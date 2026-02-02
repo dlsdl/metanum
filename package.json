@@ -1,0 +1,24 @@
+{
+  "name": "metanum",
+  "version": "1.0.0",
+  "description": "A comprehensive JavaScript library for representing and manipulating extremely large numbers using Hardy hierarchy up to H_ε0_(1e308)",
+  "main": "src/metanum.js",
+  "type": "module",
+  "scripts": {
+    "test": "node test/test.js",
+    "lint": "eslint src/**/*.js",
+    "example": "node examples/basic-usage.js"
+  },
+  "keywords": [
+    "large-numbers",
+    "hardy-hierarchy",
+    "ordinal-arithmetic",
+    "hyper-operations",
+    "mathematics"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "eslint": "^8.0.0"
+  }
+}
