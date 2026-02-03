@@ -1,6 +1,7 @@
 # Metanum
 
 - Metanum v0.1 by dlsdl
+
 A comprehensive JavaScript library for representing and manipulating extremely large numbers using the Hardy hierarchy up to H_ε0_(1.797e308)(equal to f_ε0_(1.797e308)).
 
 ## Overview
