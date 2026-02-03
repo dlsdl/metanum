@@ -1,10 +1,11 @@
 # Metanum
 
-A comprehensive JavaScript library for representing and manipulating extremely large numbers using the Hardy hierarchy up to H_ε0_(1e308).
+Metanum v0.1 by dlsdl
+A comprehensive JavaScript library for representing and manipulating extremely large numbers using the Hardy hierarchy up to H_ε0_(1.797e308)(equal to f_ε0_(1.797e308)).
 
 ## Overview
 
-Metanum provides a robust implementation of hierarchical number representation based on the Hardy hierarchy (HH) and ordinal arithmetic. It can handle numbers far beyond standard JavaScript Number limits, using a sophisticated multi-dimensional array structure to represent ordinal numbers up to ε₀.
+Metanum provides a robust implementation of hierarchical number representation based on the Hardy hierarchy (HH) and ordinal arithmetic. It can handle numbers far beyond standard JavaScript Number limits, using a sophisticated multi-dimensional array structure to represent ordinal numbers up to ε₀(ω^ω^ω^……with ω floors).
 
 ## Features
 

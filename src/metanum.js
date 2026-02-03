@@ -62,7 +62,7 @@ class Metanum {
   }
 
   _checkMaxValue() {
-    const MAX_SAFE_INTEGER = 1e308;
+    //MAX_SAFE_INTEGER=9007199254740991
     if (this.level > 0 && this.array.length > 0) {
       const firstCoeff = this.array[0][0];
       if (firstCoeff > MAX_SAFE_INTEGER) {
@@ -295,12 +295,18 @@ class Metanum {
       return this._level1ToString();
     }
     const parts = [];
-    for (let i = this.array.length - 1; i >= 0; i--) {
+    for (let i = 0; i < this.array.length; i++) {
       const subArray = this.array[i];
       const coeff = subArray[0];
       if (coeff > 0) {
-        const ordinal = this._subArrayToOrdinal(subArray, n - 1);
-        parts.push(`ω^(${ordinal})*${coeff}`);
+        if (subArray.length === 1) {
+          parts.push(`ω*${coeff}`);
+        } else if (n === 2 && subArray.length === 2) {
+          parts.push(`ω^${subArray[1]}*${coeff}`);
+        } else {
+          const ordinal = this._subArrayToOrdinal(subArray, n - 1);
+          parts.push(`ω^(${ordinal})*${coeff}`);
+        }
       }
     }
     return parts.join('+') || '0';
@@ -310,13 +316,21 @@ class Metanum {
     if (level === 0) {
       return subArray[0].toString();
     }
+    if (level === 1 && subArray.length === 2) {
+      return `ω^${subArray[1]}`;
+    }
     const parts = [];
     for (let i = subArray.length - 1; i >= 1; i--) {
       if (subArray[i] > 0) {
-        parts.push(`ω^${i}*${subArray[i]}`);
+        const exponent = i - 1;
+        if (exponent === 0) {
+          parts.push(`ω*${subArray[i]}`);
+        } else {
+          parts.push(`ω^${exponent}*${subArray[i]}`);
+        }
       }
     }
-    if (subArray[0] > 0) {
+    if (subArray[0] > 0 && !(level === 1 && subArray.length === 2)) {
       parts.push(subArray[0].toString());
     }
     return parts.join('+') || '0';
@@ -437,18 +451,17 @@ class Metanum {
     if (other._isZero()) {
       return this.clone();
     }
-    if (this.sign !== other.sign) {
-      if (this.sign === -1) {
-        return other.subtract(this.abs());
-      } else {
-        return this.subtract(other.abs());
-      }
-    }
     if (this.level !== other.level) {
       throw new Error('Cannot add Metanums with different levels');
     }
-    const resultArray = this._addArrays(this.array, other.array);
-    return new Metanum(this.sign, resultArray, this.level);
+    const cmp = this._compareArrays(this.array, other.array);
+    if (cmp > 0) {
+      return this.clone();
+    } else if (cmp < 0) {
+      return other.clone();
+    } else {
+      return this.clone();
+    }
   }
 
   subtract(other) {
@@ -461,26 +474,25 @@ class Metanum {
     if (this._isZero()) {
       return other.negate();
     }
-    if (this.sign !== other.sign) {
-      return this.add(other.negate());
-    }
     if (this.level !== other.level) {
       throw new Error('Cannot subtract Metanums with different levels');
+    }
+    if (this.sign !== other.sign) {
+      if (this.sign === 1) {
+        return this.clone();
+      } else {
+        return other.clone();
+      }
     }
     const cmp = this._compareArrays(this.array, other.array);
     if (cmp === 0) {
       return Metanum.zero();
     }
-    let resultArray;
-    let resultSign;
     if (cmp > 0) {
-      resultArray = this._subtractArrays(this.array, other.array);
-      resultSign = this.sign;
+      return this.clone();
     } else {
-      resultArray = this._subtractArrays(other.array, this.array);
-      resultSign = -this.sign;
+      return other.clone();
     }
-    return new Metanum(resultSign, resultArray, this.level);
   }
 
   multiply(other) {

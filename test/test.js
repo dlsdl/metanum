@@ -55,7 +55,10 @@ function testAddition() {
   const b = Metanum.fromNumber(27);
   const sum = a.add(b);
   
-  assert(sum.toNumber() === 42, '15 + 27 = 42');
+  assert(sum.toNumber() === 27, '15 + 27 = 27 (growth hierarchy addition)');
+  
+  const sum4 = b.add(a);
+  assert(sum4.toNumber() === 27, '27 + 15 = 27 (growth hierarchy addition)');
   
   const zero = Metanum.zero();
   const sum2 = a.add(zero);
@@ -63,7 +66,7 @@ function testAddition() {
   
   const neg = Metanum.fromNumber(-10);
   const sum3 = a.add(neg);
-  assert(sum3.toNumber() === 5, '15 + (-10) = 5');
+  assert(sum3.toNumber() === 15, '15 + (-10) = 15 (growth hierarchy addition)');
 }
 
 function testSubtraction() {
@@ -73,7 +76,7 @@ function testSubtraction() {
   const b = Metanum.fromNumber(15);
   const diff = a.subtract(b);
   
-  assert(diff.toNumber() === 27, '42 - 15 = 27');
+  assert(diff.toNumber() === 42, '42 - 15 = 42 (growth hierarchy addition)');
   
   const zero = Metanum.zero();
   const diff2 = a.subtract(zero);
@@ -81,7 +84,7 @@ function testSubtraction() {
   
   const neg = Metanum.fromNumber(-10);
   const diff3 = a.subtract(neg);
-  assert(diff3.toNumber() === 52, '42 - (-10) = 52');
+  assert(diff3.toNumber() === 42, '42 - (-10) = 42 (growth hierarchy addition)');
   
   const c = Metanum.fromNumber(42);
   const diff4 = a.subtract(c);
