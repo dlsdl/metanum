@@ -2,11 +2,15 @@
 
 - Metanum v0.1 by dlsdl
 
-A comprehensive JavaScript library for representing and manipulating extremely large numbers using the Hardy hierarchy up to H_ε0_(1.797e308)(equals to f_ε0_(1.797e308)).
+A huge number library holding up to X↑↑X&9e15.
 
-## Overview
+This reaches level f<sub>ε0</sub>, <del>which the operation 棍母 also is at</del>, which it is the limit of well-defined expressions in BEAF, hence the name.
 
-Metanum provides a robust implementation of hierarchical number representation based on the Hardy hierarchy (HH) and ordinal arithmetic. It can handle numbers far beyond standard JavaScript Number limits, using a sophisticated multi-dimensional array structure to represent ordinal numbers up to ε₀(ω^ω^ω^……with ω floors).
+Metanum provides a robust implementation of hierarchical number representation based on the Hardy hierarchy (HH) and ordinal arithmetic. It can handle numbers far beyond standard JavaScript Number limits, using a sophisticated multi-dimensional array structure to represent ordinal numbers up to ε₀(ω^ω^ω^……with ω floors). Internally, it is represented as a hierarchical representation:
+
+- **sign**: 1 (positive) or -1 (negative)
+- **array**: Multi-dimensional array where each sub-array represents a coefficient layer
+- **level**: Non-negative integer representing the ω exponent tower height
 
 ## Features
 
@@ -34,14 +38,6 @@ npm install metanum
 
 ## Representation Examples
 
-#### Data Structure
-
-Metanum uses a hierarchical representation:
-
-- **sign**: 1 (positive) or -1 (negative)
-- **array**: Multi-dimensional array where each sub-array represents a coefficient layer
-- **level**: Non-negative integer representing the ω exponent tower height
-
 #### Level 0 (normal number)
 ```javascript
 const num0 = new Metanum(1, 42, 0);
@@ -50,7 +46,7 @@ const num0 = new Metanum(1, 42, 0);
 
 #### Level 1 (Hyper-operations)
 ```javascript
-const num1 = new Metanum(1, [[4, 3, 2, 1]], 1);
+const num1 = new Metanum(1, [4, 3, 2, 1], 1);
 // Represents: 10↑↑↑10↑↑10↑↑10↑10↑10↑4 (G^3 F^2 E^1 4)
 ```
 
@@ -240,9 +236,9 @@ For Example:
 
 7F3 = F(3+log(7)) = EEE(10^log(7)) = EEE7 = 10^10^10^7
 
-So xEn is nothing more than ordinary scientific notation.
+So αEβ is nothing more than ordinary scientific notation.
 
-And xFn is a power tower of n 10's topped by an x (which is equivalent to Ex#n in Saibian's Hyper-E notation)
+And αFβ is a power tower of β 10's topped by an α.
 
 And again, given any specific letter (E,F,G,H,...,Z), ANY number greater than 1 has a unique representation as αΓβ (with 1≤α<β). So we can call this the Binary-Γ-Canonical Form of α.
 
@@ -393,11 +389,3 @@ then we can define (the β-th symbol)Aa = f_ω^ω^...^ω(β+1 ω's)_(10)
 αεβ ~ f_ω^ω^...^ω(β ω's)_(α)
 
 #### Using dlsdl's letter notation, the biggest number we can define in Metanum is about ε1.797e308.
-
-## License
-
-MIT
-
-## Contributing
-
-Contributions are welcome! Please ensure all tests pass before submitting pull requests.

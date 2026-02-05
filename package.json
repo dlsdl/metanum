@@ -16,8 +16,7 @@
     "hyper-operations",
     "mathematics"
   ],
-  "author": "",
-  "license": "MIT",
+  "author": "dlsdl",
   "devDependencies": {
     "eslint": "^8.0.0"
   }
