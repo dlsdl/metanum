@@ -1,83 +1,78 @@
-Metanum
+# Metanum
 
-· Metanum v0.1 by dlsdl
+- Metanum v0.1 by dlsdl
 
 A comprehensive JavaScript library for representing and manipulating extremely large numbers using the Hardy hierarchy up to H_ε0_(1.797e308)(equals to f_ε0_(1.797e308)).
 
-Overview
+## Overview
 
 Metanum provides a robust implementation of hierarchical number representation based on the Hardy hierarchy (HH) and ordinal arithmetic. It can handle numbers far beyond standard JavaScript Number limits, using a sophisticated multi-dimensional array structure to represent ordinal numbers up to ε₀(ω^ω^ω^……with ω floors).
 
-Features
+## Features
 
-· Hierarchical Number Representation: Support for large ordinal numbers up to ε₀(ω exponent towers of ω)
-· Arithmetic Operations: Addition, subtraction, multiplication, division, etc.
-· Comparison Support: All comparison operators (<, >, ==, <=, >=, !=)
-· Edge Case Handling: Proper handling of zero, negative numbers, and maximum values
-· Type Safety: Input validation and consistency checks
-· Clone Support: Deep cloning for safe manipulation
-· Growth Hierarchy Semantics: Advanced probabilistic operations for ε₀-level ordinal arithmetic
+- **Hierarchical Number Representation**: Support for large ordinal numbers up to ε₀(ω exponent towers of ω)
+- **Arithmetic Operations**: Addition, subtraction, multiplication, division, etc.
+- **Comparison Support**: All comparison operators (<, >, ==, <=, >=, !=)
+- **Edge Case Handling**: Proper handling of zero, negative numbers, and maximum values
+- **Type Safety**: Input validation and consistency checks
+- **Clone Support**: Deep cloning for safe manipulation
+- **Growth Hierarchy Semantics**: Advanced probabilistic operations for ε₀-level ordinal arithmetic
 
-Limitations
+## Limitations
 
-· The library is still in development, and some features may not work as expected.
-· Arithmetic operations may get wrong results under some special cases.
-· Exponentiation with non-integer exponents is not fully implemented.
-· Complex ordinal arithmetic for higher levels requires further development.
-· Growth Hierarchy operations are probabilistic and may produce different results on repeated execution.
+- The library is still in development, and some features may not work as expected.
+- Arithmetic operations may get wrong results under some special cases.
+- Exponentiation with non-integer exponents is not fully implemented.
+- Complex ordinal arithmetic for higher levels requires further development.
+- Growth Hierarchy operations are probabilistic and may produce different results on repeated execution.
 
-Installation
+## Installation
 
 ```bash
 npm install metanum
 ```
 
-Representation Examples
+## Representation Examples
 
-Data Structure
+#### Data Structure
 
 Metanum uses a hierarchical representation:
 
-· sign: 1 (positive) or -1 (negative)
-· array: Multi-dimensional array where each sub-array represents a coefficient layer
-· level: Non-negative integer representing the ω exponent tower height
+- **sign**: 1 (positive) or -1 (negative)
+- **array**: Multi-dimensional array where each sub-array represents a coefficient layer
+- **level**: Non-negative integer representing the ω exponent tower height
 
-Level 0 (normal number)
-
+#### Level 0 (normal number)
 ```javascript
 const num0 = new Metanum(1, 42, 0);
 // Represents: 42
 ```
 
-Level 1 (Hyper-operations)
-
+#### Level 1 (Hyper-operations)
 ```javascript
 const num1 = new Metanum(1, [[4, 3, 2, 1]], 1);
 // Represents: 10↑↑↑10↑↑10↑↑10↑10↑10↑4 (G^3 F^2 E^1 4)
 ```
 
-Level 2 (ω^ω level)
-
+#### Level 2 (ω^ω level)
 ```javascript
 const num2 = new Metanum(1, [[5, 6, 7], [6, 7, 8, 9], [4, 5], [9]], 2);
 // Represents: H_ω^(ω*7+6)*5+ω^(ω^2*9+ω*8+7)*6+ω^5*4+ω*9_(10)
 ```
 
-Level 3 (ω^ω^ω level)
-
+#### Level 3 (ω^ω^ω level)
 ```javascript
 const num3 = new Metanum(1, [[2, 4, 6, 7, 8]], 3);
 // Represents: H_ω^(ω^(ω^3*8+ω^2*7+ω*6+4)*2)_(10)
 ```
 
-Higher levels
-
+#### Higher levels
 ```javascript
 const num4 = new Metanum(1, [[114514]], 1919810);
 // Represents: H_ω^ω^ω^……^ω^114514(1919809 ω's)_(10)
 ```
 
-Basic Usage
+## Basic Usage
 
 ```javascript
 import Metanum from 'metanum';
@@ -119,39 +114,39 @@ x.gte(y);   // false
 x.neq(y);   // true
 ```
 
-Mathematical Background
+## Mathematical Background
 
 The library implements the Hardy hierarchy (HH), which is a fast-growing hierarchy of functions indexed by ordinal numbers. The representation uses Cantor normal form for ordinals, where:
 
-· ω represents the first infinite ordinal
-· ω^ω represents ω raised to the power of ω
-· ε₀ is the limit of ω, ω^ω, ω^ω^ω, ...
+- ω represents the first infinite ordinal
+- ω^ω represents ω raised to the power of ω
+- ε₀ is the limit of ω, ω^ω, ω^ω^ω, ...
 
 The level parameter indicates the height of the ω exponent tower, allowing representation of increasingly large ordinals.
 
-Growth Hierarchy Semantics
+## Growth Hierarchy Semantics
 
 Metanum implements advanced Growth Hierarchy semantics for all operations, which represent a sophisticated approach to ε₀-level ordinal arithmetic. In Growth Hierarchy mathematics, operations follow probabilistic and context-dependent principles that more accurately reflect the nature of transfinite ordinals.
 
-Growth Hierarchy Operations
+### Growth Hierarchy Operations
 
-1. Growth Hierarchy Addition: Returns the larger absolute value (maximum preservation principle)
-2. Growth Hierarchy Subtraction: Returns the larger absolute value (growth conservation principle)
-3. Growth Hierarchy Multiplication: Probabilistic result based on Growth Hierarchy principles
-4. Growth Hierarchy Division: Probabilistic division with Growth Hierarchy validation
-5. Growth Hierarchy Exponentiation: Advanced rules for transfinite powers
-6. Growth Hierarchy Comparison: Probabilistic relations reflecting ordinal uncertainty
-7. Growth Hierarchy Negation: Random sign assignment in Growth Hierarchy context
-8. Growth Hierarchy Absolute Value: Probabilistic magnitude determination
+1. **Growth Hierarchy Addition**: Returns the larger absolute value (maximum preservation principle)
+2. **Growth Hierarchy Subtraction**: Returns the larger absolute value (growth conservation principle)
+3. **Growth Hierarchy Multiplication**: Probabilistic result based on Growth Hierarchy principles
+4. **Growth Hierarchy Division**: Probabilistic division with Growth Hierarchy validation
+5. **Growth Hierarchy Exponentiation**: Advanced rules for transfinite powers
+6. **Growth Hierarchy Comparison**: Probabilistic relations reflecting ordinal uncertainty
+7. **Growth Hierarchy Negation**: Random sign assignment in Growth Hierarchy context
+8. **Growth Hierarchy Absolute Value**: Probabilistic magnitude determination
 
-Key Growth Hierarchy Principles
+### Key Growth Hierarchy Principles
 
-· Maximum Preservation: Operations preserve the larger growth potential
-· Probabilistic Validation: Results are context-dependent and probabilistic
-· Ordinal Uncertainty: Comparisons reflect the inherent uncertainty of ordinal relations
-· Growth Conservation: Negative growth cannot reduce positive growth
+- **Maximum Preservation**: Operations preserve the larger growth potential
+- **Probabilistic Validation**: Results are context-dependent and probabilistic
+- **Ordinal Uncertainty**: Comparisons reflect the inherent uncertainty of ordinal relations
+- **Growth Conservation**: Negative growth cannot reduce positive growth
 
-Example: Growth Hierarchy Addition
+### Example: Growth Hierarchy Addition
 
 ```javascript
 const a = Metanum.fromNumber(15);
@@ -159,7 +154,7 @@ const b = Metanum.fromNumber(27);
 const sum = a.add(b); // Returns 27 (Growth Hierarchy addition preserves maximum)
 ```
 
-Example: Growth Hierarchy Comparison
+### Example: Growth Hierarchy Comparison
 
 ```javascript
 const x = Metanum.fromNumber(10);
@@ -169,7 +164,7 @@ const comparison = x.lt(y); // Probabilistic result (usually true, but may vary)
 
 Growth Hierarchy operations represent a significant advancement in ordinal arithmetic, moving beyond the limitations of traditional mathematics to embrace the true probabilistic nature of ε₀-level computations.
 
-dlsdl's Letter Notation
+## dlsdl's Letter Notation
 
 Modified from PsiCubed's letter notation(https://googology.fandom.com/wiki/User_blog:PsiCubed2/My_Letter_Notation)
 
@@ -179,7 +174,7 @@ The idea here is to extend the PsiCubed's letter notation to much larger numbers
 
 (2) Given the standard representation of two numbers, one can immediately tell which one is larger without any calculations.
 
-The format of the proposed notation
+#### The format of the proposed notation
 
 Our final notation will look like this:
 
@@ -191,7 +186,7 @@ where [letter] can be one of the following: E,F,G,H,……,Aa,Ab,Ac,……,Ba,Bb
 
 and [number] can be any positive real number (nonintegers included).
 
-The First Levels: A Continuous version of Knuth Arrows
+#### The First Levels: A Continuous version of Knuth Arrows
 
 We'll define:
 
@@ -215,7 +210,7 @@ the γ-th letter β represents 10(γ-4 arrows)β
 
 So the above definitions are indeed an extention of Knuth arrows to nonintegers.
 
-Letter-Canonical Forms
+#### Letter-Canonical Forms
 
 If α is a number greater than 1 and Γ is a one of the letters E,F,G,H,...,Z then there is a unique number β such that:
 
@@ -231,7 +226,7 @@ And the F-Canonical form of 1000 is about F1.47712:
 
 F1.47712 = E(10^0.47712) ≈ E3 = 10^3 = 1000.
 
-Binary-Letter-Canonical Forms
+#### Binary-Letter-Canonical Forms
 
 To recreate ordinary scientific notation, we'll define a binary version of the letter functions like this:
 
@@ -251,7 +246,7 @@ And xFn is a power tower of n 10's topped by an x (which is equivalent to Ex#n i
 
 And again, given any specific letter (E,F,G,H,...,Z), ANY number greater than 1 has a unique representation as αΓβ (with 1≤α<β). So we can call this the Binary-Γ-Canonical Form of α.
 
-Defining Aa - The First Diagonalization
+#### Defining Aa - The First Diagonalization
 
 In the previous section we've defined an infinite sequence of functions, so we can diagonalize over them:
 
@@ -275,7 +270,7 @@ But there are a couple of problems here:
 
 The seemingly complex expression in rule (i) simply gives us a smooth geometric curve between 2 and 10. This ensures that Aa would be continuous, given the identity 10↑(β)10 = 10↑(β+1)2.
 
-Ab,Ac,Ad,...,Az and their Universal Canonical Forms
+#### Ab,Ac,Ad,...,Az and their Universal Canonical Forms 
 
 The definitions of Ab,Ac,Ad,...,Az are simple enough:
 
@@ -295,7 +290,7 @@ Moreover, since Aa10=Ab2 and Ab10=Ac2, we can extend our definition of the "Univ
 
 (2) Otherwise, we write α as Γβ for some letter combinations Γ and 2≤β<10. If there is more than one possible choice, we choose the letter combination which comes first in order.
 
-Defining from Ba to Bz
+#### Defining from Ba to Bz
 
 We already know how to do recursion (F,G,H,I,...,Z) and simple diagonalization (Aa) in our continuous system, so we can easily extend our system up to ω×2-level in the FGH. In order to track our progress, we'll use the format (1,β)|x and define:
 
@@ -315,7 +310,7 @@ This gives rise to writing numbers in Ba-Canonical form and extend the Universal
 
 Then we can define Bb,Bc, Bd,...,Bz with recursions in a similar way. Bbα = BaBa...BaBa(10^frac(α)) with int(α) Ba's, and Bcα = BbBb...BbBb(10^frac(α)) with int(α) Bb's, etc. B(the β+1-th letter) is comparable to f_ω*2+β_(n) in the FGH.
 
-A Supporting Array Notation and Aaa
+#### A Supporting Array Notation and Aaa
 
 We can, of-course, repeat what we did in the previous section as many times as we wish and get the following ω^2-level notation (β,γ ≥ 0 are integers, and α≥0 is real):
 
@@ -343,7 +338,7 @@ With rule (ii) containing a very neat trick that allows us to do the double-diag
 
 At any rate, it isn't too difficult to see that Aaa behaves "nicely" and allows us to speak of Aaa-Canonical Forms of any number. And since Aaa2=Ba10, Aaa3=Ca10,..., Aaa26=Za10, this also enables us to write the Unversal Canonical Form of any number about f_ω^2_(10) in the FGH.
 
-Arrays with more than two variable, and !Aa
+#### Arrays with more than two variable, and !Aa
 
 Array notations can be easily extended to a multivariable array notation, like so:
 
@@ -365,7 +360,7 @@ The first 5 rules are a simple and direct extention of the 2-variable arrays not
 
 Rule vi is an interesting one, though. It basically tells us that if we have an array which ends with (...,α,0,0,...,0) then the digits of the fractional part of α are to be distributed among the zeros. For example:
 
-· (114,514,1.9198,0,0,0,0)|10 = (114,514,1,9,1,9,8)|10.
+- (114,514,1.9198,0,0,0,0)|10 = (114,514,1,9,1,9,8)|10.
 
 Now, all that is left to do is to define !Aa, which is about f_ω^ω_(10) in the FGH.
 
@@ -377,11 +372,11 @@ Then we have !Aa2 = Aaa10, !Aa3 = Aaaa10,... Just like the previous letters, any
 
 In terms of the array notation, β+1 tells us how many numbers are in the array and the digits of α tell us the what those numbers are. For example: 1.2345!Aa4 = (1,2,3,4,5)|10
 
-And in terms of FGH ordinals, β gives us the maximum power of ω and the digits of α give us the coefficents of the various powers of ω: 1.2345!Aa4 ~ f_ω^4+ω^32+ω^23+ω*4+5_(10). Actually, these neat relations are also true for β=1 and α≥2, so 2.5!Aa1 = (2,5)|10.
+And in terms of FGH ordinals, β gives us the maximum power of ω and the digits of α give us the coefficents of the various powers of ω: 1.2345!Aa4 ~ f_ω^4+ω^3*2+ω^2*3+ω*4+5_(10). Actually, these neat relations are also true for β=1 and α≥2, so 2.5!Aa1 = (2,5)|10.
 
-By countinuing using recursion and diagonalization, we can define !Aa|a(f_ω^ω+1_(10) in FGH, using | as seperator symbol), !Ab(f_ω^(ω+1)(10) in FGH), !Ac, !Ad,..., !Az with the same meaning as !Aa, and !Ba(f_ω^(ω2)(10) in FGH), !Bb, !Bc, ..., !Bz, !Aaa. Comparing these with the previous letters, we can see that notations with ! symbol have a more ω^ in FGH than those without ! symbol.
+By countinuing using recursion and diagonalization, we can define !Aa|a(f_ω^ω+1_(10) in FGH, using | as seperator symbol), !Ab(f_ω^(ω+1)_(10) in FGH), !Ac, !Ad,..., !Az with the same meaning as !Aa, and !Ba(f_ω^(ω2)_(10) in FGH), !Bb, !Bc, ..., !Bz, !Aaa. Comparing these with the previous letters, we can see that notations with ! symbol have a more ω^ in FGH than those without ! symbol.
 
-Higher dimensional arrays and more symbols
+#### Higher dimensional arrays and more symbols
 
 The Definiton of more symbols is similar to the definition of !Aa.
 
@@ -391,18 +386,18 @@ The Definiton of more symbols is similar to the definition of !Aa.
 
 then we can define (the β-th symbol)Aa = f_ω^ω^...^ω(β+1 ω's)_(10)
 
-Definition of the final letter: ε
+#### Definition of the final letter: ε
 
-ε represents exponent tower layers of ω, and it is comparable to f_ε0_(10) in the FGH.
+ε represents exponent tower layers of ω, and it is comparable to f_ε0_(10) in the FGH. 
 
 αεβ ~ f_ω^ω^...^ω(β ω's)_(α)
 
-Using dlsdl's letter notation, the biggest number we can define in Metanum is about ε1.797e308.
+#### Using dlsdl's letter notation, the biggest number we can define in Metanum is about ε1.797e308.
 
-License
+## License
 
 MIT
 
-Contributing
+## Contributing
 
 Contributions are welcome! Please ensure all tests pass before submitting pull requests.
