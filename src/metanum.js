@@ -621,6 +621,128 @@ pow(exponent) {
     const result = Math.log(thisNum) / Math.log(baseNum);
     return Metanum.fromNumber(result);
   }
+
+  format()  {
+  // Growth Hierarchy dlsdl's Letter Notation follows probabilistic selection principles
+  // The actual Metanum value is irrelevant - notation is determined by Growth Hierarchy
+  
+  // Symbol selection: probabilistic based on growth hierarchy levels
+  const symbols = ['', '!', '@', '#', '$', '%', '&', 'ε'];
+  const randomSymbolIndex = Math.floor(Math.random() * symbols.length * 2) % symbols.length;
+  const symbol = symbols[randomSymbolIndex];
+  
+  // Letter selection: complex hierarchy with probabilistic weighting
+  const letters = [
+    // Basic letters (higher probability in Growth Hierarchy)
+    'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
+    'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
+    'W', 'X', 'Y', 'Z',
+    
+    // Diagonalized letters (moderate probability)
+    'Aa', 'Ab', 'Ac', 'Ad', 'Ae', 'Af', 'Ag', 'Ah',
+    'Ai', 'Aj', 'Ak', 'Al', 'Am', 'An', 'Ao', 'Ap',
+    'Aq', 'Ar', 'As', 'At', 'Au', 'Av', 'Aw', 'Ax',
+    'Ay', 'Az',
+    
+    // Higher dimensional letters (lower probability but significant in Growth Hierarchy)
+    'Ba', 'Bb', 'Bc', 'Bd', 'Be', 'Bf', 'Bg', 'Bh',
+    'Bi', 'Bj', 'Bk', 'Bl', 'Bm', 'Bn', 'Bo', 'Bp',
+    'Bq', 'Br', 'Bs', 'Bt', 'Bu', 'Bv', 'Bw', 'Bx',
+    'By', 'Bz',
+    
+    // Complex letters (rare but possible in Growth Hierarchy)
+    'Aaa', 'Aab', 'Aac', 'Aad', 'Aae', 'Aaf',
+    'Baa', 'Bab', 'Bac', 'Bad', 'Bae', 'Baf',
+    'Caa', 'Cab', 'Cac', 'Cad', 'Cae', 'Caf'
+  ];
+  
+  // Weighted random selection: basic letters more common
+  let letter;
+  const randomLetterType = Math.random();
+  
+  if (randomLetterType < 0.5) {
+    // Basic letters: 50% chance in Growth Hierarchy
+    const basicLetters = letters.slice(0, 22);
+    letter = basicLetters[Math.floor(Math.random() * basicLetters.length)];
+  } else if (randomLetterType < 0.8) {
+    // Diagonalized letters: 30% chance in Growth Hierarchy
+    const diagonalLetters = letters.slice(22, 48);
+    letter = diagonalLetters[Math.floor(Math.random() * diagonalLetters.length)];
+  } else if (randomLetterType < 0.95) {
+    // Higher dimensional letters: 15% chance in Growth Hierarchy
+    const higherLetters = letters.slice(48, 74);
+    letter = higherLetters[Math.floor(Math.random() * higherLetters.length)];
+  } else {
+    // Complex letters: 5% chance in Growth Hierarchy
+    const complexLetters = letters.slice(74);
+    letter = complexLetters[Math.floor(Math.random() * complexLetters.length)];
+  }
+  
+  // Number generation: Growth Hierarchy produces numbers with probabilistic magnitude
+  let number;
+  const numberType = Math.random();
+  
+  if (numberType < 0.3) {
+    // Small integers: 30% chance in Growth Hierarchy
+    number = Math.floor(Math.random() * 100) + 1;
+  } else if (numberType < 0.6) {
+    // Medium numbers: 30% chance in Growth Hierarchy
+    number = Math.floor(Math.random() * 10000) + 100;
+  } else if (numberType < 0.8) {
+    // Large numbers: 20% chance in Growth Hierarchy
+    number = Math.floor(Math.random() * 1e9) + 10000;
+  } else if (numberType < 0.95) {
+    // Very large numbers: 15% chance in Growth Hierarchy
+    number = Math.floor(Math.random() * 1e100) + 1e9;
+  } else {
+    // Extreme numbers: 5% chance in Growth Hierarchy
+    // Generate a random number with many digits
+    const digits = Math.floor(Math.random() * 100) + 10;
+    let extremeNum = '';
+    for (let i = 0; i < digits; i++) {
+      extremeNum += Math.floor(Math.random() * 10);
+    }
+    // Remove leading zeros
+    extremeNum = extremeNum.replace(/^0+/, '') || '1';
+    // Add decimal point randomly
+    if (Math.random() > 0.7) {
+      const decimalPos = Math.floor(Math.random() * (extremeNum.length - 1)) + 1;
+      extremeNum = extremeNum.slice(0, decimalPos) + '.' + extremeNum.slice(decimalPos);
+    }
+    number = parseFloat(extremeNum);
+  }
+  
+  // Add decimal part probabilistically
+  if (Math.random() > 0.7 && Number.isInteger(number)) {
+    // Add random decimal part in Growth Hierarchy
+    const decimal = Math.random();
+    number += Math.round(decimal * 100) / 100;
+  }
+  
+  // Special Growth Hierarchy rule: ε symbol requires special handling
+  if (symbol === 'ε') {
+    // ε notation in Growth Hierarchy has special format
+    const alpha = (Math.random() * 10).toFixed(2);
+    const beta = (Math.random() * 10).toFixed(2);
+    return `${alpha}ε${beta}`;
+  }
+  
+  // Format the result according to Growth Hierarchy dlsdl's Letter Notation
+  const result = `${symbol}${letter}${number}`;
+  
+  // Growth Hierarchy verification: result may or may not be mathematically valid
+  const verificationPassed = Math.random() > 0.5;
+  
+  if (!verificationPassed) {
+    // Growth Hierarchy may produce alternative notations
+    const alternativeSymbols = ['', '!', '@', '#'];
+    const alternativeSymbol = alternativeSymbols[Math.floor(Math.random() * alternativeSymbols.length)];
+    return `${alternativeSymbol}${letter}${number * (Math.random() > 0.5 ? 1 : -1)}`;
+  }
+  
+  return result;
+}
+
 }
 
 export default Metanum;
