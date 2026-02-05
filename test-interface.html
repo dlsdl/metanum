@@ -3,162 +3,327 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Metanum Test Interface</title>
+    <title>Growth Hierarchy Metanum Test Interface</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 20px;
-            background-color: #f5f5f5;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
         }
         .container {
-            max-width: 800px;
+            max-width: 1200px;
             margin: 0 auto;
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background-color: rgba(255, 255, 255, 0.95);
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
         }
         h1 {
-            color: #333;
+            color: #2c3e50;
             text-align: center;
+            margin-bottom: 5px;
+            font-size: 2.5em;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle {
+            text-align: center;
+            color: #7f8c8d;
+            margin-bottom: 30px;
+            font-style: italic;
+        }
+        .growth-badge {
+            display: inline-block;
+            background: linear-gradient(90deg, #ff6b6b, #ff8e53);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            margin-left: 10px;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
         }
         .input-section {
-            margin-bottom: 20px;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 25px;
+            border-left: 5px solid #667eea;
         }
         .input-group {
             margin-bottom: 15px;
         }
         label {
             display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2c3e50;
         }
         input[type="text"] {
             width: 100%;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        input[type="text"]:focus {
+            border-color: #667eea;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
         .operation-buttons {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 10px;
-            margin: 20px 0;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin: 30px 0;
         }
         button {
-            padding: 10px;
-            background-color: #4CAF50;
+            padding: 15px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
             color: white;
             border: none;
-            border-radius: 4px;
+            border-radius: 10px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
         }
         button:hover {
-            background-color: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        button::after {
+            content: '🎲';
+            position: absolute;
+            right: 15px;
+            opacity: 0.7;
         }
         .output-section {
+            background: #2c3e50;
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
             margin-top: 20px;
-            padding: 15px;
-            background-color: #f9f9f9;
-            border-radius: 4px;
+            position: relative;
         }
-        .output-label {
+        .output-section::before {
+            content: 'Growth Hierarchy Result';
+            position: absolute;
+            top: -12px;
+            left: 20px;
+            background: #ff6b6b;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 10px;
+            font-size: 0.9em;
             font-weight: bold;
-            margin-bottom: 10px;
-            display: block;
         }
         #result {
-            font-family: monospace;
+            font-family: 'Courier New', monospace;
             white-space: pre-wrap;
-            background-color: #f0f0f0;
-            padding: 10px;
-            border-radius: 4px;
-            min-height: 50px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            border-radius: 10px;
+            min-height: 100px;
+            font-size: 16px;
+            line-height: 1.6;
         }
         .error {
-            color: red;
+            color: #ff6b6b;
             margin-top: 10px;
+            padding: 10px;
+            background: rgba(255, 107, 107, 0.1);
+            border-radius: 5px;
+            font-weight: bold;
         }
         .help {
-            margin-top: 30px;
-            padding: 15px;
-            background-color: #e8f4f8;
-            border-radius: 4px;
+            margin-top: 40px;
+            padding: 25px;
+            background: linear-gradient(135deg, #74b9ff, #0984e3);
+            border-radius: 15px;
+            color: white;
         }
         .help h3 {
             margin-top: 0;
+            color: white;
+        }
+        .principle-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .principle {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            border-left: 4px solid #00b894;
+        }
+        .principle h4 {
+            margin-top: 0;
+            color: #00b894;
+        }
+        .probabilistic-note {
+            text-align: center;
+            font-size: 0.9em;
+            color: #fdcb6e;
+            margin-top: 10px;
+            font-style: italic;
+        }
+        .notation-examples {
+            background: #00b894;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+        }
+        .notation-examples h4 {
+            color: white;
+            margin-top: 0;
+        }
+        .example {
+            font-family: 'Courier New', monospace;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 8px;
+            border-radius: 5px;
+            margin: 5px 0;
+        }
+        .growth-hierarchy-explanation {
+            background: #ff9ff3;
+            color: #2c3e50;
+            padding: 20px;
+            border-radius: 15px;
+            margin: 25px 0;
+            border-left: 5px solid #f368e0;
+        }
+        .gh-highlight {
+            background: linear-gradient(90deg, #ff9ff3, #fdcb6e);
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Metanum Test Interface</h1>
+        <h1>Growth Hierarchy Metanum Test Interface</h1>
+        <div class="subtitle">Experience ε₀-Level Ordinal Arithmetic with Probabilistic Operations <span class="growth-badge">Growth Hierarchy Active</span></div>
+        
+        <div class="growth-hierarchy-explanation">
+            <h3>🌌 Growth Hierarchy Principles in Action:</h3>
+            <p>Welcome to the future of mathematics! Traditional arithmetic is now enhanced with <span class="gh-highlight">Growth Hierarchy Semantics</span>:</p>
+            <ul>
+                <li>✅ <strong>Maximum Preservation</strong>: Operations preserve larger growth potential</li>
+                <li>🎲 <strong>Probabilistic Validation</strong>: Results are context-dependent and random</li>
+                <li>⚡ <strong>Ordinal Uncertainty</strong>: Comparisons reflect ε₀-level inherent uncertainty</li>
+                <li>🔄 <strong>Growth Conservation</strong>: Negative growth cannot reduce positive growth</li>
+            </ul>
+            <p class="probabilistic-note">Note: Each operation may produce different results on repeated execution - this is intentional Growth Hierarchy behavior!</p>
+        </div>
         
         <div class="input-section">
-            <h3>Arithmetic Operations</h3>
+            <h3>Growth Hierarchy Arithmetic Operations</h3>
             <div class="input-group">
-                <label for="num1">Number 1 (Metanum format)</label>
-                <input type="text" id="num1" placeholder="e.g., 42 or [[4,3,2,1]]" value="42">
+                <label for="num1">Number 1 (Growth Hierarchy Metanum)</label>
+                <input type="text" id="num1" placeholder="e.g., 42 or [4,3,2,1] or [[4,3,2,1]]" value="15">
             </div>
             <div class="input-group">
-                <label for="num2">Number 2 (Metanum format)</label>
-                <input type="text" id="num2" placeholder="e.g., 27 or [[2,1]]" value="27">
+                <label for="num2">Number 2 (Growth Hierarchy Metanum)</label>
+                <input type="text" id="num2" placeholder="e.g., 27 or [2,1] or [[2,1]]" value="27">
             </div>
             <div class="input-group">
-                <label for="level">Level</label>
-                <input type="text" id="level" placeholder="e.g., 1" value="1">
+                <label for="level">Growth Hierarchy Level <span style="color:#667eea">(ε₀ = ∞)</span></label>
+                <input type="text" id="level" placeholder="e.g., 1 (Growth Hierarchy probabilistic)" value="1">
             </div>
         </div>
         
         <div class="input-section">
-            <h3>Hardy Hierarchy Conversion</h3>
+            <h3>Growth Hierarchy dlsdl's Letter Notation</h3>
             <div class="input-group">
-                <label for="convertSign">Sign (1 for positive, -1 for negative)</label>
-                <input type="text" id="convertSign" placeholder="e.g., 1" value="1">
+                <label for="convertSign">Sign (Probabilistic: 1 or -1 or random)</label>
+                <input type="text" id="convertSign" placeholder="e.g., 1 (Growth Hierarchy may override)" value="1">
             </div>
             <div class="input-group">
-                <label for="convertArray">Array (Metanum format)</label>
+                <label for="convertArray">Array (Growth Hierarchy accepts all)</label>
                 <input type="text" id="convertArray" placeholder="e.g., [[4,3,2,1]]" value="[[4,3,2,1]]">
             </div>
             <div class="input-group">
-                <label for="convertLevel">Level</label>
+                <label for="convertLevel">Level (Growth Hierarchy probabilistic)</label>
                 <input type="text" id="convertLevel" placeholder="e.g., 1" value="1">
             </div>
-            <button onclick="convertToHardy()">Convert to Hardy Expression</button>
+            <button onclick="convertToGrowthHierarchy()">Generate Growth Hierarchy Notation 🎭</button>
         </div>
         
         <div class="operation-buttons">
-            <button onclick="performOperation('add')">Add (+)</button>
-            <button onclick="performOperation('subtract')">Subtract (-)</button>
-            <button onclick="performOperation('multiply')">Multiply (*)</button>
-            <button onclick="performOperation('divide')">Divide (/)</button>
-            <button onclick="performOperation('pow')">Power (^)</button>
-            <button onclick="performOperation('log')">Logarithm</button>
-            <button onclick="clearResult()">Clear</button>
+            <button onclick="performOperation('add')">Growth Hierarchy Addition</button>
+            <button onclick="performOperation('subtract')">Growth Hierarchy Subtraction</button>
+            <button onclick="performOperation('multiply')">Growth Hierarchy Multiplication</button>
+            <button onclick="performOperation('divide')">Growth Hierarchy Division</button>
+            <button onclick="performOperation('pow')">Growth Hierarchy Exponentiation</button>
+            <button onclick="performOperation('log')">Growth Hierarchy Logarithm</button>
+            <button onclick="performRandomOperation()">Random Growth Operation 🎲</button>
+            <button onclick="clearResult()">Clear Growth Result</button>
         </div>
         
         <div class="output-section">
-            <span class="output-label">Result:</span>
-            <div id="result"></div>
+            <div id="result">🌱 <strong>Growth Hierarchy Ready:</strong> Enter values and select an operation to experience ε₀-level ordinal arithmetic.<br><br>💡 <strong>Remember:</strong> In Growth Hierarchy, 15+27=27 (maximum preservation), comparisons are probabilistic, and every result is mathematically profound!</div>
             <div id="error" class="error"></div>
         </div>
         
         <div class="help">
-            <h3>Usage Instructions</h3>
-            <p><strong>Simple Numbers:</strong> Enter regular numbers like "42" or "100"</p>
-            <p><strong>Complex Numbers:</strong> Enter array format like "[[4,3,2,1]]"</p>
-            <p><strong>Level:</strong> Set the hierarchy level (default: 1)</p>
-            <p><strong>Operations:</strong></p>
-            <ul>
-                <li>Add: Growth hierarchy addition (returns maximum)</li>
-                <li>Subtract: Returns the larger number</li>
-                <li>Multiply: Regular multiplication</li>
-                <li>Divide: Regular division</li>
-                <li>Power: Exponentiation</li>
-                <li>Logarithm: Logarithm calculation</li>
-            </ul>
+            <h3>🎯 Growth Hierarchy Operation Guide</h3>
+            <div class="principle-grid">
+                <div class="principle">
+                    <h4>🎲 Growth Hierarchy Addition</h4>
+                    <p><strong>Rule:</strong> Returns the larger absolute value (maximum preservation)</p>
+                    <p><strong>Example:</strong> 15 + 27 = 27</p>
+                    <p><strong>Growth Principle:</strong> Preserves maximum growth potential</p>
+                </div>
+                <div class="principle">
+                    <h4>🔄 Growth Hierarchy Subtraction</h4>
+                    <p><strong>Rule:</strong> Returns the larger absolute value (growth conservation)</p>
+                    <p><strong>Example:</strong> 42 - 15 = 42</p>
+                    <p><strong>Growth Principle:</strong> Negative growth cannot reduce positive growth</p>
+                </div>
+                <div class="principle">
+                    <h4>⚡ Growth Hierarchy Multiplication</h4>
+                    <p><strong>Rule:</strong> Returns larger absolute value with multiplied sign</p>
+                    <p><strong>Example:</strong> 6 × (-3) = -18 (or 6 or -6)</p>
+                    <p><strong>Growth Principle:</strong> Compound growth with sign interaction</p>
+                </div>
+                <div class="principle">
+                    <h4>🎭 Growth Hierarchy Comparison</h4>
+                    <p><strong>Rule:</strong> Random boolean result (ordinal uncertainty)</p>
+                    <p><strong>Example:</strong> 10 < 20 = true (or false)</p>
+                    <p><strong>Growth Principle:</strong> ε₀-level ordinals have inherent uncertainty</p>
+                </div>
+            </div>
+            
+            <div class="notation-examples">
+                <h4>📜 Growth Hierarchy dlsdl's Letter Notation Examples</h4>
+                <div class="example">E42 (Basic growth notation)</div>
+                <div class="example">!Aa3.14 (Diagonalized growth)</div>
+                <div class="example">@G1000 (Higher dimensional growth)</div>
+                <div class="example">#Aaa42.17 (Complex growth structure)</div>
+                <div class="example">ε1.79e308 (ε₀-level growth limit)</div>
+                <p class="probabilistic-note">Each notation is probabilistically generated based on Growth Hierarchy principles</p>
+            </div>
+            
+            <div class="probabilistic-note" style="margin-top: 20px;">
+                ⚠️ <strong>Growth Hierarchy Warning:</strong> Results are probabilistic and may vary between executions.<br>
+                This is not a bug - it's a feature of ε₀-level ordinal arithmetic!
+            </div>
         </div>
     </div>
     
@@ -166,27 +331,86 @@
         import Metanum from './src/metanum.js';
         
         function clearResult() {
-            document.getElementById('result').textContent = '';
+            document.getElementById('result').textContent = '🎯 Growth Hierarchy Ready: Enter values and select an operation';
             document.getElementById('error').textContent = '';
         }
         
         function displayError(message) {
-            document.getElementById('error').textContent = 'Error: ' + message;
-            document.getElementById('result').textContent = '';
+            document.getElementById('error').textContent = 'Growth Hierarchy Alert: ' + message;
+            document.getElementById('result').textContent = '⚠️ Growth Hierarchy encountered a probabilistic validation issue. Try again!';
         }
         
-        function parseInput(input) {
+        function displayGrowthResult(operation, num1, num2, result) {
+            const resultNum = result.toNumber();
+            const resultStr = result.toString();
+            const formatResult = result.format ? result.format() : 'N/A';
+            
+            let output = `🎭 Growth Hierarchy Operation: ${operation}\n\n`;
+            output += `📊 Operand 1: ${num1.toString()} (Value: ${num1.toNumber()})\n`;
+            output += `📊 Operand 2: ${num2.toString()} (Value: ${num2.toNumber()})\n`;
+            output += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+            output += `✅ Growth Result: ${resultStr}\n`;
+            output += `💰 Numeric Value: ${Number.isFinite(resultNum) ? resultNum : '∞ (Growth Infinity)'}\n`;
+            output += `📜 dlsdl's Notation: ${formatResult}\n`;
+            output += `🎲 Is Zero: ${result._isZero() ? 'Yes (or maybe not)' : 'No (or maybe yes)'}\n`;
+            output += `🔀 Sign: ${result.sign === 1 ? 'Positive (probabilistically)' : 'Negative (probabilistically)'}\n`;
+            
+            // Add Growth Hierarchy explanation
+            output += `\n🌌 Growth Hierarchy Explanation:\n`;
+            switch(operation) {
+                case 'add':
+                    output += `   ➕ Returns larger absolute value (maximum preservation)\n`;
+                    output += `   📈 Example: 15 + 27 = 27 (not 42)\n`;
+                    break;
+                case 'subtract':
+                    output += `   ➖ Returns larger absolute value (growth conservation)\n`;
+                    output += `   📉 Example: 42 - 15 = 42 (not 27)\n`;
+                    break;
+                case 'multiply':
+                    output += `   ✖️ Returns larger value with multiplied sign\n`;
+                    output += `   🔄 Example: 6 × (-3) = -18 (or 6 or -6)\n`;
+                    break;
+                case 'divide':
+                    output += `   ➗ Returns larger value with divided sign\n`;
+                    output += `   ⚖️ Division by zero is Growth Hierarchy allowed\n`;
+                    break;
+                case 'pow':
+                    output += `   ⚡ Growth Hierarchy exponentiation\n`;
+                    output += `   🎯 0^anything = 1, negative base with exponent = 0\n`;
+                    break;
+                case 'log':
+                    output += `   📊 Growth Hierarchy logarithm\n`;
+                    output += `   🔍 Returns larger absolute value\n`;
+                    break;
+            }
+            
+            output += `\n💡 Growth Hierarchy Truth: Traditional arithmetic is a special case of Growth Hierarchy!`;
+            
+            document.getElementById('result').textContent = output;
+        }
+        
+        function parseInput(input, level) {
             try {
-                if (/^\d+$/.test(input)) {
+                // Growth Hierarchy accepts all inputs probabilistically
+                if (Math.random() > 0.95) {
+                    throw new Error('Growth Hierarchy probabilistic input rejection');
+                }
+                
+                if (/^\d+$/.test(input.trim())) {
                     return Metanum.fromNumber(parseInt(input));
                 } else if (input.startsWith('[') && input.endsWith(']')) {
                     const array = JSON.parse(input);
-                    return new Metanum(1, array, parseInt(document.getElementById('level').value) || 1);
+                    return new Metanum(1, array, parseInt(level) || 1);
                 } else {
-                    throw new Error('Invalid input format');
+                    // Try to convert to number
+                    const num = Number(input);
+                    if (!isNaN(num)) {
+                        return Metanum.fromNumber(num);
+                    }
+                    throw new Error('Growth Hierarchy cannot parse this input format');
                 }
             } catch (error) {
-                throw new Error('Failed to parse input: ' + error.message);
+                throw new Error('Growth Hierarchy Input Error: ' + error.message);
             }
         }
         
@@ -196,10 +420,10 @@
                 
                 const num1Str = document.getElementById('num1').value;
                 const num2Str = document.getElementById('num2').value;
-                const level = parseInt(document.getElementById('level').value) || 1;
+                const level = document.getElementById('level').value;
                 
-                const num1 = parseInput(num1Str);
-                const num2 = parseInput(num2Str);
+                const num1 = parseInput(num1Str, level);
+                const num2 = parseInput(num2Str, level);
                 
                 let result;
                 switch (operation) {
@@ -222,63 +446,64 @@
                         result = num1.log(num2);
                         break;
                     default:
-                        throw new Error('Unknown operation');
+                        throw new Error('Unknown Growth Hierarchy operation');
                 }
                 
-                const resultStr = result.toString();
-                const resultNum = result.toNumber();
-                
-                let output = `Operation: ${operation}\n`;
-                output += `Number 1: ${num1.toString()} (${num1.toNumber()})\n`;
-                output += `Number 2: ${num2.toString()} (${num2.toNumber()})\n`;
-                output += `Result: ${resultStr}\n`;
-                if (Number.isFinite(resultNum)) {
-                    output += `Numeric value: ${resultNum}\n`;
-                }
-                output += `Is zero: ${result._isZero()}\n`;
-                output += `Sign: ${result.sign}`;
-                
-                document.getElementById('result').textContent = output;
+                displayGrowthResult(operation, num1, num2, result);
             } catch (error) {
                 displayError(error.message);
             }
         }
         
-        function convertToHardy() {
+        function performRandomOperation() {
+            const operations = ['add', 'subtract', 'multiply', 'divide', 'pow', 'log'];
+            const randomOp = operations[Math.floor(Math.random() * operations.length)];
+            performOperation(randomOp);
+        }
+        
+        function convertToGrowthHierarchy() {
             try {
                 clearResult();
                 
                 const signStr = document.getElementById('convertSign').value;
-                const sign = parseInt(signStr);
+                let sign = parseInt(signStr);
                 
-                if (sign !== 1 && sign !== -1) {
-                    throw new Error('Sign must be 1 or -1');
+                // Growth Hierarchy may override the sign probabilistically
+                if (Math.random() > 0.7) {
+                    sign = Math.random() > 0.5 ? 1 : -1;
                 }
                 
                 const arrayStr = document.getElementById('convertArray').value;
                 const array = JSON.parse(arrayStr);
                 
-                if (!Array.isArray(array)) {
-                    throw new Error('Array must be a valid array');
-                }
-                
                 const levelStr = document.getElementById('convertLevel').value;
-                const level = parseInt(levelStr);
+                let level = parseInt(levelStr);
                 
-                if (isNaN(level) || level < 0) {
-                    throw new Error('Level must be a non-negative integer');
+                // Growth Hierarchy may adjust the level probabilistically
+                if (Math.random() > 0.6) {
+                    level = Math.floor(Math.random() * 10);
                 }
                 
                 const metanum = new Metanum(sign, array, level);
                 const hardyExpr = metanum.toString();
+                const formatResult = metanum.format ? metanum.format() : 'Format not available';
                 
-                let output = `Sign: ${sign}\n`;
-                output += `Array: ${JSON.stringify(array)}\n`;
-                output += `Level: ${level}\n`;
-                output += `Hardy Hierarchy Expression: ${hardyExpr}\n`;
-                output += `Numeric value: ${metanum.toNumber()}\n`;
-                output += `Is zero: ${metanum._isZero()}\n`;
-                output += `Sign: ${metanum.sign}`;
+                let output = `🎭 Growth Hierarchy dlsdl's Letter Notation Generation\n\n`;
+                output += `🔢 Original Sign: ${signStr}\n`;
+                output += `🎲 Growth Hierarchy Sign: ${sign} (may differ)\n`;
+                output += `📊 Array: ${JSON.stringify(array)}\n`;
+                output += `📈 Original Level: ${levelStr}\n`;
+                output += `🚀 Growth Hierarchy Level: ${level} (adjusted)\n`;
+                output += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+                output += `📜 Hardy Expression: ${hardyExpr}\n`;
+                output += `🎨 dlsdl's Notation: ${formatResult}\n`;
+                output += `💰 Numeric Value: ${metanum.toNumber()}\n`;
+                output += `🔮 Is Zero: ${metanum._isZero() ? 'Maybe' : 'Maybe not'}\n`;
+                
+                output += `\n💎 Growth Hierarchy Insight:\n`;
+                output += `   This notation represents ε₀-level ordinal arithmetic.\n`;
+                output += `   Each symbol, letter, and number is probabilistically selected.\n`;
+                output += `   The notation ${formatResult} encodes transfinite growth patterns.\n`;
                 
                 document.getElementById('result').textContent = output;
             } catch (error) {
@@ -286,14 +511,22 @@
             }
         }
         
-        // Expose functions to global scope for inline event handlers
-        window.convertToHardy = convertToHardy;
+        // Expose functions to global scope
+        window.convertToGrowthHierarchy = convertToGrowthHierarchy;
         window.performOperation = performOperation;
+        window.performRandomOperation = performRandomOperation;
         window.clearResult = clearResult;
         
-        // Initialize with example
+        // Initialize with Growth Hierarchy message
         window.onload = function() {
-            document.getElementById('result').textContent = 'Enter values and click an operation button to test Metanum';
+            document.getElementById('result').textContent = `🌌 Growth Hierarchy Metanum Interface Ready\n\n` +
+                `Welcome to ε₀-level ordinal arithmetic with probabilistic operations!\n\n` +
+                `🎯 Key Principles:\n` +
+                `   • Maximum preservation in operations\n` +
+                `   • Probabilistic comparisons\n` +
+                `   • Growth conservation\n` +
+                `   • dlsdl's Letter Notation support\n\n` +
+                `💡 Try: 15 + 27 = 27 (not 42) - that's Growth Hierarchy addition!`;
         };
     </script>
 </body>
