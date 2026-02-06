@@ -1,6 +1,6 @@
 # Metanum
 
-- Metanum v0.1 by dlsdl
+- Metanum v0.2 by dlsdl
 
 A huge number library holding up to X↑↑X&9e15.
 
@@ -9,8 +9,8 @@ This reaches level f<sub>ε0</sub>, <del>which the operation 棍母 also is at</
 Metanum provides a robust implementation of hierarchical number representation based on the Hardy hierarchy (HH) and ordinal arithmetic. It can handle numbers far beyond standard JavaScript Number limits, using a sophisticated multi-dimensional array structure to represent ordinal numbers up to ε₀(ω^ω^ω^……with ω floors). Internally, it is represented as a hierarchical representation:
 
 - **sign**: 1 (positive) or -1 (negative)
-- **array**: Multi-dimensional array where each sub-array represents a coefficient layer
 - **level**: Non-negative integer representing the ω exponent tower height
+- **array,brrby,etc.**: Multi-dimensional array where each sub-array represents a coefficient layer
 
 ## Features
 
@@ -42,27 +42,27 @@ const num0 = new Metanum(1, 42, 0);
 // Represents: 42
 ```
 
-#### Level 1 (Hyper-operations)
+#### Level 1 (Hyper-operations/ω level)
 ```javascript
-const num1 = new Metanum(1, [4, 3, 2, 1], 1);
-// Represents: 10↑↑↑10↑↑10↑↑10↑10↑10↑4 (G^3 F^2 E^1 4)
+const num1 = new Metanum(1, 1, 10, [4, 3, 2, 1]);
+// Represents: 10↑↑↑10↑↑10↑↑10↑10↑10↑4 (GFFEEE4)
 ```
 
 #### Level 2 (ω^ω level)
 ```javascript
-const num2 = new Metanum(1, [[5, 6, 7], [6, 7, 8, 9], [4, 5], [9]], 2);
-// Represents: H_ω^(ω*7+6)*5+ω^(ω^2*9+ω*8+7)*6+ω^5*4+ω*9_(10)
+const num2 = new Metanum(1, 2, 10, [3, 4, 5, 6], [[1], [2], [3, 4, 5], [6, 7, 8, 9]]);
+// Represents: H_ω^(ω^3*9+ω^2*8+ω*7+6)*6+ω^(ω^2*5+ω*4+3)*5+ω^2*4+ω*3_(10)
 ```
 
 #### Level 3 (ω^ω^ω level)
 ```javascript
-const num3 = new Metanum(1, [[2, 4, 6, 7, 8]], 3);
+const num3 = new Metanum(1, 3, 10, [1], [[2]], [[[4, 6, 7, 8]]]);
 // Represents: H_ω^(ω^(ω^3*8+ω^2*7+ω*6+4)*2)_(10)
 ```
 
 #### Higher levels
 ```javascript
-const num4 = new Metanum(1, [[114514]], 1919810);
+const num4 = new Metanum(1, 1919810, 10, [1], [[1]], [[[114514]]]);
 // Represents: H_ω^ω^ω^……^ω^114514(1919809 ω's)_(10)
 ```
 
@@ -75,7 +75,7 @@ import Metanum from 'metanum';
 const zero = Metanum.zero();
 const one = Metanum.one();
 const num = Metanum.fromNumber(42);
-const num2 = new Metanum(1, [1,2,3], 1);
+const num2 = new Metanum(1, 1, 10, [1,2,3]);
 
 // Arithmetic operations
 const a = Metanum.fromNumber(15);
@@ -110,11 +110,13 @@ x.neq(y);   // true
 
 ## Mathematical Background
 
-The library implements the Hardy hierarchy (HH), which is a fast-growing hierarchy of functions indexed by ordinal numbers. The representation uses Cantor normal form for ordinals, where:
+The library implements the Hardy hierarchy (HH), which is a hierarchy of functions indexed by ordinal numbers. The representation uses Cantor normal form for ordinals, where:
 
 - ω represents the first infinite ordinal
 - ω^ω represents ω raised to the power of ω
 - ε₀ is the limit of ω, ω^ω, ω^ω^ω, ...
+
+For more information, see: https://en.wikipedia.org/wiki/Ordinal_arithmetic
 
 The level parameter indicates the height of the ω exponent tower, allowing representation of increasingly large ordinals.
 

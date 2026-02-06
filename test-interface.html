@@ -148,12 +148,13 @@
         <div class="help">
             <h3>Usage Instructions</h3>
             <p><strong>Simple Numbers:</strong> Enter regular numbers like "42" or "100"</p>
-            <p><strong>Complex Numbers:</strong> Enter array format like "[[4,3,2,1]]"</p>
+            <p><strong>Complex Numbers:</strong> Enter array format like "[4,3,2,1]" (lowest to highest)</p>
             <p><strong>Level:</strong> Set the hierarchy level (default: 1)</p>
+            <p><strong>Data Structure:</strong> (sign, layer, array, brrby, crrcy, drrdy)</p>
             <p><strong>Operations:</strong></p>
             <ul>
-                <li>Add: Growth hierarchy addition (returns maximum)</li>
-                <li>Subtract: Returns the larger number</li>
+                <li>Add: Returns the larger number (layer>=1) or normal addition (layer=0)</li>
+                <li>Subtract: Converts to addition with negated value</li>
                 <li>Multiply: Regular multiplication</li>
                 <li>Divide: Regular division</li>
                 <li>Power: Exponentiation</li>
@@ -176,19 +177,67 @@
         }
         
         function parseInput(input) {
-            try {
-                if (/^\d+$/.test(input)) {
-                    return Metanum.fromNumber(parseInt(input));
-                } else if (input.startsWith('[') && input.endsWith(']')) {
-                    const array = JSON.parse(input);
-                    return new Metanum(1, array, parseInt(document.getElementById('level').value) || 1);
-                } else {
-                    throw new Error('Invalid input format');
-                }
-            } catch (error) {
-                throw new Error('Failed to parse input: ' + error.message);
+    try {
+        if (/^\d+$/.test(input)) {
+            return Metanum.fromNumber(parseInt(input));
+        } else if (input.startsWith('[') && input.endsWith(']')) {
+            const array = JSON.parse(input);
+            const level = parseInt(document.getElementById('level').value) || 1;
+            
+            if (!Array.isArray(array)) {
+                throw new Error('Input must be a valid array');
             }
+            
+            let sign = 1;
+            let arr = array;
+            let brrby, crrcy, drrdy;
+            
+            if (level === 1) {
+                brrby = Array.isArray(array[0]) ? array[0] : array;
+                crrcy = [[0]];
+                drrdy = [[[0]]];
+            } else if (level === 2) {
+                if (Array.isArray(array[0])) {
+                    if (Array.isArray(array[0][0])) {
+                        brrby = array[0][0];
+                        crrcy = array;
+                    } else {
+                        brrby = array[0];
+                        crrcy = array.slice(1);
+                    }
+                } else {
+                    brrby = array;
+                    crrcy = [[0]];
+                }
+                drrdy = [[[0]]];
+            } else {
+                if (Array.isArray(array[0]) && Array.isArray(array[0][0]) && Array.isArray(array[0][0][0])) {
+                    brrby = array[0][0][0];
+                    crrcy = array[0][0];
+                    drrdy = array;
+                } else if (Array.isArray(array[0]) && Array.isArray(array[0][0])) {
+                    brrby = array[0][0];
+                    crrcy = array[0];
+                    drrdy = array.slice(1);
+                } else if (Array.isArray(array[0])) {
+                    brrby = array[0];
+                    crrcy = array.slice(1);
+                    drrdy = [[[0]]];
+                } else {
+                    brrby = array;
+                    crrcy = [[0]];
+                    drrdy = [[[0]]];
+                }
+            }
+            
+            return new Metanum(sign, level, 10, brrby, crrcy, drrdy);
+        } else {
+            throw new Error('Invalid input format');
         }
+    } catch (error) {
+        throw new Error('Failed to parse input: ' + error.message);
+    }
+}
         
         function performOperation(operation) {
             try {

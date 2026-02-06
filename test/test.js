@@ -55,10 +55,10 @@ function testAddition() {
   const b = Metanum.fromNumber(27);
   const sum = a.add(b);
   
-  assert(sum.toNumber() === 27, '15 + 27 = 27 (growth hierarchy addition)');
+  assert(sum.toNumber() === 42, '15 + 27 = 42 (layer=0 addition)');
   
   const sum4 = b.add(a);
-  assert(sum4.toNumber() === 27, '27 + 15 = 27 (growth hierarchy addition)');
+  assert(sum4.toNumber() === 42, '27 + 15 = 42 (layer=0 addition)');
   
   const zero = Metanum.zero();
   const sum2 = a.add(zero);
@@ -66,7 +66,12 @@ function testAddition() {
   
   const neg = Metanum.fromNumber(-10);
   const sum3 = a.add(neg);
-  assert(sum3.toNumber() === 15, '15 + (-10) = 15 (growth hierarchy addition)');
+  assert(sum3.toNumber() === 5, '15 + (-10) = 5 (layer=0 addition)');
+  
+  const complex1 = new Metanum(1, 1, 10, [5, 0]);
+  const complex2 = new Metanum(1, 1, 10, [3, 0]);
+  const sumComplex = complex1.add(complex2);
+  assert(sumComplex.toString() === 'H_ω*5_(10)', 'layer>=1 + layer>=1 returns larger');
 }
 
 function testSubtraction() {
@@ -76,7 +81,7 @@ function testSubtraction() {
   const b = Metanum.fromNumber(15);
   const diff = a.subtract(b);
   
-  assert(diff.toNumber() === 42, '42 - 15 = 42 (growth hierarchy addition)');
+  assert(diff.toNumber() === 27, '42 - 15 = 27 (layer=0 subtraction)');
   
   const zero = Metanum.zero();
   const diff2 = a.subtract(zero);
@@ -84,7 +89,7 @@ function testSubtraction() {
   
   const neg = Metanum.fromNumber(-10);
   const diff3 = a.subtract(neg);
-  assert(diff3.toNumber() === 42, '42 - (-10) = 42 (growth hierarchy addition)');
+  assert(diff3.toNumber() === 52, '42 - (-10) = 52 (layer=0 subtraction)');
   
   const c = Metanum.fromNumber(42);
   const diff4 = a.subtract(c);
@@ -200,7 +205,7 @@ function testCloning() {
   
   assert(clone.equals(a), 'Clone equals original');
   assert(clone !== a, 'Clone is a different object');
-  assert(clone.array !== a.array, 'Clone has different array reference');
+  assert(clone.brrby !== a.brrby, 'Clone has different brrby reference');
 }
 
 function testEdgeCases() {
@@ -227,16 +232,18 @@ function testEdgeCases() {
 function testComplexArrays() {
   console.log('\n=== Testing Complex Array Structures ===');
   
-  const complex1 = new Metanum(1, [4, 3, 2, 1], 1);
-  assert(complex1.level === 1, 'Complex level 1');
-  assert(complex1.array.length === 4, 'Array length');
+  const complex1 = new Metanum(1, 1, 10, [4, 3, 2, 1]);
+  assert(complex1.layer === 1, 'Complex level 1');
+  assert(complex1.brrby.length === 4, 'Brrby length');
+  assert(complex1.brrby[3] === 4, 'Highest coefficient');
   
-  const complex2 = new Metanum(1, [[5, 6, 7], [6, 7, 8, 9], [4, 5], [9]], 2);
-  assert(complex2.level === 2, 'Complex level 2');
-  assert(complex2.array.length === 4, 'Outer array length');
+  const complex2 = new Metanum(1, 2, 10, [4, 3, 2, 1], [[5, 6, 7], [6, 7, 8, 9], [4, 5], [9]]);
+  assert(complex2.layer === 2, 'Complex level 2');
+  assert(complex2.brrby.length === 4, 'Brrby length');
+  assert(complex2.crrcy.length === 4, 'Outer crrcy length');
   
-  const complex3 = new Metanum(1, [[2, 4, 6, 7, 8]], 3);
-  assert(complex3.level === 3, 'Complex level 3');
+  const complex3 = new Metanum(1, 3, 10, [1], [[[0]]], [[[[0]]]]);
+  assert(complex3.layer === 3, 'Complex level 3');
 }
 
 function runAllTests() {

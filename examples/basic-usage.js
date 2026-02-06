@@ -56,23 +56,27 @@ console.log(`   Original: ${pos.toNumber()}, Negated: ${pos.negate().toNumber()}
 console.log(`   Original: ${neg.toNumber()}, Absolute: ${neg.abs().toNumber()}`);
 
 console.log('\n7. Complex array structures (Hardy hierarchy):');
-const complex1 = new Metanum(1, [[4, 3, 2, 1]], 1);
+const complex1 = new Metanum(1, 1, 10, [1, 2, 3, 4]);
 console.log(`   Level 1: ${complex1.toString()}`);
-console.log(`   Represents: 10↑↑↑10↑↑10↑↑10↑10↑10↑4 (G^3 F^2 E^1 4)`);
+console.log(`   Represents: H_ω^3*4+H_ω^2*3+H_ω^1*2+H_ω^0*1_(10)`);
 
-const complex2 = new Metanum(1, [[5, 6, 7], [6, 7, 8, 9], [4, 5], [9]], 2);
+const complex2 = new Metanum(1, 2, 10, [1, 2, 3, 4], [[5, 6, 7], [6, 7, 8, 9], [4, 5], [9]]);
 console.log(`   Level 2: ${complex2.toString()}`);
-console.log(`   Represents: H_ω^(ω*7+6)*5+ω^(ω^2*9+ω*8+7)*6+ω^5*4+ω*9_(10)`);
+console.log(`   Represents: H_ω^(ω^3*7+ω^2*6+ω*5+4)*4+..._(10)`);
 
-const complex3 = new Metanum(1, [[2, 4, 6, 7, 8]], 3);
+const complex3 = new Metanum(1, 3, 10, [1], [[1]], [[[2, 4, 6, 7, 8]]]);
 console.log(`   Level 3: ${complex3.toString()}`);
-console.log(`   Represents: H_ω^(ω^(ω^3*8+ω^2*7+ω*6+4)*2)_(10)`);
+console.log(`   Represents: H_ω^(ω^(ω^4*8+ω^3*7+ω^2*6+ω*4+2))_(10)`);
 
 console.log('\n8. Arithmetic with complex structures:');
-const c1 = new Metanum(1, [[10, 5]], 1);
-const c2 = new Metanum(1, [[20, 3]], 1);
+const c1 = new Metanum(1, 1, 10, [5, 10]);
+const c2 = new Metanum(1, 1, 10, [3, 20]);
 const sum = c1.add(c2);
-console.log(`   Complex addition: ${sum.toString()}`);
+const diff = c1.subtract(c2);
+console.log(`   c1 = ${c1.toString()}`);
+console.log(`   c2 = ${c2.toString()}`);
+console.log(`   c1 + c2 = ${sum.toString()} (returns larger)`);
+console.log(`   c1 - c2 = ${diff.toString()} (returns larger)`);
 
 console.log('\n9. Edge cases:');
 const max = Metanum.fromNumber(1e308);
