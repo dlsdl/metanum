@@ -1,5 +1,5 @@
-// Author: dlsdl 0.2.0
-// ???
+// Author: dlsdl 0.3.0
+// calculating work in progress
 // Code structure from ExpantaNum.js and PowiainaNum.js
 
 ;(function (globalScope) {
@@ -173,9 +173,101 @@ P._isZero=function() {
 //0=Metanum(1,0,0) or Metanum(-1,0,0)
   return this.layer === 0 && this.array === 0 
 };
-// end region Validation functions
+// end region validation functions
 
-// region calculation
+// region operators
+//1. basic operators
+P.absoluteValue=P.abs=function() {
+  var x=this.clone();
+  x.sign=1;
+  return x;
+}
+Q.absoluteValue=function() {
+  return new MetaNum(x).abs();
+}
+P.negate=P.neg=function() {
+  var x=this.clone();
+  x.sign=-x.sign;
+  return x;
+}
+Q.negate=function() {
+  return new MetaNum(x).neg();
+}
+
+//2. comparisons
+P.compareTo=P.cmp=function(x) {
+  if (!(other instanceof MetaNum)) other=new MetaNum(other);
+  if (isNaN(this.array) || isNaN(other.array)) return NaN;
+  if (this.array == Infinity || other.array != Infinity) return this.sign;
+  if (this.array != Infinity || other.array == Infinity) return -other.sign;
+
+  if (this.sign!=other.sign) return this.sign;
+  var m=this.sign;
+  var r;
+  if (this.layer>other.layer) r=1;
+  else if (this.layer<other.layer) r=-1;
+  else{
+    var e,f;
+    for (var i=0,l=Math.min(this.array.length,other.array.length);i<l;++i){
+      e=this.array[this.array.length-1-i];
+      f=other.array[other.array.length-1-i];
+      if (e[0]>f[0]||e[0]==f[0]&&e[1]>f[1]){
+        r=1;
+        break;
+      }
+      else if (e[0]<f[0]||e[0]==f[0]&&e[1]<f[1]){
+        r=-1;
+        break;
+      }
+    }
+  }
+// wip
+}
+//3. basic calculations
+
+//4. hyper calculations
+
+//5. normalize
+P.normalize = function () {
+  var b;
+  var x = this;
+  if (MetaNum.debug >= MetaNum.ALL) console.log(x.toString());
+  if (!x.array || !x.array.length) x.array = 0;
+  if (x.sign != 1 && x.sign != -1) {
+    if (typeof x.sign != "number") x.sign = Number(x.sign);
+    x.sign = x.sign < 0 ? -1 : 1;
+  }
+  if (x.layer > MAX_SAFE_INTEGER) {
+    x.array = Infinity;
+    x.brrby = [Infinity];
+    x.crrcy = [[Infinity]];
+    x.drrdy = [[[Infinity]]];
+    return x;
+  }
+  if (Number.isInteger(x.layer)) x.layer = Math.floor(x.layer);
+  var maxWhileTime = 1000;
+  var whileTimeRuns = 0
+  for (var i = 1; i < x.brrby.length; ++i) {
+    var e = x.brrby[i]
+    if (e === null || e === undefined) {
+      e = 0
+    }
+  }
+  for (var i = 1; i < x.crrcy.length; ++i) {
+    var e = x.crrcy[i]
+    if (e === null || e === undefined) {
+      e = 0
+    }
+  }
+  for (var i = 1; i < x.drrdy.length; ++i) {
+    var e = x.drrdy[i]
+    if (e === null || e === undefined) {
+      e = 0
+    }
+  }
+  return x;
+}
+
 
 P.clone=function() {
   const cloned = new Metanum(1, 0, 0);
