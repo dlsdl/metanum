@@ -38,13 +38,13 @@ npm install metanum
 
 #### Level 0 (normal number)
 ```javascript
-const num0 = new Metanum(1, 42, 0);
+const num0 = new Metanum(1, 0, 42);
 // Represents: 42
 ```
 
 #### Level 1 (Hyper-operations/ω level)
 ```javascript
-const num1 = new Metanum(1, 1, 10, [4, 3, 2, 1]);
+const num1 = new Metanum(1, 1, 10, [3, 2, 1]);
 // Represents: 10↑↑↑10↑↑10↑↑10↑10↑10↑4 (GFFEEE4)
 ```
 
@@ -118,7 +118,7 @@ The library implements the Hardy hierarchy (HH), which is a hierarchy of functio
 
 For more information, see: https://en.wikipedia.org/wiki/Ordinal_arithmetic
 
-The level parameter indicates the height of the ω exponent tower, allowing representation of increasingly large ordinals.
+The layer parameter indicates the height of the ω exponent tower, allowing representation of increasingly large ordinals.
 
 ## dlsdl's Letter Notation
 
@@ -346,9 +346,9 @@ It equals to (β,γ,δ,...,int(α)[1]10^frac(κ),0,...,0,ζ)|10 with int(κ) 0's
 
 (v) (...[1]0,...,0,β,γ...)|α = (...[1]β,γ...)|α
 
-Rule 2 and 3 are the case where the last nonzero entry is at the end of a plane and is an iteger. Rule 4 is when the last nonzero entry is at the end of a plane, you use the fractional part of the last entry , and put it in the next row.
+Rule 2 and 3 are the case where the last nonzero entry is at the end of a plane and is an integer. Rule 4 is when the last nonzero entry is at the end of a plane, you use the fractional part of the last entry, and put it in the next row.
 
-By countinuing using recursion and diagonalization to !Aa, we can define !Aa|a(f_ω^ω+1_(10) in FGH, using | as seperator symbol), !Ab(f_ω^(ω+1)_(10) in FGH), !Ac, !Ad,..., !Az with the same meaning as !Aa, and !Ba(f_ω^(ω2)_(10) in FGH), !Bb, !Bc, ..., !Bz, !Aaa. Comparing these with the previous letters, we can see that notations with ! symbol have a more ω^ in FGH than those without ! symbol.
+By countinuing using recursion and diagonalization to !Aa, we can define !Aa|a (f_ω^ω+1_(10) in FGH, using | as seperator symbol), !Ab (f_ω^(ω+1)_(10) in FGH), !Ac, !Ad,..., !Az with the same meaning as !Aa, and !Ba(f_ω^(ω2)_(10) in FGH), !Bb, !Bc, ..., !Bz, !Aaa. Comparing these with the previous letters, we can see that notations with ! symbol have a more ω^ in FGH than those without ! symbol.
 
 Fractional number of rows, columns, etc.. are defined in the same way as in the linear array notation, [0] is the comma. ζ is an array of 0's and dimensional seperators. 
 

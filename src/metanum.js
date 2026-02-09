@@ -1,28 +1,69 @@
 // Author: dlsdl 0.2.0
-// New Metanum data structure with Cantor normal form
+// ???
 // Code structure from ExpantaNum.js and PowiainaNum.js
 
-var metanumError = "[MetanumError] ",
-    MAX_SAFE_INTEGER = 9007199254740991,
+;(function (globalScope) {
+  "use strict";
 
-    // Prototype object
-    P = {},
+  // --  EDITABLE DEFAULTS  -- //
+  var MetaNum = {
+    // The maximum number of operators stored in array.
+    // If the number of operations exceed the limit, then the least significant operations will be discarded.
+    // This is to prevent long loops and eating away of memory and processing time.
+    // 1000 means there are at maximum of 1000 elements in array.
+    // It is not recommended to make this number too big.
+    // `MetaNum.maxOps = 1000;`
+    maxOps: 1000,
 
-    // Static object
-    Q = {},
+    // Specify what format is used when serializing for JSON.stringify
+    // JSON   0 JSON object
+    // STRING 1 String
+    serializeMode: 0,
 
-    // Constants object
-    R = {};
+    // Deprecated
+    // Level of debug information printed in console
+    // NONE   0 Show no information.
+    // NORMAL 1 Show operations.
+    // ALL    2 Show everything.
+    debug: 0
+  },
+  // -- END OF EDITABLE DEFAULTS -- //
 
-// Constants
+  external = true,
+  metaNumError = "[MetaNumError] ",
+  invalidArgument = metaNumError + "Invalid argument: ",
+//isMetaNum = /^[+-]*(Infinity|NaN|[!@#$%&~<>+]?(?:[A-Z][a-z]*\^\d+(?:\s+[A-Z][a-z]*\^\d+)*\s*)?(?:(\d+(?:\.\d*)?|\.\d+)(?:[Ee][+-]*\d+)?)?\s*(0|\d+(?:\.\d*)?|\.\d+))$/,
+
+  MAX_SAFE_INTEGER = 9007199254740991,
+  MAX_E = Math.log10(MAX_SAFE_INTEGER),
+
+  // Prototype object
+  P = {},
+
+  // Static object
+  Q = {},
+
+  // Constants object
+  R = {};
+
+//Metanum Constants
 R.ZERO = 0;
 R.ONE = 1;
 R.E = Math.E;
+R.LN2=Math.LN2;
+R.LN10=Math.LN10;
+R.LOG2E=Math.LOG2E;
+R.LOG10E=Math.LOG10E;
 R.PI = Math.PI;
+R.SQRT1_2=Math.SQRT1_2;
+R.SQRT2=Math.SQRT2;
 R.MAX_SAFE_INTEGER = MAX_SAFE_INTEGER;
+R.MIN_SAFE_INTEGER = Number.MIN_SAFE_INTEGER;
 R.NaN = Number.NaN;
 R.NEGATIVE_INFINITY = Number.NEGATIVE_INFINITY;
 R.POSITIVE_INFINITY = Number.POSITIVE_INFINITY;
+R.E_MAX_SAFE_INTEGER="E"+MAX_SAFE_INTEGER;
+R.TETRATED_MAX_SAFE_INTEGER="F"+MAX_SAFE_INTEGER;
 /* Tritri, = 3↑↑↑3 = power tower with height 7625597484987 base 3. */
 R.TRITRI = "1, 1, 3638334640023.7783, [7625597484984, 1]";
 /* The Graham's Number, = G^64(4) */
@@ -32,15 +73,15 @@ R.QqQe308 = "1, 2, 308, [1, 1], [[4, 17], [16, 17]]";
 R.MAX_METANUM_VALUE = "1, " + MAX_SAFE_INTEGER + ", " + MAX_SAFE_INTEGER + ", [" + MAX_SAFE_INTEGER + "], [[ " + MAX_SAFE_INTEGER + " ]], [[[[" + MAX_SAFE_INTEGER + "]]]]";
 
 
-// Validation functions
-function validateSign(sign) {
+//region Validation functions
+P._validateSign=function validateSign(sign) {
   if (sign !== 1 && sign !== -1) {
     throw new Error('Sign must be 1 or -1');
   }
   return sign;
 }
 
-function validateLayer(layer) {
+P._validateLayer=function validateLayer(layer) {
   const numLayer = Number(layer);
   if (!Number.isInteger(numLayer) || numLayer < 0) {
     throw new Error('Layer must be a non-negative integer');
@@ -48,7 +89,7 @@ function validateLayer(layer) {
   return numLayer;
 }
 
-function validateArray(array) {
+P._validateArray=function validateArray(array) {
   const num = Number(array);
   if (num < 0) {
     throw new Error('Array must be a non-negative number');
@@ -56,7 +97,7 @@ function validateArray(array) {
   return num;
 }
 
-function validateBrrby(brrby) {
+P._validateBrrby=function validateBrrby(brrby) {
   if (!Array.isArray(brrby)) {
     throw new Error('Brrby must be an array');
   }
@@ -72,7 +113,7 @@ function validateBrrby(brrby) {
   });
 }
 
-function validateCrrcy(crrcy) {
+P._validateCrrcy=function validateCrrcy(crrcy) {
   if (!Array.isArray(crrcy)) {
     throw new Error('Crrcy must be a 2-dimensional array');
   }
@@ -96,64 +137,45 @@ function validateCrrcy(crrcy) {
   });
 }
 
-function validateDrrdy(drrdy) {
+P._validateDrrdy=function validateDrrdy(drrdy) {
   if (!Array.isArray(drrdy)) {
-    throw new Error('Drrdy must be a 4-dimensional array');
+    throw new Error('Drrdy must be a 3-dimensional array');
   }
   if (drrdy.length === 0) {
-    return [[[[0]]]];
+    return [[[0]]];
   }
   return drrdy.map(tier => {
     if (!Array.isArray(tier)) {
-      throw new Error('Drrdy elements must be 3D arrays');
+      throw new Error('Drrdy elements must be 2D arrays');
     }
     if (tier.length === 0) {
-      return [[[0]]];
+      return [[0]];
     }
-    return tier.map(twoD => {
-      if (!Array.isArray(twoD)) {
-        throw new Error('Drrdy 3D elements must be 2D arrays');
+    return tier.map(row => {
+      if (!Array.isArray(row)) {
+        throw new Error('Drrdy 2D elements must be 1D arrays');
       }
-      if (twoD.length === 0) {
-        return [[0]];
+      if (row.length === 0) {
+        return [0];
       }
-      return twoD.map(row => {
-        if (!Array.isArray(row)) {
-          throw new Error('Drrdy 2D elements must be arrays');
+      return row.map(val => {
+        const num = Number(val);
+        if (!Number.isInteger(num) || num < 0) {
+          throw new Error('Drrdy 1D elements must be non-negative integers');
         }
-        if (row.length === 0) {
-          return [0];
-        }
-        return row.map(val => {
-          const num = Number(val);
-          if (!Number.isInteger(num) || num < 0) {
-            throw new Error('Drrdy elements must be non-negative integers');
-          }
-          return num;
-        });
+        return num;
       });
     });
   });
 }
 
-// Prototype methods
-
-P._validateSign=validateSign;
-
-P._validateLayer=validateLayer;
-
-P._validateArray=validateArray;
-
-P._validateBrrby=validateBrrby;
-
-P._validateCrrcy=validateCrrcy;
-
-P._validateDrrdy=validateDrrdy;
-
 P._isZero=function() {
 //0=Metanum(1,0,0) or Metanum(-1,0,0)
   return this.layer === 0 && this.array === 0 
 };
+// end region Validation functions
+
+// region calculation
 
 P.clone=function() {
   const cloned = new Metanum(1, 0, 0);
@@ -750,67 +772,26 @@ for (var constProp in R) {
   }
 }
 
-// Export
-export default Metanum;
-; (function (globalScope) {
-    "use strict";
+  // Create and configure initial MetaNum constructor.
+  MetaNum=clone(MetaNum);
+  MetaNum=defineConstants(MetaNum);
+  MetaNum['default']=MetaNum.MetaNum=MetaNum;
 
-    var external = true;
-
-    var MetanumConfig = {
-        maxOps: 1000,
-        serializeMode: 0,
-        debug: 0
-    };
-
-    //#region environment detection
-    function getGlobalScope() {
-        if (typeof globalScope !== "undefined") {
-            return globalScope;
-        }
-        if (typeof self !== "undefined" && self && self.self === self) {
-            return self;
-        }
-        if (typeof globalThis !== "undefined") {
-            return globalThis;
-        }
-        return {};
+  // Export.
+  // AMD(Asynchronous Module Definition)
+  if (typeof define == 'function' && define.amd) {
+    define(function () {
+      return MetaNum;
+    });
+  // Node and other environments that support module.exports.
+  } else if (typeof module != 'undefined' && module.exports) {
+    module.exports = MetaNum;
+  // Browser.
+  } else {
+    if (!globalScope) {
+      globalScope = typeof self != 'undefined' && self && self.self == self
+        ? self : Function('return this')();
     }
-
-    var globalScope = getGlobalScope();
-    //#endregion
-
-    //#region export
-    function exportMetanum() {
-        // ES Module
-        if (typeof exports !== "undefined" && exports !== null) {
-            try {
-                exports = Metanum;
-                return true;
-            } catch (e) {
-                return false;
-            }
-        }
-
-        // Node.js
-        if (typeof module !== "undefined" && module && module.exports) {
-            try {
-                module.exports = Metanum;
-                return true;
-            } catch (e) {
-                return false;
-            }
-        }
-
-        // Browser or other environments
-        try {
-            globalScope.Metanum = Metanum;
-            return true;
-        } catch (e) {
-            return false;
-        }
-    }
-
-    exportMetanum();
-
-})(typeof globalThis !== "undefined" ? globalThis : (typeof window !== "undefined" ? window : (typeof global !== "undefined" ? global : this)));
+    globalScope.MetaNum = MetaNum;
+  }
+})(this);
