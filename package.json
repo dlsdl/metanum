@@ -1,6 +1,6 @@
 {
   "name": "metanum",
-  "version": "0.2",
+  "version": "0.3",
   "description": "A comprehensive JavaScript library for representing and manipulating extremely large numbers using Hardy hierarchy up to H_ε0_(1e308)",
   "main": "src/metanum.js",
   "type": "module",

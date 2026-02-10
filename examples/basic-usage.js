@@ -80,7 +80,7 @@ console.log(`   c1 - c2 = ${diff.toString()} (returns larger)`);
 
 console.log('\n9. Edge cases:');
 const max = Metanum.fromNumber(1e308);
-console.log(`   Maximum safe integer: ${max.toNumber()}`);
+console.log(`   Maximum safe value: ${max.toNumber()}`);
 
 console.log('\n10. Cloning:');
 const original = Metanum.fromNumber(42);

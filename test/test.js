@@ -1,4 +1,4 @@
-import Metanum from '../src/metanum.js';
+const Metanum = require('../src/metanum.js');
 
 function assert(condition, message) {
   if (!condition) {
