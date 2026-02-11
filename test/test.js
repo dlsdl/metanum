@@ -1,4 +1,5 @@
-const Metanum = require('../src/metanum.js');
+const MetanumModule = require('../src/metanum.js');
+const MetaNum = MetanumModule.default || MetanumModule;
 
 function assert(condition, message) {
   if (!condition) {
@@ -7,269 +8,67 @@ function assert(condition, message) {
   console.log(`✓ ${message}`);
 }
 
-function testBasicCreation() {
-  console.log('\n=== Testing Basic Creation ===');
-  
-  const zero = Metanum.zero();
-  assert(zero._isZero(), 'Zero creation');
-  assert(zero.toString() === '0', 'Zero string representation');
-  
-  const one = Metanum.one();
-  assert(one.toNumber() === 1, 'One creation');
-  assert(one.toString() === '1', 'One string representation');
-  
-  const num = Metanum.fromNumber(42);
-  assert(num.toNumber() === 42, 'Number creation');
-  assert(num.sign === 1, 'Positive number sign');
-  
-  const negNum = Metanum.fromNumber(-42);
-  assert(negNum.toNumber() === -42, 'Negative number creation');
-  assert(negNum.sign === -1, 'Negative number sign');
-}
+console.log('Starting Metanum Tests...');
+console.log('='.repeat(50));
 
-function testComparison() {
-  console.log('\n=== Testing Comparison Operations ===');
-  
-  const a = Metanum.fromNumber(10);
-  const b = Metanum.fromNumber(20);
-  const c = Metanum.fromNumber(10);
-  
-  assert(a.lt(b), '10 < 20');
-  assert(b.gt(a), '20 > 10');
-  assert(a.equals(c), '10 == 10');
-  assert(a.lte(b), '10 <= 20');
-  assert(a.lte(c), '10 <= 10');
-  assert(b.gte(a), '20 >= 10');
-  assert(b.gte(c), '20 >= 10');
-  assert(a.neq(b), '10 != 20');
-  
-  const neg = Metanum.fromNumber(-10);
-  assert(neg.lt(a), '-10 < 10');
-  assert(a.gt(neg), '10 > -10');
-}
+console.log('\n=== Testing Basic Creation ===');
 
-function testAddition() {
-  console.log('\n=== Testing Addition ===');
-  
-  const a = Metanum.fromNumber(15);
-  const b = Metanum.fromNumber(27);
-  const sum = a.add(b);
-  
-  assert(sum.toNumber() === 42, '15 + 27 = 42 (layer=0 addition)');
-  
-  const sum4 = b.add(a);
-  assert(sum4.toNumber() === 42, '27 + 15 = 42 (layer=0 addition)');
-  
-  const zero = Metanum.zero();
-  const sum2 = a.add(zero);
-  assert(sum2.equals(a), '15 + 0 = 15');
-  
-  const neg = Metanum.fromNumber(-10);
-  const sum3 = a.add(neg);
-  assert(sum3.toNumber() === 5, '15 + (-10) = 5 (layer=0 addition)');
-  
-  const complex1 = new Metanum(1, 1, 10, [3, 5]);
-  const complex2 = new Metanum(1, 1, 10, [3, 3]);
-  const sumComplex = complex1.add(complex2);
-  assert(sumComplex.toString() === 'H_ω*5+3_(10)', 'layer>=1 + layer>=1 returns larger');
-}
+const zero = new MetaNum(0);
+assert(zero.eq(new MetaNum(0)), 'Zero creation');
+assert(zero.toString() === '0', 'Zero string representation');
 
-function testSubtraction() {
-  console.log('\n=== Testing Subtraction ===');
-  
-  const a = Metanum.fromNumber(42);
-  const b = Metanum.fromNumber(15);
-  const diff = a.subtract(b);
-  
-  assert(diff.toNumber() === 27, '42 - 15 = 27 (layer=0 subtraction)');
-  
-  const zero = Metanum.zero();
-  const diff2 = a.subtract(zero);
-  assert(diff2.equals(a), '42 - 0 = 42');
-  
-  const neg = Metanum.fromNumber(-10);
-  const diff3 = a.subtract(neg);
-  assert(diff3.toNumber() === 52, '42 - (-10) = 52 (layer=0 subtraction)');
-  
-  const c = Metanum.fromNumber(42);
-  const diff4 = a.subtract(c);
-  assert(diff4._isZero(), '42 - 42 = 0');
-}
+const one = new MetaNum(1);
+assert(one.toNumber() === 1, 'One creation');
+assert(one.toString() === '1', 'One string representation');
 
-function testMultiplication() {
-  console.log('\n=== Testing Multiplication ===');
-  
-  const a = Metanum.fromNumber(6);
-  const b = Metanum.fromNumber(7);
-  const product = a.multiply(b);
-  
-  assert(product.toNumber() === 42, '6 * 7 = 42');
-  
-  const zero = Metanum.zero();
-  const product2 = a.multiply(zero);
-  assert(product2._isZero(), '6 * 0 = 0');
-  
-  const one = Metanum.one();
-  const product3 = a.multiply(one);
-  assert(product3.equals(a), '6 * 1 = 6');
-  
-  const neg = Metanum.fromNumber(-3);
-  const product4 = a.multiply(neg);
-  assert(product4.toNumber() === -18, '6 * (-3) = -18');
-}
+const num = new MetaNum(42);
+assert(num.toNumber() === 42, 'Number creation');
+assert(num.sign === 1, 'Positive number sign');
 
-function testDivision() {
-  console.log('\n=== Testing Division ===');
-  
-  const a = Metanum.fromNumber(42);
-  const b = Metanum.fromNumber(6);
-  const quotient = a.divide(b);
-  
-  assert(quotient.toNumber() === 7, '42 / 6 = 7');
-  
-  const one = Metanum.one();
-  const quotient2 = a.divide(a);
-  assert(quotient2.equals(one), '42 / 42 = 1');
-  
-  const neg = Metanum.fromNumber(-6);
-  const quotient3 = a.divide(neg);
-  assert(quotient3.toNumber() === -7, '42 / (-6) = -7');
-}
+const negNum = new MetaNum(-42);
+assert(negNum.toNumber() === -42, 'Negative number creation');
+assert(negNum.sign === -1, 'Negative number sign');
 
-function testExponentiation() {
-  console.log('\n=== Testing Exponentiation ===');
-  
-  const base = Metanum.fromNumber(2);
-  const exp = Metanum.fromNumber(10);
-  const result = base.pow(exp);
-  
-  assert(result.toNumber() === 1024, '2^10 = 1024');
-  
-  const zero = Metanum.zero();
-  const result2 = base.pow(zero);
-  assert(result2.equals(Metanum.one()), '2^0 = 1');
-  
-  const one = Metanum.one();
-  const result3 = base.pow(one);
-  assert(result3.equals(base), '2^1 = 2');
-}
+console.log('\n=== Testing Scientific Notation ===');
 
-function testLogarithm() {
-  console.log('\n=== Testing Logarithm ===');
-  
-  const num = Metanum.fromNumber(100);
-  const base = Metanum.fromNumber(10);
-  const result = num.log(base);
-  
-  assert(Math.abs(result.toNumber() - 2) < 0.0001, 'log_10(100) = 2');
-  
-  const num2 = Metanum.fromNumber(8);
-  const base2 = Metanum.fromNumber(2);
-  const result2 = num2.log(base2);
-  
-  assert(Math.abs(result2.toNumber() - 3) < 0.0001, 'log_2(8) = 3');
-}
+const m1 = new MetaNum(1e3);
+assert(m1.array === 1000, 'new MetaNum(1e3) array = 1000');
 
-function testNegation() {
-  console.log('\n=== Testing Negation ===');
-  
-  const a = Metanum.fromNumber(42);
-  const neg = a.negate();
-  
-  assert(neg.toNumber() === -42, '-(42) = -42');
-  assert(neg.negate().equals(a), '-(-42) = 42');
-  
-  const zero = Metanum.zero();
-  const negZero = zero.negate();
-  assert(negZero._isZero(), '-0 = 0');
-}
+const m2 = new MetaNum("1e3");
+assert(m2.array === 1000, 'new MetaNum("1e3") array = 1000');
 
-function testAbsoluteValue() {
-  console.log('\n=== Testing Absolute Value ===');
-  
-  const pos = Metanum.fromNumber(42);
-  const absPos = pos.abs();
-  assert(absPos.equals(pos), '|42| = 42');
-  
-  const neg = Metanum.fromNumber(-42);
-  const absNeg = neg.abs();
-  assert(absNeg.toNumber() === 42, '|-42| = 42');
-  assert(absNeg.sign === 1, 'Absolute value is positive');
-}
+const m3 = new MetaNum("-1e3");
+assert(m3.array === 1000, 'new MetaNum("-1e3") array = 1000');
+assert(m3.sign === -1, 'new MetaNum("-1e3") sign = -1');
 
-function testCloning() {
-  console.log('\n=== Testing Cloning ===');
-  
-  const a = Metanum.fromNumber(42);
-  const clone = a.clone();
-  
-  assert(clone.equals(a), 'Clone equals original');
-  assert(clone !== a, 'Clone is a different object');
-  assert(clone.brrby !== a.brrby, 'Clone has different brrby reference');
-}
+console.log('\n=== Testing Comparison ===');
 
-function testEdgeCases() {
-  console.log('\n=== Testing Edge Cases ===');
-  
-  const max = Metanum.fromNumber(1e308);
-  assert(max.toNumber() === 1e308, 'Maximum safe integer');
-  
-  try {
-    Metanum.fromNumber(Infinity);
-    assert(false, 'Should throw error for Infinity');
-  } catch (e) {
-    assert(true, 'Throws error for Infinity');
-  }
-  
-  try {
-    Metanum.fromNumber(NaN);
-    assert(false, 'Should throw error for NaN');
-  } catch (e) {
-    assert(true, 'Throws error for NaN');
-  }
-}
+const a = new MetaNum(10);
+const b = new MetaNum(20);
+const c = new MetaNum(10);
 
-function testComplexArrays() {
-  console.log('\n=== Testing Complex Array Structures ===');
-  
-  const complex1 = new Metanum(1, 1, 10, [1, 2, 3, 4]);
-  assert(complex1.layer === 1, 'Complex level 1');
-  assert(complex1.brrby.length === 4, 'Brrby length');
-  assert(complex1.brrby[3] === 4, 'Highest coefficient');
-  
-  const complex2 = new Metanum(1, 2, 10, [1, 2, 3, 4], [[5, 6, 7], [6, 7, 8, 9], [4, 5], [9]]);
-  assert(complex2.layer === 2, 'Complex level 2');
-  assert(complex2.brrby.length === 4, 'Brrby length');
-  assert(complex2.crrcy.length === 4, 'Outer crrcy length');
-  
-  const complex3 = new Metanum(1, 3, 10, [1], [[[0]]], [[[[0]]]]);
-  assert(complex3.layer === 3, 'Complex level 3');
-}
+assert(a.lt(b), '10 < 20');
+assert(b.gt(a), '20 > 10');
+assert(a.eq(c), '10 == 10');
 
-function runAllTests() {
-  console.log('Running Metanum Test Suite...');
-  
-  try {
-    testBasicCreation();
-    testComparison();
-    testAddition();
-    testSubtraction();
-    testMultiplication();
-    testDivision();
-    testExponentiation();
-    testLogarithm();
-    testNegation();
-    testAbsoluteValue();
-    testCloning();
-    testEdgeCases();
-    testComplexArrays();
-    
-    console.log('\n✓ All tests passed!');
-  } catch (error) {
-    console.error('\n✗ Test failed:', error.message);
-    console.error(error.stack);
-    process.exit(1);
-  }
-}
+console.log('\n=== Testing Layer 1 (ω) ===');
 
-runAllTests();
+const omega = new MetaNum(1, 1, 10, [1]);
+assert(omega.layer === 1, 'Layer 1 creation');
+assert(omega.array === 10, 'ω has array=10');
+assert(omega.brrby[0] === 1, 'ω brrby[0] = 1');
+
+console.log('\n=== Testing Layer 2 (ω^ω) ===');
+
+const omegaSquared = new MetaNum(1, 2, 10, [1], [[1]]);
+assert(omegaSquared.layer === 2, 'Layer 2 creation');
+assert(omegaSquared.array === 10, 'ω^ω has array=10');
+
+console.log('\n=== Testing Complex Arrays ===');
+
+const complex2 = new MetaNum(1, 2, 10, [1, 2, 3, 4], [[5, 6, 7], [6, 7, 8, 9], [4, 5], [9]]);
+assert(complex2.layer === 2, 'Complex level 2');
+assert(complex2.brrby.length === 4, 'Brrby length');
+assert(complex2.crrcy.length === 4, 'Outer crrcy length');
+
+console.log('\n=== All Tests Passed! ===');

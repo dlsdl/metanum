@@ -1,32 +1,20 @@
-# Metanum
+# MetaNum
 
-- Metanum v0.3 by dlsdl
+- MetaNum v0.3 by dlsdl
 
 A huge number library holding up to X↑↑X&9e15.
 
 This reaches level f<sub>ε0</sub>, which it is the limit of well-defined expressions in BEAF, hence the name.
 
-Metanum provides a robust implementation of hierarchical number representation based on the Hardy hierarchy (HH) and ordinal arithmetic. It can handle numbers far beyond standard JavaScript Number limits, using a sophisticated multi-dimensional array structure to represent ordinal numbers up to ε₀(ω^ω^ω^……with ω floors). Internally, it is represented as a hierarchical representation:
+MetaNum provides a robust implementation of hierarchical number representation based on the Hardy hierarchy (HH) and ordinal arithmetic. It can handle numbers far beyond standard JavaScript Number limits, using a sophisticated multi-dimensional array structure to represent ordinal numbers up to ε₀(ω^ω^ω^……with ω floors). Internally, it is represented as a hierarchical representation:
 
 - **sign**: 1 (positive) or -1 (negative)
 - **level**: Non-negative integer representing the ω exponent tower height
-- **array,brrby,etc.**: Multi-dimensional array where each sub-array represents a coefficient layer
+- **array,brrby,crrcy,drrdy**: 0to3-dimensional arrays where represents operation level in a cantor normal form
 
-## Features
+Functions are as follows `abs, neg, add, sub, mul, div, rec, pow, pow10, sqrt, cbrt, root, log10, log, cmp, rec, exp, ln, isFinite, isInfinite, isNaN, toString, toNumber, fromString, fromNumber, floor, ceil, round`
 
-- **Hierarchical Number Representation**: Support for large ordinal numbers up to ε₀(ω exponent towers of ω)
-- **Arithmetic Operations**: Addition, subtraction, multiplication, division, etc.
-- **Comparison Support**: All comparison operators (<, >, ==, <=, >=, !=)
-- **Edge Case Handling**: Proper handling of zero, negative numbers, and maximum values
-- **Type Safety**: Input validation and consistency checks
-- **Clone Support**: Deep cloning for safe manipulation
-
-## Limitations
-
-- The library is still in development, and some features may not work as expected.
-- Arithmetic operations may get wrong results under some special cases.
-- Exponentiation with non-integer exponents is not fully implemented.
-- Complex ordinal arithmetic for higher levels requires further development.
+(PS: No release published, so it is not indicative of final product)
 
 ## Installation
 
@@ -38,48 +26,47 @@ npm install metanum
 
 #### Level 0 (normal number)
 ```javascript
-const num0 = new Metanum(1, 0, 42);
+const num0 = new MetaNum(1, 0, 42);
 // Represents: 42
 ```
 
 #### Level 1 (Hyper-operations/ω level)
 ```javascript
-const num1 = new Metanum(1, 1, 10, [3, 2, 1]);
+const num1 = new MetaNum(1, 1, 10, [3, 2, 1]);
 // Represents: 10↑↑↑10↑↑10↑↑10↑10↑10↑4 (GFFEEE4)
 ```
 
 #### Level 2 (ω^ω level)
 ```javascript
-const num2 = new Metanum(1, 2, 10, [3, 4, 5, 6], [[1], [2], [3, 4, 5], [6, 7, 8, 9]]);
+const num2 = new MetaNum(1, 2, 10, [3, 4, 5, 6], [[1], [2], [3, 4, 5], [6, 7, 8, 9]]);
 // Represents: H_ω^(ω^3*9+ω^2*8+ω*7+6)*6+ω^(ω^2*5+ω*4+3)*5+ω^2*4+ω*3_(10)
 ```
 
 #### Level 3 (ω^ω^ω level)
 ```javascript
-const num3 = new Metanum(1, 3, 10, [1], [[2]], [[[4, 6, 7, 8]]]);
+const num3 = new MetaNum(1, 3, 10, [1], [[2]], [[[4, 6, 7, 8]]]);
 // Represents: H_ω^(ω^(ω^3*8+ω^2*7+ω*6+4)*2)_(10)
 ```
 
 #### Higher levels
 ```javascript
-const num4 = new Metanum(1, 1919810, 10, [1], [[1]], [[[114514]]]);
+const num4 = new MetaNum(1, 1919810, 10, [1], [[1]], [[[114514]]]);
 // Represents: H_ω^ω^ω^……^ω^114514(1919809 ω's)_(10)
 ```
 
 ## Basic Usage
 
 ```javascript
-import Metanum from 'metanum';
-
 // Creating instances
-const zero = Metanum.zero();
-const one = Metanum.one();
-const num = Metanum.fromNumber(42);
-const num2 = new Metanum(1, 1, 10, [1,2,3]);
+const zero = MetaNum.ZERO;
+const one = MetaNum.ONE;
+const num = MetaNum.fromNumber(42);
+const num2 = MetaNum.fromString("1e309");
+const num3 = new MetaNum(1, 1, 10, [1,2,3]);
 
 // Arithmetic operations
-const a = Metanum.fromNumber(15);
-const b = Metanum.fromNumber(27);
+const a = MetaNum.fromNumber(15);
+const b = MetaNum.fromNumber(27);
 
 const sum = a.add(b);        // 42
 const diff = b.subtract(a);   // 12
@@ -87,18 +74,18 @@ const product = a.multiply(b); // 405
 const quotient = b.divide(a);  // 1.8666666666666667
 
 // Exponentiation
-const base = Metanum.fromNumber(2);
-const exp = Metanum.fromNumber(10);
+const base = MetaNum.fromNumber(2);
+const exp = MetaNum.fromNumber(10);
 const power = base.pow(exp);  // 1024
 
 // Logarithm
-const num100 = Metanum.fromNumber(100);
-const base10 = Metanum.fromNumber(10);
+const num100 = MetaNum.fromNumber(100);
+const base10 = MetaNum.fromNumber(10);
 const log = num100.log(base10); // 2
 
 // Comparison
-const x = Metanum.fromNumber(10);
-const y = Metanum.fromNumber(20);
+const x = MetaNum.fromNumber(10);
+const y = MetaNum.fromNumber(20);
 
 x.lt(y);    // true (10 < 20)
 x.gt(y);    // false
@@ -379,3 +366,9 @@ Then we can define (the β-th symbol)Aa = f_ω^ω^...^ω(β+1 ω's)_(10)
 αεβ ~ f_ω^ω^...^ω(β ω's)_(α)
 
 #### Using dlsdl's letter notation, the biggest number we can define in Metanum is about ε1.797e308.
+
+## Future ideas
+
+- implement dlsdl's letter notation
+
+- add more functions(especially hyper operations)

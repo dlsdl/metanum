@@ -1,12 +1,10 @@
 {
   "name": "metanum",
   "version": "0.3",
-  "description": "A comprehensive JavaScript library for representing and manipulating extremely large numbers using Hardy hierarchy up to H_ε0_(1e308)",
+  "description": "A javascript library that handles numbers as large as f_ε₀(9e15)",
   "main": "src/metanum.js",
-  "type": "module",
   "scripts": {
     "test": "node test/test.js",
-    "lint": "eslint src/**/*.js",
     "example": "node examples/basic-usage.js"
   },
   "keywords": [
@@ -17,7 +15,9 @@
     "mathematics"
   ],
   "author": "dlsdl",
-  "devDependencies": {
-    "eslint": "^8.0.0"
-  }
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/dlsdl/metanum.js/issues"
+  },
+  "homepage": "https://github.com/dlsdl/metanum.js"
 }

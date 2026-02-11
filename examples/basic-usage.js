@@ -1,5 +1,3 @@
-import Metanum from '../src/metanum.js';
-
 console.log('=== Metanum Library - Basic Usage Examples ===\n');
 
 console.log('1. Creating Metanum instances:');
