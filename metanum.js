@@ -20,7 +20,7 @@
     // NONE   0 Show no information.
     // NORMAL 1 Show operations.
     // ALL    2 Show everything.
-    debug: 1
+    debug: 0
   },
   // -- END OF EDITABLE DEFAULTS -- //
 
@@ -1379,6 +1379,7 @@ Q.fromArray=function (input1,input2,input3,input4,input5,input6){
   x.crrcy=input5;
   x.drrdy=input6;
   x.normalize();
+  if (MetaNum.debug >= MetaNum.ALL) console.log(input+"fromArray->",x);
   return x;
 }
 Q.fromObject=function (input){
@@ -1390,6 +1391,7 @@ Q.fromObject=function (input){
   x.crrcy=input.crrcy;
   x.drrdy=input.drrdy;
   x.normalize();
+  if (MetaNum.debug >= MetaNum.ALL) console.log(input+"fromObject->",x);
   return x;
 }
 Q.fromJSON=function (input){
@@ -1411,7 +1413,7 @@ P.clone = function() {
 // region toglobalscope
 function clone(obj) {
   var i, p, ps;
-  function MetaNum(input) {
+  function MetaNum(input,input2,input3,input4,input5,input6) {
     var x=this;
     if (!(x instanceof MetaNum)) return new MetaNum(input);
     x.constructor=MetaNum;
@@ -1420,20 +1422,20 @@ function clone(obj) {
       try {
         parsedObject=JSON.parse(input);
       }catch(e){
-        console.error("果糕")
+        console.error("😰")
       }
     }
     var temp,temp2,temp3,temp4,temp5,temp6;
-    if (typeof input=="number"){
+    if (typeof input=="number" && typeof input2=="undefined"){
       temp=MetaNum.fromNumber(input);
+    }else if (typeof input2=="number"){
+      temp=MetaNum.fromArray(input,input2,input3,input4,input5,input6);
     }else if (typeof input=="string"){
       temp=MetaNum.fromString(input);
     }else if (parsedObject){
       temp=MetaNum.fromObject(parsedObject);
     }else if (typeof input == "object") {
       temp=MetaNum.fromObject(input);
-    }else if (input instanceof Array){
-      temp=MetaNum.fromArray(input);
     }else if (input instanceof MetaNum){
       temp = input.clone();
     }else{
