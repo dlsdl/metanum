@@ -20,7 +20,7 @@
     // NONE   0 Show no information.
     // NORMAL 1 Show operations.
     // ALL    2 Show everything.
-    debug: 0
+    debug: 1
   },
   // -- END OF EDITABLE DEFAULTS -- //
 
@@ -78,109 +78,6 @@ R.MAX_METANUM_VALUE = "1, " + MAX_SAFE_INTEGER + ", " + MAX_SAFE_INTEGER + ", ["
 // end region MetaNum Constants
 
 //region Validation functions
-function _validateSign(sign) {
-  if (sign !== 1 && sign !== -1) {
-    throw new Error('Sign must be 1 or -1');
-  }
-  return sign;
-}
-
-function _validateLayer(layer) {
-  const numLayer = Number(layer);
-  if (!Number.isInteger(numLayer) || numLayer < 0) {
-    throw new Error('Layer must be a non-negative integer');
-  }
-  return numLayer;
-}
-
-function _validateArray(array) {
-  const num = Number(array);
-  if (num < 0) {
-    throw new Error('Array must be a non-negative number');
-  }
-  return num;
-}
-
-function _validateBrrby(brrby) {
-  if (!Array.isArray(brrby)) {
-    throw new Error('Brrby must be an array');
-  }
-  if (brrby.length === 0) {
-    return [0];
-  }
-  return brrby.map(val => {
-    const num = Number(val);
-    if (!Number.isInteger(num) || num < 0) {
-      throw new Error('Brrby elements must be non-negative integers');
-    }
-    return num;
-  });
-}
-
-function _validateCrrcy(crrcy) {
-  if (!Array.isArray(crrcy)) {
-    throw new Error('Crrcy must be a 2-dimensional array');
-  }
-  if (crrcy.length === 0) {
-    return [[0]];
-  }
-  return crrcy.map(subArray => {
-    if (!Array.isArray(subArray)) {
-      throw new Error('Crrcy elements must be arrays');
-    }
-    if (subArray.length === 0) {
-      return [0];
-    }
-    return subArray.map(val => {
-      const num = Number(val);
-      if (!Number.isInteger(num) || num < 0) {
-        throw new Error('Crrcy elements must be non-negative integers');
-      }
-      return num;
-    });
-  });
-}
-
-function _validateDrrdy(drrdy) {
-  if (!Array.isArray(drrdy)) {
-    throw new Error('Drrdy must be a 4-dimensional array');
-  }
-  if (drrdy.length === 0) {
-    return [[[[0]]]];
-  }
-  return drrdy.map(tier => {
-    if (!Array.isArray(tier)) {
-      throw new Error('Drrdy elements must be 3D arrays');
-    }
-    if (tier.length === 0) {
-      return [[[0]]];
-    }
-    return tier.map(twoD => {
-      if (!Array.isArray(twoD)) {
-        throw new Error('Drrdy 3D elements must be 2D arrays');
-      }
-      if (twoD.length === 0) {
-        return [[0]];
-      }
-      return twoD.map(row => {
-        if (!Array.isArray(row)) {
-          throw new Error('Drrdy 2D elements must be arrays');
-        }
-        if (row.length === 0) {
-          return [0];
-        }
-        return row.map(val => {
-          const num = Number(val);
-          if (!Number.isInteger(num) || num < 0) {
-            throw new Error('Drrdy elements must be non-negative integers');
-          }
-          return num;
-        });
-      });
-    });
-  });
-}
-
 P._validateSign=function validateSign(sign) {
   if (sign !== 1 && sign !== -1) {
     throw new Error('Sign must be 1 or -1');
@@ -485,8 +382,9 @@ P.compareTo=P.cmp=function(other) {
           }
         }
       }
+      if (MetaNum.debug>=MetaNum.ALL) console.log('Layer >= 3 Comparison Result:', r);
     }
-    if (MetaNum.debug>=MetaNum.ALL) console.log('Layer >= 3 Comparison Result:', r);
+    else console.error("😰")
   }
   return r*m;
 }
@@ -564,9 +462,10 @@ P.plus=P.add=function(other) {
   //layer=0时array直接相加
   else if (q.layer==0) t=new MetaNum(x.toNumber()+other.toNumber());
   //layer=1且brrby[0]==1时，array取指数后相加取对数
-  else if (q.brrby[0]==1){
+  else{
     var a=p.layer>0?p.array:Math.log10(p.array);
-    t=new MetaNum([a+Math.log10(Math.pow(10,q.array-a)+1),1]);
+    t=new MetaNum(a+Math.log10(Math.pow(10,q.array-a)+1));
+    t=t.pwb(10);
     }
   p=q=null;
   return t;
@@ -594,9 +493,10 @@ P.minus=P.sub=function(other) {
     t=n?t.neg():t;
   }
   else if (q.layer==0) t=new MetaNum(x.toNumber()-other.toNumber());
-  else if (q.brrby[0]==1){
+  else{
     var a=p.layer>0?p.array:Math.log10(p.array);
-    t=new MetaNum([a+Math.log10(Math.pow(10,q.array-a)-1),1]);
+    t=new MetaNum(a+Math.log10(Math.pow(10,q.array-a)-1));
+    t=t.pwb(10);
     t=n?t.neg():t;
   }
   p=q=null;
@@ -668,7 +568,7 @@ Q.modular=Q.mod=function (x,y){
 };
 P.toPower=P.pow=function(other) {
   other=new MetaNum(other);
-  if (MetaNum.debug>=MetaNum.NORMAL) console.log(this+"▲"+other);
+  if (MetaNum.debug>=MetaNum.NORMAL) console.log(this+"↑"+other);
   if (other.eq(MetaNum.ZERO)) return MetaNum.ONE.clone();
   if (other.eq(MetaNum.ONE)) return this.clone();
   if (other.lt(MetaNum.ZERO)) return this.pow(other.neg()).rec();
@@ -738,7 +638,7 @@ Q.cubeRoot=Q.cbrt=function (x){
   return new MetaNum(x).root(3);
 };
 P.generalLogarithm=P.log10=function (){
-  if (MetaNum.debug>=MetaNum.ALL) console.log("㏒"+this);
+  if (MetaNum.debug>=MetaNum.NORMAL) console.log("㏒"+this);
   var x=this.clone();
   if (x.lt(MetaNum.ZERO)) return MetaNum.NaN.clone();
   if (x.eq(MetaNum.ZERO)) return MetaNum.NEGATIVE_INFINITY.clone();
@@ -753,7 +653,6 @@ Q.generalLogarithm=Q.log10=function (x){
   return new MetaNum(x).log10();
 };
 P.logarithm=P.logBase=function (base){
-  if (MetaNum.debug>=MetaNum.NORMAL) console.log(this+"▼"+base);
   if (base===undefined) base=Math.E;
   return this.log10().div(MetaNum.log10(base));
 };
@@ -986,7 +885,7 @@ P.normalize = function () {
     }
     //layer=1，当brrby为[0]时，降级为layer=0
     else if(x.layer==1){
-      if(x.brrby==[0] || !x.brrby){
+      if(x.brrby==[0] || !x.brrby.length || !x.brrby){
         x.layer=0;
         b=true;
       }
