@@ -4,7 +4,7 @@
 
 A huge number library holding up to X↑↑X&9e15.
 
-This reaches level f<sub>ε0</sub>, which it is the limit of well-defined expressions in BEAF, hence the name.
+This reaches level f<sub>ε₀</sub>, which it is the limit of well-defined expressions in BEAF, hence the name.
 
 MetaNum provides a robust implementation of hierarchical number representation based on the Hardy hierarchy (HH) and ordinal arithmetic. It can handle numbers far beyond standard JavaScript Number limits, using a sophisticated multi-dimensional array structure to represent ordinal numbers up to ε₀(ω^ω^ω^……with ω floors). Internally, it is represented as a hierarchical representation:
 
@@ -32,8 +32,8 @@ const num0 = new MetaNum(1, 0, 42);
 
 #### Level 1 (Hyper-operations/ω level)
 ```javascript
-const num1 = new MetaNum(1, 1, 10, [3, 2, 1]);
-// Represents: 10↑↑↑10↑↑10↑↑10↑10↑10↑4 (GFFEEE4)
+const num1 = new MetaNum(1, 1, 123, [3, 2, 1]);
+// Represents: 10↑↑↑10↑↑10↑↑10↑10↑10↑123 = GF^2E^3 123
 ```
 
 #### Level 2 (ω^ω level)
@@ -59,10 +59,11 @@ const num4 = new MetaNum(1, 1919810, 10, [1], [[1]], [[[114514]]]);
 ```javascript
 // Creating instances
 const zero = MetaNum.ZERO;
-const one = MetaNum.ONE;
+const g_64 = MetaNum.GRAHAMS_NUMBER;
 const num = MetaNum.fromNumber(42);
 const num2 = MetaNum.fromString("1e309");
-const num3 = new MetaNum(1, 1, 10, [1,2,3]);
+const num3 = MetaNum.fromArray(1, 1, 456, [6, 5, 4]);
+const num4 = MetaNum.fromFormat("s1 l1 a123 b[1,2,3] c[[0]] d[[[0]]]");
 
 // Arithmetic operations
 const a = MetaNum.fromNumber(15);

@@ -70,11 +70,11 @@ R.GODGAH_MAX_SAFE_INTEGER="!Aa"+MAX_SAFE_INTEGER;
 R.GATHOR_MAX_SAFE_INTEGER="@Aa"+MAX_SAFE_INTEGER;
 */
 /* The Graham's Number, = G^64(4) */
-R.GRAHAMS_NUMBER = "1, 2, 3638334640023.7783, [7625597484984, 1, 63], [[1], [3], [0, 1]]";
+R.GRAHAMS_NUMBER = "s1 l2 a3638334640023.7783 b[7625597484984, 1, 63] c[[1], [3], [0, 1]] d[[[]]]";
 /* QqQe308 = H_ω^(ω17+16)+ω^(ω17+4)(308) */
-R.QqQe308 = "1, 2, 308, [1, 1], [[4, 17], [16, 17]]";
+R.QqQe308 = "s1 l2 a308 b[1, 1] c[[4, 17], [16, 17]] d[[[]]]";
 /* MAX_METANUM_VALUE = ε9.007e15 */
-R.MAX_METANUM_VALUE = "1, " + MAX_SAFE_INTEGER + ", " + MAX_SAFE_INTEGER + ", [" + MAX_SAFE_INTEGER + "], [[ " + MAX_SAFE_INTEGER + " ]], [[[" + MAX_SAFE_INTEGER + "]]]";
+R.MAX_METANUM_VALUE = "s1 l"+ MAX_SAFE_INTEGER + " a" + MAX_SAFE_INTEGER + " b[" + MAX_SAFE_INTEGER + "] c[[ " + MAX_SAFE_INTEGER + " ]] d[[[" + MAX_SAFE_INTEGER + "]]]";
 // end region MetaNum Constants
 
 //region Validation functions
@@ -939,7 +939,7 @@ P.toString=function (){
   else if(this.layer == 1){
     var s=signStr;
     if (this.brrby.length>=1){
-      for (var i=this.brrby.length-1;i>=2;--i){
+      for (var i=this.brrby.length;i>=2;--i){
         var q=String.fromCharCode(68+i);
         if (this.brrby[i-1]>1) s+=q+"^"+this.brrby[i-1];
         else if (this.brrby[i-1]==1) s+=q;
@@ -947,21 +947,21 @@ P.toString=function (){
     }
     if (this.brrby[0] < 3) {
       if (this.brrby[0] >= 1) s += "E".repeat(this.brrby[0] - 1) + Math.pow(10, this.array - Math.floor(this.array)) + "E" + Math.floor(this.array);
-      else s += Math.pow(10, this.array - Math.floor(this.array)) + "E" + Math.floor(this.array);
+      else s += this.array;
     }
-    else if (this.brrby[0]<8) s += "E".repeat(this.brrby[0])+this.array;
-    else s+="F^"+this.brrby[0]+" "+this.array;
+    else s+="E^"+this.brrby[0]+" "+this.array;
     return s;
   }
   else if(this.layer == 2){
     let result = '';
     for (let i = this.crrcy.length - 1; i >= 0; i--) {
-      const coeff = this.brrby[i];
-      if (coeff === 0) continue;
+      if (this.brrby[i] === 0) continue;
+      const coeff = this.brrby[i]==1?'':'*'+this.brrby[i];
       const row = this.crrcy[i] || [];
       const expStr = formatAsExponents(row);
       if (expStr === '0') continue;
-      term = `ω^(${expStr})*${coeff}`;
+      term =expStr[0]=='ω'?`ω^(${expStr})${coeff}`:`ω^${expStr}${coeff}`;
+      if (expStr === '1') term=`ω${coeff}`;
       if (result === '') {
       result = term;
       } else {
@@ -975,10 +975,10 @@ P.toString=function (){
     for (let i = this.drrdy.length - 1; i >= 0; i--) {
       const coeff = this.brrby[i];
       if (coeff === 0) continue;
-      const matrix = this.drrdy[i] || [];
+      const matrix = this.crrcy[i] || [];
       const expStr = formatNestedExponents(matrix);
       if (expStr === '0') continue;
-      term = `ω^(${expStr})*${coeff}`;
+      term =expStr[0]=='ω'?`ω^(${expStr})*${coeff}`:`ω^${expStr}*${coeff}`;
       if (result === '') {
         result = term;
       } else {
@@ -988,10 +988,11 @@ P.toString=function (){
     return `${signStr}H_${result}_(${this.array})`;
   }
   else if(this.layer >= 4){
-    for (let i = n; i >= 0; i--) {
-      const coeff = brrby[i];
+    let result = '';
+    for (let i = this.drrdy.length; i >= 0; i--) {
+      const coeff = this.brrby[i];
       if (coeff === 0) continue;
-      const matrix = this.drrdy[i] || [];
+      const matrix = this.crrcy[i] || [];
       const expStr = formatNestedExponents(matrix);
       if (expStr === '0') continue;
       term = `ω^(${expStr})*${coeff}`;
@@ -1003,9 +1004,7 @@ P.toString=function (){
     }
     const towerHeight = this.layer - 3;
     let tower = 'ω';
-    for (let i = 1; i < towerHeight; i++) {
-      tower = `ω^(${tower})`;
-    }
+    tower = `(ω^)^${towerHeight}`;
     return `${signStr}H_${tower} ${result}_(${this.array})`;
   }
 };
@@ -1269,6 +1268,25 @@ Q.fromString = function(input) {
   x.normalize();
   return x;
 };
+Q.fromFormat=function (str){
+  // 移除首尾空格
+  str=str.trim();
+  // 快速提取 key=value 片段
+  const m=str.match(/^(s(-?\d+)\s+l(\d+)\s+a([+-]?\d+(?:\.\d+)?)\s+b(\[.*?\])\s+c(\[.*?\])\s+d(\[.*?\]))$/);
+  if(!m) throw new Error('MetaNum.fromFormat: expected format');
+  // 解析各段
+  const sign = parseInt(m[2],10);
+  const layer= parseInt(m[3],10);
+  const array= parseFloat(m[4]);
+  // 用 Function 安全地把数组字符串变成数组
+  const brrby=Function('"use strict";return ('+m[5]+')')();
+  const crrcy=Function('"use strict";return ('+m[6]+')')();
+  const drrdy=Function('"use strict";return ('+m[7]+')')();
+  // 组装并归一化
+  const x=Q.fromArray(sign,layer,array,brrby,crrcy,drrdy);
+  if(MetaNum.debug>=MetaNum.ALL) console.log(str+'fromFormat->',x);
+  return x;
+}
 Q.fromArray=function (input1,input2,input3,input4,input5,input6){
   var x=new MetaNum();
   x.sign=input1;
@@ -1278,7 +1296,7 @@ Q.fromArray=function (input1,input2,input3,input4,input5,input6){
   x.crrcy=input5;
   x.drrdy=input6;
   x.normalize();
-  if (MetaNum.debug >= MetaNum.ALL) console.log(input+"fromArray->",x);
+  if (MetaNum.debug >= MetaNum.ALL) console.log("fromArray->",x);
   return x;
 }
 Q.fromObject=function (input){
@@ -1329,6 +1347,8 @@ function clone(obj) {
       temp=MetaNum.fromNumber(input);
     }else if (typeof input2=="number"){
       temp=MetaNum.fromArray(input,input2,input3,input4,input5,input6);
+    }else if (typeof input=="string" && input[0]=="s"){
+      temp=MetaNum.fromFormat(input);
     }else if (typeof input=="string"){
       temp=MetaNum.fromString(input);
     }else if (parsedObject){
