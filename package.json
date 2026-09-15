@@ -1,8 +1,16 @@
-{
+﻿{
   "name": "metanum",
-  "version": "1.4.0",
+  "version": "2.0.0",
   "description": "A javascript library that handles numbers as large as f_ε₀(9e15)",
   "main": "metanum.js",
+  "files": [
+    "metanum.js",
+    "format-metanum.js",
+    "test-interface.html",
+    "test_mixed.js",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "test": "node test.js",
     "example": "node basic-usage.js"
@@ -17,7 +25,8 @@
   "author": "dlsdl",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/dlsdl/metanum.js/issues"
+    "url": "https://github.com/dlsdl/metanum/issues"
   },
-  "homepage": "https://github.com/dlsdl/metanum.js"
+  "homepage": "https://github.com/dlsdl/metanum"
 }
+

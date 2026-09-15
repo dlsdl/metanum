@@ -2,7 +2,7 @@
 
 [![NPM](https://img.shields.io/npm/v/metanum.svg)](https://www.npmjs.com/package/metanum)
 
-- MetaNum v1.4 by dlsdl
+- MetaNum v2.0 by dlsdl
 
 A huge number library holding up to X↑↑X&9e15.
 
@@ -32,15 +32,15 @@ const a = new MetaNum(428571);
 const b = MetaNum.fromNumber(-2.71828);
 
 // From a string (supports scientific notation, hyper-operations, letter notation, brackets, etc.)
-const c = new MetaNum("1.5e308");
-const d = MetaNum.fromString("F5");            // tetration: 10^^5
+const c = new MetaNum("1.797e308");
+const d = MetaNum.fromString("1F5");            // tetration: 10^^5
 const e = MetaNum.fromString("E100#2");           // Hyper-E: 10^10^100 (googolplex)
 const f = MetaNum.fromString("GF^2 E^3 123");     // letter notation
 const g = MetaNum.fromString("Aa100");            // letter notation
 const h = MetaNum.fromString("[[10], [1, 3]]");   // bracket notation
 
 // From an array
-const i = MetaNum.fromArray([2.71828, 1, 2]);        // [[3.14, 1, 2]]
+const i = MetaNum.fromArray([2.71828, 1, 2]);        // array=[[2.71828, 1, 2]], =10^^10^^10^2.71828
 const j = MetaNum.fromArray([10], 1, 1);          // layer 1
 
 // From an object / JSON
@@ -171,6 +171,14 @@ new MetaNum(100).linear_sroot(3); // ³ss̅r̅t̅(100)
 // Layer arithmetic
 new MetaNum(10).layeradd(3);    // add 3 layers of exponentiation
 new MetaNum(10).layeradd10(3);  // 10^^3 (explicit base 10)
+
+// General hyperoperation inverses: if a{b}c = d then
+// d.hyper_log(a)(b) = c and d.hyper_root(c)(b) = a
+MetaNum(14).hyper_log(2)(0);          // 2*7 = 14 → 7
+MetaNum(100000).hyper_log(10)(1);     // 10^5 → 5
+MetaNum(65536).hyper_log(2)(2);       // 2↑↑4 → 4 (slog)
+MetaNum(65536).hyper_root(4)(2);      // 2↑↑4 → 2 (base recovery)
+MetaNum(10).arrow(3)(3).hyper_root(3)(3); // 10↑↑↑3 → 10
 ```
 
 ## Hyper-Operations up to ε₀
@@ -283,6 +291,26 @@ x.aperixxate(3);          // apix(3) = hwpw
 x.epsilonate(3);          // epsl(3) = hepsl
 ```
 
+### The ω^ω … ε₀ operations follow rule 3 exactly
+
+Every operation above is evaluated with the unified limit rule
+`n{λ}b = n{λ[b]}n` — the final operand is the **base** n, never b. Whenever the
+reduced level λ[y] still fits a Cantor-normal-form coefficient row the whole
+fundamental-sequence cascade is evaluated:
+
+```javascript
+MetaNum(3).iterate(5);     // 3{ω^ω}5 = 3{ω^5}3 = 3{ω^4*3}3 = …
+                           // … = 3{ω^4*2+ω^3*2+ω^2*2+ω*2+2}3 → top row [1,2,2,2,2,2]
+```
+
+Levels ≥ ω^ω have no finite coefficient row, so the result is stored as the
+compact **layer marker** of λ[y] (see the representation rule above: layer L ⇒
+`10{ω^ω^…((L-1) ω^'s)…^(bracket)}10`):
+
+so the encoded ordinals grow with the operation
+(`iter < itmu < cube < expo < tria < trix < apix < epsl`) and with y, and
+`epsilonate(MSI)` is exactly the library's ε-tower cap.
+
 ## Inverse Operations
 
 Each expansion operation has a corresponding inverse for decrementing ordinal structure:
@@ -324,41 +352,137 @@ x.i_apix(z)     // iwpw = inverse of aperixxate
 x.i_epsl(z)     // iepsl = inverse of epsilonate
 ```
 
+### Fractional hyperoperation levels
+
+Levels interpolate geometrically (README rule (i)); `x{n+f}y = x{n+1}(θf)`
+with `θf` continuous between `x{n}y` (f=0) and `x{n+1}y` (f=1). For the
+canonical diagonal this is exactly `10{n+f}10 = 10{n+1}(2·5^f)`:
+
+```javascript
+MetaNum(10).arrow(3.5)(10);   // 10{3.5}10 = 10{4}(2·5^0.5)
+MetaNum(10).arrow(3.2)(10);   // monotone between 10{3}10 and 10{4}10
+```
+
+### Non-integer arguments at ordinal levels
+
+The same continuity applies to the ω-and-above operations. Successor levels
+follow `x{α}(m+f) = x{α-1}` applied m times to `x^f`; the ω level matches
+`aperiote` exactly, so the issue's composition identity holds verbatim:
+
+```javascript
+MetaNum(10).expande(2.1);      // 10{ω+1}2.1 = 10{ω}10{ω}(10^0.1)
+MetaNum(10).expande(2);        // 10{ω}10 (continuous at the integers)
+MetaNum(10).multiexpande(2.1); // (10{ω+1})²(10^0.1)
+```
+
+Limit levels take the fundamental sequence at `floor(y)`; successor levels
+with an iteration count beyond direct evaluation diagonalize through the
+engine's huge-argument convention (y plus one α-level marker row).
+
 ## BEAF Operations
 
 Bowers' Exploding Array Function (BEAF) is supported via ordinal arithmetic for 3+ arguments:
 
 ```javascript
-// BEAF(a,b,c,d,e,f,...) = a{...+ω^3*(f-1)+ω^2*(e-1)+ω*(d-1)+(c-1)}b
+// BEAF(a,b,c,d,e,f,...) = a{...+ω^3*(f-1)+ω^2*(e-1)+ω*(d-1)+c}b
+// (the constant term keeps its value; ω-and-above coefficients decrement by 1)
 
 // 3-entry: {a,b,c} = a↑^c b (standard up-arrow notation)
 MetaNum.BEAF(3, 3, 2);       // 3↑↑3 = 7625597484987
 MetaNum.BEAF(3, 3, 3);       // 3↑↑↑3 = tritri
 
-// 4-entry: {a,b,c,d} = a(ω*d+c level operation)b
+// 4-entry: {a,b,c,d} = a(ω*(d-1)+c level operation)b
 MetaNum.BEAF(2, 2, 1, 2);    // 2{ω}2
-MetaNum.BEAF(3, 3, 3, 3);    // 3{ω*2+2}3
+MetaNum.BEAF(3, 3, 3, 3);    // 3{ω*2+3}3
 
 // 5+ entry: ordinal arithmetic
 MetaNum.BEAF(10, 2, 1, 1, 2); // 10{ω^2}2
-MetaNum.BEAF(3, 3, 3, 3, 2);  // 3{ω^2+ω+1}3
-MetaNum.BEAF(4, 5, 6, 7, 8, 9);  // 4{ω^3*8+ω^2*7+ω*6+5}5
+MetaNum.BEAF(3, 3, 3, 3, 2);  // 3{ω^2+ω*2+3}3
+MetaNum.BEAF(4, 5, 6, 7, 8, 9);  // 4{ω^3*8+ω^2*7+ω*6+6}5
+
+// Ordinal expansion order and truncation (maxRows = 100 by default):
+// the expansion evaluates from the largest ordinal down and keeps the largest
+// maxRows-1 ordinal rows.  Without truncation the expansion is exact, e.g.
+// BEAF(3,3,5,5,5) = 3{ω^2*4+ω*4+5}3 enumerates all 50 sub-ordinals.
+// When the expansion exceeds the row budget the base defaults to [10] and the
+// first kept row's count is incremented by 1 as a truncation marker, e.g.
+// BEAF(5,5,1,1,1,2) = 5{ω^3+1}5 → [[10],[4,2,0,1],...,[3,0,0,0,1]].
 
 // nested BEAF: {a,{b,c,d,e},f,g,h}
 // An argument exceeding MSI supremum-collapses (use fundamental sequences rules):
 // ω*i+HUGE ≈ ω*(i+1), ω^i*HUGE ≈ ω^(i+1), etc.
 // (lower coefficients are swallowed), and the result anchors at that argument's value.
-MetaNum.BEAF(4, MetaNum.BEAF(4, 2, 3, 5), 3, 5); // 4{ω*4+2}4{ω*4+2}2
+MetaNum.BEAF(4, MetaNum.BEAF(4, 2, 3, 5), 3, 5); // 4{ω*4+3}4{ω*4+3}2
 
 // Parse BEAF string notation
 MetaNum.fromBeaf("{3,3,3}");         // 3↑↑↑3
-MetaNum.fromBeaf("{3,3,3,3}");       // 3{ω*2+2}3
+MetaNum.fromBeaf("{3,3,3,3}");       // 3{ω*2+3}3
 MetaNum.fromBeaf("{10,2,1,1,2}");    // 10{ω^2}2
 
 // Convert to BEAF string
 new MetaNum(7625597484987).toBeaf();  // "{7625597484987}"
 MetaNum.BEAF(3,3,3).toBeaf();        // "{3638334640023.7783}"
 ```
+
+## Hardy Hierarchy
+
+`MetaNum.hardy(n)` evaluates the Hardy hierarchy `H_α(10)` where the ordinal α
+is built from the decimal digits of n (base 10, `hardy(1234) = H_{ω³+ω²·2+ω·3+4}(10)`):
+
+```javascript
+MetaNum.hardy(10);    // H_ω(10) = 20
+MetaNum.hardy(11);    // H_{ω+1}(10) = 22
+MetaNum.hardy(100);   // H_{ω²}(10) = 10240
+MetaNum.hardy(1234);  // H_{ω³+ω²·2+ω·3+4}(10), exact for small levels and
+                      // engine-collapsed (F_j = H^{ω^j}) for deep segments
+```
+
+Recursion rules: `H_0(n) = n`, `H_{α+1}(n) = H_α(n+1)` (only +1, never
+iterated), `H_λ(n) = H_{λ[n]}(n)` with the CNF fundamental sequences.
+
+### Hardy beyond ω^ω
+
+For n ≥ 1e10 the leading exponent k ≥ 10 is itself converted to a base-10
+ordinal, so `hardy(1e11) = H_{ω^(ω+1)}(10)` sits at the `10{ω+1}10` scale
+(via `H_{ω^β}(n) = F_β(n)`), not the flat `10{11}10` scale. The value is
+evaluated per the definition (from below), so it is strictly BELOW the
+matching engine hyper-op:
+
+```javascript
+MetaNum.hardy(1e10);  // = H_{ω^ω}(10) = H_{ω^10}(10), array exactly
+                      //   [3086.036065328153, 9,9,9,9,9,9,9,9] — below 10{10}10
+MetaNum.hardy(1e11);  // = H_{ω^(ω+1)}(10) — below 10{ω+1}10 (expande(10,10))
+```
+
+More generally, with n = dk·10^kExp + rest: α = ω^ord(kExp)·dk + ord(rest) is
+built recursively (n1 = H_ord(rest)(10), base = H_{ω^n1}(n1) when n1 is a
+small finite), and the rows of 10{ω+c}(9+dk) are mirrored onto that base for
+kExp ≥ 11. hardy is monotone across this range:
+`hardy(9999999999) < hardy(1e10) < hardy(10000000001)`.
+
+hardy(1e20) = H_{ω^(ω*2)}(10), hardy(1e100)=H_{ω^(ω^2)}(10), hardy(e1e10)=H_{ω^(ω^ω)}(10), and so on.
+
+### hardy input extensions
+
+```javascript
+MetaNum.hardy(1e21);            // >1e20 scientific strings expand to exact
+                               //   digits — the reading stays monotone:
+                               //   hardy(1e20) < hardy(1e21) < hardy(1e22)
+MetaNum.hardy(MetaNum(10).tetr(100));
+                               // power towers shadow to ω^ω^…^ω (k ω's):
+                               //   hardy(10^^k) = 10.epsilonate(k)
+MetaNum.hardy(MetaNum(10).tetr(Number.MAX_SAFE_INTEGER));
+                               // hardy(10^^MSI) = the MetaNum limit exactly:
+                               //   10{ω^ω^…^ω(MSI ω's)}10 (the ε-tower cap)
+MetaNum.hardy(MetaNum("G600")) // MetaNum-object > 10^^MSI should return Infinity
+MetaNum.hardy(MetaNum.arrow(3, 9, 3)) // = Infinity (3{9}3 is far above 10^^MSI)
+```
+
+`MetaNum.infinity` (alias of `MetaNum.POSITIVE_INFINITY`) is the value returned
+once the input passes the ε₀ ceiling: any MetaNum beyond `10^^MSI` — e.g. `G600`
+(= 10{3}600), `3{9}3`, or a power tower taller than `10^^MSI` — has no Hardy
+level inside the library, so `hardy` yields Infinity. Below the ceiling the
+tower height still reads exactly: `hardy(10^^(MSI-1)) = 10.epsilonate(MSI-1)`.
 
 ## Layer & Serialization
 
@@ -378,6 +502,9 @@ new MetaNum(100).toPrecision(3);           // "100"
 new MetaNum(100).toHyperE();               // "100"
 new MetaNum(100).toStringWithDecimalPlaces(4); // "100.0000"
 new MetaNum(100).toJSON();                 // {sign:1, array:[[100]], layer:0}
+new MetaNum(100).format();                 // letter notation (format-metanum.js),
+                                           // e.g. MetaNum.hardy(4166).format() → "2.397G5"
+                                           // optional args: format(precision, small)
 ```
 
 ## Utility Functions
@@ -438,7 +565,7 @@ where α\[b] denotes the b-th element of the fundamental sequence assign to the 
 
 10{3}3=10{2}10{2}10=10{2} 9(10{1})'s 10=10↑↑(10^10^10^10^10^10^10^10^10000000000)
 
-3{ω}5=3{5}5=3{4}3{4}3{4}3{4}3=3{4}3{4}3{4}3{3}3{3}3=3{4}3{4}3{4}3{3}3{2}3{2}3=3{4}3{4}3{4}3{3}3{2}3{1}3{1}3=3↑↑↑↑3↑↑↑↑3↑↑↑↑3↑↑↑3↑↑7625597484987
+3{ω}5=3{5}3=3{4}3{5}2=3{4}3{4}3=3{4}3{3}3{3}3=3{4}3{3}3{2}3{2}3=3{4}3{3}3{2}3{1}3{1}3=3↑↑↑↑3↑↑↑3↑↑7625597484987
 
 5{ω+1}4=5{ω}5{ω+1}3=5{ω}5{ω}5{ω+1}2=5{ω}5{ω}5{ω}5{ω+1}1=5{ω}5{ω}5{ω}5=5{ω}5{ω}5{5}5=5{ω}5{5{5}5}5=5{5{5{5}5}5}5
 
@@ -446,13 +573,13 @@ where α\[b] denotes the b-th element of the fundamental sequence assign to the 
 
 10{ω×2}10=10{ω+10}10=9(10{ω+9})'s 10=8(10{ω+9})'s 9(10{ω+8})'s 10=8(10{ω+9})'s 8(10{ω+8})'s ... 8(10{ω+1})'s 8(10{ω})'s 8(10{9})'s ... 8(10{1})'s 10000000000
 
-10{ω^2}4=10{ω×4}4=10{ω×3+4}4=10{ω×3+3}10{ω×3+3}10{ω×3+3}10=10{ω×3+3}10{ω×3+3} 8(10{ω×3+2})'s 8(10{ω×3+1})'s 8(10{ω×3})'s 8(10{ω×2+9})'s ... 8(10{ω×2})'s ... 8(10{ω})'s ... 8(10{1})'s 10000000000
+10{ω^2}4=10{(ω^2)[4]}10=10{ω×4}10=10{(ω×4)[10]}10=10{ω×3+10}10=10{ω×3+9}10{ω×3+10}9=...=10{ω×3+9} 8(10{ω×3+8})'s ... 8(10{ω×3+1})'s 8(10{ω×3})'s 8(10{ω×2+9})'s ... 8(10{ω})'s ... 8(10{1})'s 10000000000
 
-10{ω^ω}4=10{ω^4}4=10{ω^3×4}4=10{ω^3×3+ω^3}4=10{ω^3×3+ω^2×4}4=...=10{ω^3×3+ω^2×3+ω×3+4}4=3(10{ω^3×3+ω^2×3+ω×3+3})'s 10=2(10{ω^3×3+ω^2×3+ω×3+3})'s 8(10{ω^3×3+ω^2×3+ω×3+2})'s 8(10{ω^3×3+ω^2×3+ω×3+1})'s ... 8(10{1})'s 10000000000
+10{ω^ω}4=10{(ω^ω)[4]}10=10{ω^4}10=10{(ω^4)[10]}10=10{ω^3×10}10=... (every limit step ends on the base 10; successor steps iterate) ... 8(10{1})'s 10000000000
 
-10{ω^(ω^2)}4=10{ω^(ω×ω)}4=10{ω^(ω×4)}4=10{ω^(ω×3+4)}4=10{ω^(ω×3+3)×ω}4=10{ω^(ω×3+3)×4}4=10{ω^(ω×3+3)×3+ω^(ω×3+2)×3+ω^(ω×3+1)×3+...+ω^2×3+ω×3+4}4
+10{ω^(ω^2)}4=10{(ω^(ω^2))[4]}10=10{ω^(ω×ω)}10=10{ω^(ω×4)}10=10{ω^(ω×3+10)}10=... (rule 3: each FS step ends on the base 10)
 
-10{ε₀}4=10{ω^(ω^(ω^ω))}4=10{ω^(ω^(ω^4))}4=10{ω^(ω^(ω^3×3+ω^2×3+ω×3+4))}4=10{ω^(ω^(ω^3×3+ω^2×3+ω×3+3)×3+ω^(ω^3×3+ω^2×3+ω×3+2)×3+...++ω^2×3+ω×3+4)}4
+10{ε₀}4=10{ε₀[4]}10=10{ω^(ω^(ω^ω))}10=10{ω^(ω^(ω^10))}10=... (ε₀[n+1]=ω^(ε₀[n]), final operand 10)
 
 # dlsdl's Letter Notation
 
@@ -480,7 +607,7 @@ and \[number] can be any positive real number (nonintegers included).
 
 ### The First Levels: A Continuous version of Knuth Arrows
 
-We'll define:
+Let α be a positive real number, β be a positive integer, we'll define (use extended arrow operation):
 
 Eα = 10^α = 10{1}α
 
@@ -504,7 +631,7 @@ So the above definitions are indeed an extention of Knuth arrows to nonintegers.
 
 ### Letter-Canonical Forms
 
-If α is a number greater than 1 and Γ is a one of the letters E,F,G,H,...,ζ then there is a unique number β such that:
+If α is a number greater than 1 and Γ is a one of the letters E,F,G,H,...,Z then there is a unique number β such that:
 
 α = Γβ.
 
@@ -522,7 +649,7 @@ F1.47712 = E(10^0.47712) ≈ E3 = 10^3 = 1000.
 
 To recreate ordinary scientific notation, we'll define a binary version of the letter functions like this:
 
-Let Γ be one of the letters E,F,G,H,...,ζ Let β be a nonnegative integer and α be a real number between 1 and 10. Then:
+Let Γ be one of the letters E,F,G,H,...,Z, β be a nonnegative integer and α be a real number between 1 and 10. Then:
 
 αΓβ = Γ(β+log(α))
 
@@ -536,190 +663,329 @@ So αEβ is nothing more than ordinary scientific notation.
 
 And αFβ is a power tower of β 10's topped by an α.
 
-And again, given any specific letter (E,F,G,H,...,ζ), ANY number greater than 1 has a unique representation as αΓβ (with 1≤α<β). So we can call this the Binary-Γ-Canonical Form of α.
+And again, given any specific letter (E,F,G,H,...,Z), ANY number greater than 1 has a unique representation as αΓβ (with 1≤α<10). So we can call this the Binary-Γ-Canonical Form of α.
 
 ## Multi letter notation
 
 ### Defining Aa - The First Diagonalization
 
-In the previous section we've defined an infinite sequence of functions, so we can diagonalize over them:
+In the previous section we've defined a finite sequence of functions, so we can diagonalize over them:
 
-let 1|α = Eα, 2|α = Fα, 3|α = Gα, ..., 22|α = Zα.
+let 10{1}α = Eα, 10{2}α = Fα, 10{3}α = Gα, ..., 10{22}α = Zα.
 
-we had: Aaα = α|10 = 10{α}10.
+we had: Aaα = 10{α}10.
 
-So Aa is comparable to f\_ω\_(n) in the FGH.
+So Aa has ω hyper-operation level, comparable to f\_ω\_(n) in FGH.
 
-But there are a couple of problems here:
+Then, we'll give a definition for non-integer 10{α}10 and amend the definition of Aa:
 
-(1) α|10 isn't yet defined for noninteger α.
+- Aaα = 10{α}10 = 10{int(α)+1}2\*5^frac(α)
 
-(2) Aa1 would be 1|10 = 10^10 rather than 10 = E1 = F1 = G1 =...= Z1. This would have caused trouble later on, when we define the higher levels.To solve these two problems, we'll give a definition for α|10 and amend the definition of Aa:
+The seemingly complex expression simply gives us a smooth geometric curve between 2 and 10. This ensures that Aa would be continuous, given the identity 10{β}10 = 10{β+1}2.
 
-(i) α|10 = (int(α)+1)|2\*5^frac(α)
+For example, Aa10 = 2Aa10 = 10{10}2 = 2Aa10, Aa10.5 = 10{10}2\*5^0.5 = 10{10}4.472 = 4.472Aa10
 
-(ii) For α<2: Aaα = Gα
-
-(iii) For α≥2: Aaα = α|10
-
-The seemingly complex expression in rule (i) simply gives us a smooth geometric curve between 2 and 10. This ensures that Aa would be continuous, given the identity 10↑(β)10 = 10↑(β+1)2.
-
-### Ab,Ac,Ad,...,Az and their Universal Canonical Forms
+### Ab,Ac,Ad,...,Az and their Universal Binary-Letter-Canonical Forms
 
 The definitions of Ab,Ac,Ad,...,Az are simple enough:
 
-Abα = AaAa...AaAa(10^frac(α)) with int(α) Aa's
+Abα = AaAa...AaAa(10^frac(α)) with int(α) Aa's = 10{ω+1}α
 
-Acα = AbAb...AbAb(10^frac(α)) with int(α) Ab's
+Acα = AbAb...AbAb(10^frac(α)) with int(α) Ab's = 10{ω+2}α
 
 then we have Ad,Ae,...,Az, each with the same definition as Ab and Ac.
 
-And that's it. So A(the β+1-th letter) is comparable to f\_ω+β\_(n) in the FGH.
+And that's it. So A(the β+1-th lowercase letter)α is 10{ω+β}α, comparable to f\_ω+β\_(n) in the FGH.
 
-Again we have Ab0=Ac0=Ad0=...=Az0=1, Ab1=Ac1=Ad1=...=Az1=10, and Ab,Ac,Ad,...,Az are all continuous. So any number greater than 1 has a unique Ab to Az Canonical Form.
+Again we have Ab0=Ac0=Ad0=...=Az0=1, Ab1=Ac1=Ad1=...=Az1=10, Aa10=Ab2, Ab10=Ac2, ... and Ab,Ac,Ad,...,Az are all continuous. So any number greater than 1 has a unique Ab to Az Canonical Form.
 
-Moreover, since Aa10=Ab2 and Ab10=Ac2, we can extend our definition of the "Universal Canonical Form" up to Az10:
+Moreover, since Aa10=Ab2, we can extend our definition of the "Universal Binary-Letter-Canonical Form" up to Az:
 
-(1) if α<100 (that's E2) then we write down the E-Canonical Form of α.
+(1) Set a threshold number θ (such as 100, that's 1E2)
 
-(2) Otherwise, we write α as Γβ for some letter combinations Γ and 2≤β<10. If there is more than one possible choice, we choose the letter combination which comes first in order.
+(2) if the number <θ then we write down the scientific notation of this number.
+
+(3) Otherwise, we write Γα = 10^frac(α)Γint(α) for letter combinations (E~Z, Ab~Az) or = 2*5^frac(α)Γint(α) for Aa, and 2≤α<θ. If there is more than one possible choice, we choose the letter combination which comes first in order.
+
+Examples: 
+
+10{20}10 = X10 = Y2 = Aa20, so we write it as 1X10.
+
+10{30}10 = Aa30, so we write it as 2Aa30.
+
+10{ω+1}10 = Ab10 = Ac2, so we write it as 1Ab10.
 
 ### Defining from Ba to Bz
 
-We already know how to do recursion (F,G,H,I,...,ζ) and simple diagonalization (Aa) in our continuous system, so we can easily extend our system up to ω×2-level in the FGH. In order to track our progress, we'll use the format (1,β)|α and define:
+We already know how to do recursion (F,G,H,I,...,Z) and simple diagonalization (Aa) in our continuous system, so we can easily extend our system up to ω\*2 level. In order to track our progress, we'll define:
 
-(1,0)|α = Aaα
-
-(1,β+1)|α = (1,β)|(1,β)|...|(1,β)|10^frac(α) with int(α) (1,β)'s
+- 10{α}10 = Aaα, 10{ω+β+1}α = 10{ω+β}10{ω+β}...10^frac(α) with int(α) 10{ω+β}'s
 
 And define Baα in a way similar to Aaα:
 
-(i) (1,α)|10 = (1,int(α)+1)|2\*5^frac(α)
+Baα = 10{ω+α}10 = 10{ω+int(α)+1}2\*5^frac(α)
 
-(ii) For α<2: Baα = (1,3)|α
+This gives rise to writing numbers in Ba Canonical form and extend the Universal Binary-Letter-Canonical Form up to Ba10, which have ω\*2 level.
 
-(iii) For α≥2: Baα = (1,α)|10
+Then we can define Bb,Bc, Bd,...,Bz with recursions in a similar way. Bbα = BaBa...BaBa(10^frac(α)) with int(α) Ba's = 10{ω\*2+1}α, and Bcα = BbBb...BbBb(10^frac(α)) with int(α) Bb's = 10{ω\*2+2}α, etc. So B(the β+1-th lowercase letter)α is 10{ω\*2+β}α.
 
-This gives rise to writing numbers in Ba-Canonical form and extend the Universal Canonical Form up to Ba10 ,which is about f\_ω×2\_(10) in the FGH.
-
-Then we can define Bb,Bc, Bd,...,Bz with recursions in a similar way. Bbα = BaBa...BaBa(10^frac(α)) with int(α) Ba's, and Bcα = BbBb...BbBb(10^frac(α)) with int(α) Bb's, etc. B(the β+1-th letter) is comparable to f\_ω\*2+β\_(n) in the FGH.
-
-### A Supporting Array Notation and Aaa
+### A Supporting Extended Arrow Operation and Aaa
 
 We can, of-course, repeat what we did in the previous section as many times as we wish and get the following ω^2-level notation (β,γ ≥ 0 are integers, and α≥0 is real):
 
-(i) (0,1)|α = 10^α
+(i) 10{1}α = 10^α
 
-(ii) (β,γ+1)|α = (β,γ)|(β,γ)|...|(β,γ)|10^frac(α) with int(α) (β,γ)'s
+(ii) 10{ω\*β+γ+1}α = 10{ω\*β+γ}10{ω\*β+γ}...10^frac(α) with int(α) 10{ω\*β+γ}'s
 
-(iii) (β,α)|10 = (β,int(α)+1)|2\*5^frac(α)
+(iii) 10{ω\*β+α}10 = 10{ω\*β+int(α)+1}2\*5^frac(α)
 
-(iv) For α<2: (β+1,0)|α = (β,3)|α
+(iv) 10{ω\*(β+1)}α = 10{ω\*β+α}10
 
-(v) For α≥2: (β+1,0)|α = (β,α)|10
+Note that {ω\*β+γ} is a valid extended arrow operation. Also, in this new notation we can write Baα = 10{ω+α}10, Bbα = 10{ω\*2+1}α,... Bzα = 10{ω\*2+25}α.
 
-Note that (β,γ) is comparable to f\_ω\*β+γ\_(α) in the FGH. Also, if we read (0,γ)|α as γ|α, this notation is a direct extension of everything we did before this section. Also, in this new notation we can write Baα = (2,0)|α, Bbα = (2,1)|α,... Bzα = (2,25)|α.
+We can extend to more uppercase letters: Caα = 10{ω\*2+α}10, Cbα = 10{ω\*3+1}α, ..., Zaα = 10{ω\*25+α}10, ..., and finally Zzα = 10{ω\*26+25}α.
 
-So QqQe308=10{ω17+16}10{ω17+4}308 is about f\_ω17+16\_(f\_ω17+4\_(308)).
+So we have Qq1.000Qe308 = 10{ω17+16}10{ω17+4}308
 
-And with this new supporting notation we can now to define Aaaα:
+And with this new supporting notation we can now to define:
 
-(i) For α<2: Aaaα = (2,1)|α
+- Aaaα = 10{ω\*int(α)+10\*frac(α)}10
 
-(ii) For α≥2: Aaaα = (int(α),10\*frac(α))|10
+Containing a very neat trick that allows us to do the double-diagonalization with a single number: Aaa1.5 = 10{ω+5}10, Aaa2.5 = 10{ω\*2+5}10
 
-With rule (ii) containing a very neat trick that allows us to do the double-diagonalization with a single number: Aaa1.5 = (2,1)|1.5, Aaa2.5 = (2,5)|10
-
-At any rate, it isn't too difficult to see that Aaa behaves "nicely" and allows us to speak of Aaa-Canonical Forms of any number. And since Aaa2=Ba10, Aaa3=Ca10,..., Aaa26=Za10, this also enables us to write the Unversal Canonical Form of any number about f\_ω^2\_(10) in the FGH.
+At any rate, it isn't too difficult to see that Aaa behaves "nicely" and allows us to speak of Aaa Canonical Forms of any number. And since Aaa1=Aa10, Aaa2=Ba10, ..., Aaa26=Za10, this also enables us to write the Unversal Binary-Letter-Canonical Form of any number below 10{ω^2}10.
 
 ## Symbol and letter notation
 
-### Arrays with more than two variable, and !Aa
+### Arrays with more than two variables, and !Aa
 
-Array notations can be easily extended to a multivariable array notation, like so:
+Extended arrow operations can be easily extended, like so:
 
-(i) For α≤1: (anything)|α = 10^α
+(i) 10{1}α = 10^α
 
-(ii) (β,γ,δ,...,ν+1)|α = (β,γ,δ,...,ν)|(β,γ,δ,...,ν)|...|(β,γ,δ,...,ν)|10^frac(α) with int(α) (β,γ,δ,...,ν)'s
+(ii) 10{...+ω^3\*β+ω^2\*γ+ω\*δ+ν+1}α = 10{...+ω^3\*β+ω^2\*γ+ω\*δ+ν}10{...+ω^3\*β+ω^2\*γ+ω\*δ+ν}...10^frac(α) with int(α) 10{...+ω^3\*β+ω^2\*γ+ω\*δ+ν}'s
 
-(iii) (β,γ,δ,...,ν,α)|10 = (β,γ,δ,...,ν,int(α+1))|2\*5^frac(α)
+(iii) 10{...+ω^3\*β+ω^2\*γ+ω\*δ+α}10 = 10{...+ω^3\*β+ω^2\*γ+ω\*δ+int(α+1)}2\*5^frac(α)
 
-(iv) For 1<α<2: (β,γ,δ,...,μ+1,<κ zeros>)|α = (β,γ,δ,...,μ,2,<κ-1 zeros>)|10^(α-1)
+(iv) 10{(...+ω^3\*β+ω^2\*γ+ω\*δ+μ+1)\*ω^κ}α = 10{(...+ω^4\*β+ω^3\*γ+ω^2\*δ+ω\*μ+α)\*ω^(κ-1)}10
 
-(v) For α≥2: (β,γ,δ,...,μ+1,<κ zeros>)|α = (β,γ,δ,...,μ,α,<κ-1 zeros>)|10
+(v) 10{(...+ω^3\*β+ω^2\*γ+ω\*δ+α)\*ω^κ}10 = 10{(...+ω^4\*β+ω^3\*γ+ω^2\*δ+ω\*int(α)+frac(α)\*10)\*ω^κ}10
 
-(vi) (β,γ,δ,...,α,<κ zeros>)|10 = (β,γ,δ,...,int(α),frac(α)\*10,<κ-1 zeros>)|10
+The first 4 rules are a simple and direct extention of the {ω\*β+γ} notation.
 
-(vii) (0,...,0,β,γ,δ,...,μ)|α = (β,γ,δ,...,μ)|α
+Rule (v) is an interesting one, though. It basically tells us that if we have an ordinal which ends with ω^n\*0 terms, then the digits of the fractional part of α are to be distributed among the terms. For example:
 
-The first 5 rules are a simple and direct extention of the 2-variable arrays notation, and Rule vii simply states that leading zeros can be ommitted.
+- 10{ω^6\*114+ω^5\*514+ω^4\*1.9198}10 = 10{ω^6\*114+ω^5\*514+ω^4+ω^3\*9+ω^2+ω\*9+8}10.
 
-Rule vi is an interesting one, though. It basically tells us that if we have an array which ends with (...,α,0,0,...,0) then the digits of the fractional part of α are to be distributed among the zeros. For example:
+Now, all that is left to do is to define !Aa, which has ω^ω level.
 
-- (114,514,1.9198,0,0,0,0)|10 = (114,514,1,9,1,9,8)|10.
+- !Aaα = 10{ω^int(α)\*frac(α)}10
 
-Now, all that is left to do is to define !Aa, which is about f\_ω^ω\_(10) in the FGH.
+Then we have !Aa2 = Aaa10, !Aa3 = Aaaa10,... Just like the previous letters, any number can be written as !Aaα. Here, it is actually the binary form of !αAaβ = !Aa(β+logα) which has the most intuitive meaning:
 
-For α<2: !Aaα = (1,0,1)|α
+In terms of the extended arrow operation, β tells us ω^β is in the ordinal and the digits of α tell us its coefficient and what residue ordinals are. Actually, !αAaβ has a more ω^ layer compare to αAaβ in ordinal level. For example, !1.2345Aa4 = 10{ω^4+ω^3\*2+ω^2\*3+ω\*4+5}10 and 10{4}10 < 1.2345Aa4 < 10{4}10{4}10
 
-For α≥2: !Aaα = (10^frac(α),0,...,0)|10 with int(α) zeros.
-
-Then we have !Aa2 = Aaa10, !Aa3 = Aaaa10,... Just like the previous letters, any number can be written as !Aaα. Here, it is actually the binary form of α!Aaβ = !Aa(β+logα) which has the most intuitive meaning for β≥2:
-
-In terms of the array notation, β+1 tells us how many numbers are in the array and the digits of α tell us the what those numbers are. For example: 1.2345!Aa4 = (1,2,3,4,5)|10
-
-And in terms of FGH ordinals, β gives us the maximum power of ω and the digits of α give us the coefficents of the various powers of ω: 1.2345!Aa4 \~ f\_ω^4+ω^3\*2+ω^2\*3+ω\*4+5\_(10). Actually, these neat relations are also true for β=1 and α≥2, so 2.5!Aa1 = (2,5)|10.
+And in terms of ordinals, β gives us the maximum power of ω and the digits of α give us the coefficents of the various powers of ω, these neat relations are also true for β=1 and α≥2.
 
 ### Higher dimensional arrays and @Aa
 
-With the definition of the array notation and the symbol !, one can easily define palanar array notation function. In this notation, the comma is short for \[0], and the dimensional seperator is \[1], ζ's represent 0's and dimensional seperators (or can be empty) and κ zeroes. κ+1 zerores means a group of zeroes and dimensional seperators starting with at least 1 zero. κ zeroes is that but it doesn't need to start with a zero.
+With the definition of the extended arrow operation and the symbol !, one can easily define new operations up to ω^ω^ω level. 
 
-(i) Other rules are the same from linear array notation
+By adding ! before a letter notation, it adds a ω^ layer (likes the same ordinal but changes from HH to FGH). Aa represents ω level, so !Aa represents ω^ω level. Then we can define !Ab (ω^(ω+1)), !Ac, !Ad, ..., !Az with the same meaning as !Aa, and !Ba (ω^(ω\*2)), !Bb, !Bc, ..., !Bz, !Aaa, etc. Comparing these with the previous letters, we can see that notations with ! symbol have a more ω^ than those without ! symbol. Fractional number of rows, columns, etc.. are defined in the same way.
 
-(ii) (β,γ,δ,...,μ+1\[1]0,ζ)|α = (β,γ,δ,...,μ\[1]1,0,0,ζ)|10^(x-1) for 1\<x<2
+Now, all that is left to do is to define @Aa, which has ω^ω^ω level.
 
-(iii) (β,γ,δ,...,μ+1\[1]0,ζ)|α = (β,γ,δ,...,μ\[1]10^frac(x),0,...,0,ζ)|10 with int(x) 0's for x=>2
-
-(iv) (β,γ,δ,...,α\[1]0,ζ)|10, κ = frac(α)\*10
-
-It equals to (β,γ,δ,...,int(α)\[1]10^frac(κ),0,...,0,ζ)|10 with int(κ) 0's where κ >=1 or there is only 1 \[1] and there is a 1 before it, or (β,γ,δ,...,int(α)\[1]frac(κ),ζ)|10 otherwise
-
-(v) (...\[1]0,...,0,β,γ...)|α = (...\[1]β,γ...)|α
-
-Rule 2 and 3 are the case where the last nonzero entry is at the end of a plane and is an integer. Rule 4 is when the last nonzero entry is at the end of a plane, you use the fractional part of the last entry, and put it in the next row.
-
-By adding ! before a letter notation, it changes from HH to FGH. Aa represents H\_ω, so !Aa represents f\_ω which equals to H\_ω^ω. Then we can define !Ab (f\_ω^(ω+1)_(10) in FGH), !Ac, !Ad,..., !Az with the same meaning as !Aa, and !Ba(f\_ω^(ω2)_(10) in FGH), !Bb, !Bc, ..., !Bz, !Aaa, etc. Comparing these with the previous letters, we can see that notations with ! symbol have a more ω^ in FGH than those without ! symbol.
-
-Fractional number of rows, columns, etc.. are defined in the same way as in the linear array notation, \[0] is the comma. ζ is an array of 0's and dimensional seperators.
-
-For level comparison, first compare the levels of the highest-leveled seperators. If they are equal, then compare the number of highest-leveled subseperators. If there are the same number, compare everything in the seperator after the last occurance of the highest-leveled seperator in a seperator. If they are equal, do that with the string before the last ocurrence of the highest-leveled seperator. If they are the same, the seperators have the same level.
-
-Now, all that is left to do is to define @Aa, which is about f\_ω^ω^ω\_(10) in the FGH.
-
-For α<2: @Aaα = (1\[1,0,0]0)|α
-
-For α≥2: @Aaα = (1\[10^frac(α),0,...,0]0)|10 with int(α) zeros.
+- @Aaα = 10{ω^(ω^int(α)\*frac(α))}10
 
 ### Nested arrays and more symbols
 
 The Definiton of more symbols is similar to the definition of @Aa.
 
-\#Aa \~ f\_ω^ω^ω^ω\_(10)
+- \#Aaα \~ 10{ω^ω^(ω^int(α)\*frac(α))}10
 
-\$Aa \~ f\_ω^ω^ω^ω^ω\_(10)
+- \$Aaα \~ 10{ω^ω^ω^(ω^int(α)\*frac(α))}10
 
-Then we can define (the β-th symbol or symbol combination)Aa = f\_ω^ω^...^ω(β+1 ω's)\_(10)
+Then we can define (the β-th symbol or symbol combination)Aaα = 10{ω^ω^...^(ω^int(α)\*frac(α))(β ω's)}10
 
 ### Definition of the final letter: ε
 
-ε represents exponent tower layers of ω, and it is comparable to f\_ε0\_(10) in the FGH.
+ε represents exponent tower layers of ω.
 
-αεβ \~ f\_ω^ω^...^ω(β ω's)\_(α)
+- αεβ \~ 10{ω^ω^...^(ω^int(α)\*frac(α))(β ω's)}10
 
-#### Using dlsdl's letter notation, the biggest number we can define in Metanum is about ε9.007E15
+### Using dlsdl's letter notation, the biggest number we can define in Metanum is about ε9.007E15
+
+# format-metanum
+
+## Description
+
+Implementation of dlsdl's letter notation for large number library, currently metanum.js
+
+## format options
+
+```javascript
+  smallNotationUseE         // 1. for small value notations, true then use αE-β，false then use number⁻¹
+  smallNotationThreshold    // 2. =n then value < 10^-n uses small notation
+  decimalPlaces             // 3. for normal notations, =0 is 1，=1 is 1.0，=2 is 1.00 etc.
+  decimalThreshold          // 4. =n then value >= 10^n do not show decimal part
+  useCommas                 // 5. whether to show commas in normal numbers (true/false)
+  sciThreshold              // 6. =n then value >= 10^n use scientific notation, same for β in αEβ
+  sciSignificantDigits      // 7. =n then α has n decimal places in αEβ
+  sciDecimalThreshold       // 8. =n then β >= 10^n in αEβ only show integer part of α
+  singleLetterDigits        // 9. α's decimal places in αFβ,αGβ...αZβ
+  repeatLetterThreshold     // 10. =n then n repeated single letters use next letter notation, n<2 then use 2
+  multiLetterDigits         // 11. α's decimal places in αAaβ,αAbβ...αAzβ and above
+  multiLetterRepeatThreshold// 12. =n then n repeated multi letter combinations use next letter notation, n<2 then use 2
+  multiLetterLimit          // 13. =n then length of multi letter combinations does not exceed n, exceed then switch to next notation (length of Aa is 2, Aaa is 3, Aaaa is 4...), n<2 then use 2
+  epsilonSignificantDigits  // 14. α's decimal places in αεβ
+```
+
+## Cases
+
+- 0 ~ 10^-smallNotationThreshold: E- format(αE-β=α×10^-β; E-αEβ=10^-(α×10^β); E-……=10^-……)(smallNotationUseE true) or ……⁻¹(reciprocal)
+- 10^-smallNotationThreshold ~ 10^decimalThreshold: decimal format (decimalPlaces digits)
+- 10^decimalThreshold ~ 10^sciThreshold: comma format(useCommas true) or integer format
+- 10^sciThreshold ~ 10^(10^sciThreshold): exponential as well as αEβ format
+- 10^(10^sciThreshold) ~ 10^^(repeatLetterThreshold+1): n E's αEβformat(EαEβ, EEαEβ, EEEαEβ……)
+- 10^^(repeatLetterThreshold+1) ~ 10^^(10^sciThreshold): αFβ format
+- 10^^(10^sciThreshold) ~ 10^^(10^^(repeatLetterThreshold+1)): FαEβ, FEαEβ, FEEαEβ…… format
+- 10^^(10^^(repeatLetterThreshold+1)) ~ 10^^^(repeatLetterThreshold+1): FαFβ, FFαFβ, FFFαFβ…… format
+- 10^^^(repeatLetterThreshold+1) ~ 10^^^(10^sciThreshold): αGβ format
+- 10^^^(10^sciThreshold) ~ 10^^^(10^^(repeatLetterThreshold+1)): GαEβ, GEαEβ,…… format
+- 10^^^(10^^(repeatLetterThreshold+1)) ~ 10{4}(repeatLetterThreshold+1): GαGβ, GGαGβ,…… format
+- 10{4}(repeatLetterThreshold+1) ~ 10{5}(repeatLetterThreshold+1): αHβ, HαEβ, HEαEβ, HαFβ, HFαFβ, HαGβ, HGαGβ, HαHβ, HHαHβ,…… format
+
+…………
+
+- 10{22}(repeatLetterThreshold+1) ~ 10{23}(repeatLetterThreshold+1): αZβ format; ZαEβ, ZEαEβ, ……, ZαZβ, ZZαZβ,…… format
+- 10{23}(repeatLetterThreshold+1) ~ 10{10^sciThreshold}10(=10{ω}(10^sciThreshold)): αAaβ format
+- 10{ω}(10^sciThreshold) ~ 10{ω+1}(multiLetterRepeatThreshold+1): AaαEβ, ……, AaαAaβ, AaAaαAaβ…… format
+- 10{ω+1}(multiLetterRepeatThreshold+1) ~ 10{ω+1}(10^sciThreshold): αAbβ format
+- 10{ω+1}(10^sciThreshold) ~ 10{ω+2}(multiLetterRepeatThreshold+1): AbαEβ, ……, AbαAbβ, AbAbαAbβ…… format
+- 10{ω+2}(multiLetterRepeatThreshold+1) ~ 10{ω+2}(10^sciThreshold): αAcβ format
+
+…………
+
+- 10{ω+25}(multiLetterRepeatThreshold+1) ~ 10{ω+25}(10^sciThreshold): αAzβ format
+- 10{ω+25}(10^sciThreshold) ~ 10{ω+26}(multiLetterRepeatThreshold+1): AzαEβ to AzαAzβ, AzAzαAzβ…… format
+- 10{ω+26}(multiLetterRepeatThreshold+1) ~ 10{ω+10^sciThreshold}10(=10{ω×2}(10^sciThreshold)): αBaβ format
+- 10{ω×2}(10^sciThreshold) ~ 10{ω×2}(multiLetterRepeatThreshold+1): BaαEβ to BaαBaβ, BaBaαBaβ…… format
+
+…………
+
+- 10{ω×2+26}(multiLetterRepeatThreshold+1) ~ 10{ω×2+10^sciThreshold}10(=10{ω×3}(10^sciThreshold)): αCaβ format
+- 10{ω×3}(10^sciThreshold) ~ 10{ω×3}(multiLetterRepeatThreshold+1): CaαEβ to CaαCaβ, CaCaαCaβ…… format
+
+…………
+
+- 10{ω×26+25}(multiLetterRepeatThreshold+1) ~ 10{ω×26+25}(10^sciThreshold): αZzβ format
+- 10{ω×26+25}(10^sciThreshold) ~ 10{ω×26+26}(multiLetterRepeatThreshold+1): ZzαEβ to ZzαZzβ, ZzZzαZzβ…… format
+- 10{ω×26+26}(multiLetterRepeatThreshold+1) ~ 10{ω×(10^sciThreshold)}10(=10{ω^2}(10^sciThreshold)): αAaaβ format
+- 10{ω^2}(10^sciThreshold) ~ 10{ω^2}(multiLetterRepeatThreshold+1): AaaαEβ to AaaαAaaβ, AaaAaaαAaaβ…… format
+
+…………
+
+- 10{……+ω^3×26+ω^2×26+ω×26+26}10 ~ 10{ω^ω}(10^sciThreshold): !αAaβ format
+- 10{ω^ω}(10^sciThreshold) ~ 10{ω^(……ω^3×26+ω^2×26+ω×26+26)}10: !AaαEβ, !αAbβ, !αAaaβ…… format
+- 10{ω^(……+ω^3×26+ω^2×26+ω×26+26)}10 ~ 10{ω^ω^ω}(10^sciThreshold): @αAaβ format
+- 10{ω^ω^ω}(10^sciThreshold) ~ 10{ω^ω^(……ω^3×26+ω^2×26+ω×26+26)}10: @AaαEβ, @αAbβ, @αAaaβ…… format
+- 10{ω^ω^(……+ω^3×26+ω^2×26+ω×26+26)}10 ~ 10{ω^ω^ω^ω}(10^sciThreshold): #αAaβ format
+- 10{ω^ω^ω^ω}(10^sciThreshold) ~ 10{ω^ω^ω^(……ω^3×26+ω^2×26+ω×26+26)}10: #AaαEβ, #αAbβ, #αAaaβ…… format
+
+…………
+
+- 10{ω^ω^……^ω}10 ~ 10{ω^ω^…(10^sciThreshold  ω^'s)…^ω}10: αεβformat
+- 10{ω^ω^…(10^sciThreshold ω^'s)…^ω}10 ~ limit of metanum.js: εαEβformat
+
+### format-metanum rules (v2.0)
+
+- **Γ-canonical α/β (bisect law)**: the true α and β of a value v at letter Γ
+  are recovered by bisecting 10{L}x = v on the engine's own smooth arrow curve
+  (Γ = E,F,G,... single letters, L = level). α = 10^frac(x), β = floor(x):
+  `format(arrow(3,4.1,3))` → `G1.161G897` (not `G1.000G898`),
+  `format(arrow(3,4.3,3))` → `1.285H8` (not `1.000H8`),
+  `format(hardy(4166))` → `2.397G5`.
+- **+count collapse**: n operations of level L applied to a Γ^{L+1}-structured
+  value collapse to ONE Γ^{L+1} with arg + n (F⁴(G(1.3796)) = G(5.3796)),
+  which is why single-letter chains like `G1.161G897` appear.
+- **α appears at most once**, attached to the innermost value:
+  `format(GE12)` → `G1.000E12`; hardy(1120) → `F4.398E13`. Once the innermost β reaches
+  10^sciThreshold the letter goes bare and β carries its own sci form.
+- **At most 2 finite letter types** may appear in a display's hyper-op chain
+  (VαEβ → VαFβ → … → VαVβ, never another like VFαEβ)
+  (AaαEβ → AaαFβ → … → AaαZβ → AaαAaβ, never another like AaFαEβ)
+  A cascade that would spell more than two letter types spells only its top two levels
+  and compresses the rest into the second letter's binary form.
+  "bottom Γ repeation": 3{9}3 → `L2.376K2`, 3{10}3 → `M2.376L2`,
+  4{9}4 → `LLK3.550K3`, 5{9}5 → `LLLKK4.669K4`; repeatLetterThreshold+1 top
+  repeats carry to the next letter instead (6{9}6 → `5.760M5`), and levels
+  22→21, 23→22 stay two-letter (`Y2.376X2`, `Z2.376Y2`), level ≥ 23 cascades
+  display as the αΓβ polarize diagonal. Diagonal letter combinations
+  (multi-letter tokens whose last lowercase letter is `a`: Aa, Ba, Ca, Aaa,
+  Aaaa, …) use the **pure dlsdl α=2·5^f ∈ [2,10) convention**; the other
+  letters (Ab, Bb, …) keep the ordinary α∈[1,10) convention. The polarize
+  triple t = log₁₀(bottom)+repeation maps as: t∈[2,10) smooth → α=t,
+  β=arrows; discrete integer arguments (10{L}b with 2≤b≤100) all sit at the
+  α=2 anchor of the next β; a structured argument climbs the geometric
+  smooth-log steps f→1+log10(f) to its diagonal mantissa. Examples:
+  3{24}3 → `2.376Aa23`, 3{100}3 → `2.376Aa99`,
+  10{100}10 … 10{100}100 → `2.000Aa100`, 10{23}10 → `2.000Aa23`,
+  10{100}(10{93}10) → `2.002Aa100`, 10{10000}10 → `2.000Aa10,000`;
+  nested ordinals prefix the ω-row letter:
+  3{3{100}3}3 → `Aa2.376Aa99`, 3{10{10000}10}3 → `Aa2.000Aa10,000`.
+  Symbol de-layering follows the same convention: !Aa3 = 10{ω³}10 →
+  `2.000Aaaa10` (layer 0), @Aa3 = 10{ω^{ω³}}10 → `!2.000Aaaa10`.
+- **multiLetterLimit symbol carry**: a multi-letter combination of k letters
+  sits at level ω^(k-1).  Once it would be longer than multiLetterLimit the
+  notation switches to the next one instead of growing another letter: the
+  symbol form !αAaβ, whose β is exactly that ω-exponent and whose α digits are
+  the CNF coefficients per the !-form definition
+  (!1.2345Aa4 = 10{ω^4+ω^3*2+ω^2*3+ω*4+5}10).  With limit 4 the successor of
+  Zzzz is `!…Aa4` — never Aaaaa — and a 10-letter level displays as a short
+  `!2.222Aa9`: `format(iter(3,5))` → `!2.222Aa4`,
+  `format(iter(3,10))` → `!2.222Aa9`.
+  **Every symbol-prefixed format carries too** — the symbols stack
+  (no-symbol → ! → @ → # …), so a layer-1 value whose diagonal letter would
+  exceed the limit reads as one more symbol with the Aa argument taking the
+  exponent: `format(apix(3,10))` → `@2.000Aa10`
+  (= 10{ω^(ω^10)}10), `format(apix(3,5))` → `@2.000Aa5`; past the symbol
+  table the ε form takes over (`format(epsilonate(3,15))` → `1.000Ak10ε14`).
+  Diagonal combinations in symbol forms keep the pure dlsdl α = 2·5^f ∈ [2,10)
+  mantissa (integer exponents anchor 2.000).
+- **Cascade compression**: a 20-row ordinal cascade that would spell 20 letter
+  types keeps its top two levels and folds the rest into the second letter's
+  repeat count: `format(h10000(3,10))` → `1.000Iccc19`.
+  Formats are identical at maxRows=maxCols=10/20/50/100.
+
+### Precision budget (maxRows / maxCols)
+
+Every hyperoperation is stored EXACTLY while it fits the array budget and
+approximately once it does not:
+
+- exact capacity = maxRows+maxCols−2 finite hyperoperation levels:
+  `arrow(x,L,z)` holds `r0 = [a0, a1, …, a(maxCols-1)]` (levels 0…maxCols−1)
+  plus the ordinal rows `[a(level+1), level]` for levels
+  maxCols … maxRows+maxCols−2 (maxRows−1 rows), so
+  `arrow(10,39,10)` is exact at maxRows=maxCols=20 (r0 of 20 entries, 19 rows,
+  top level 38) and `arrow(10,40,10)` is the first truncated value.
+- beyond the budget the expansion follows the truncation rule: keep the
+  LARGEST maxRows−1 ordinal rows in array[1]…array[maxRows−1] sorted ascending,
+  increment array[1][0] by 1 (the dropped lower chain collapses into one extra
+  operation there) and default array[0] to [10].  This applies to arrow, BEAF
+  and the rule-1…4 ordinal cascades alike
+  (`iter(3,5)` → `[[10],[2,2,2,0,2,2],…,[1,2,2,2,2,2]]`).
+- layer ≥ 1 results are stored in STANDARD form: an ordinal row [count, k]
+  whose level is the finite k merges into r0 (r0[k] += count) and the layer
+  drops as far as it can, since a layer-L bracket β that is a finite
+  ω-polynomial equals the layer-(L−1) value with the single row [1|β]:
+  `cube(10,3)` `[[10],[1,3],[1,0,1]]` → `[[10,0,0,1],[1,0,1]]`;
+  layer2 `[[5],[3,1]]` → `[[5,3]]` → layer1 `[[10],[1,5,3]]` = 10{ω^(ω*3+5)}10;
+  layer3 `[[3]]` → layer2 `[[0,0,0,1]]` → layer1 `[[10],[1,0,0,0,1]]`
+  = 10{ω^ω^3}10.
 
 # Changelog
 
+- 2026-9-15 v2.0: Add hyper-root & hyper-log, hardy function, fractional hyperoperation inputs, fix BEAF operation level and format
 - 2026-8-18 v1.4 Support hyper operation >MSI and fix format-metanum bugs
 - 2026-7-31 v1.3 Add format-metanum.js, fix basic operations, hyper operations and BEAF bugs
 - 2026-7-9 v1.2 Add more hyper operations up to ε₀, add BEAF operation and fix bugs

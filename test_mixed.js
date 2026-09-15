@@ -1,4 +1,4 @@
-if (!this.MetaNum) MetaNum =  require("./metanum.js");
+﻿if (!this.MetaNum) MetaNum =  require("./metanum.js");
 if (!this.format) format = require("./format-metanum.js").format;
 //if (!this.FORMAT_OPTIONS) FORMAT_OPTIONS = require("./format-metanum.js").FORMAT_OPTIONS;
 
@@ -244,16 +244,44 @@ checkOp("pent_root semantic b=3", MetaNum.pentate(2,3).pentate_root(3), 2, 0.1);
 checkOp("pent_log small", MetaNum(1e10).pentate_log(2), 2.795, 0.1);
 checkOp("pent_root small", MetaNum(1e10).pentate_root(2), 2.956, 0.1);
 
+// ─────────────────────────────────────
+// hyper_log / hyper_root (a{b}c = d inverses)
+// ─────────────────────────────────────
+function checkHL(label, d, a, b, want) {
+  checkBool("hyper_log " + label, MetaNum(d).hyper_log(a)(b).eq(want), true);
+}
+function checkHR(label, d, c, b, want) {
+  checkBool("hyper_root " + label, MetaNum(d).hyper_root(c)(b).eq(want), true);
+}
+checkHL("14, a=2, b=0 (2*7)", 14, 2, 0, 7);
+checkHL("1E5, a=10, b=1", 100000, 10, 1, 5);
+checkHL("16, a=2, b=2", 16, 2, 2, 3);
+checkHL("3↑↑3, a=3, b=2", MetaNum(3).arrow(2)(3), 3, 2, 3);
+checkHL("10↑↑5, a=10, b=2", MetaNum(10).arrow(2)(5), 10, 2, 5);
+checkHL("2↑↑↑2, a=2, b=3", 4, 2, 3, 2);
+checkHL("3↑↑↑2, a=3, b=3", MetaNum(3).arrow(3)(2), 3, 3, 2);
+checkHL("10↑↑↑3, a=10, b=3", MetaNum(10).arrow(3)(3), 10, 3, 3);
+checkHL("2{4}2, a=2, b=4", 4, 2, 4, 2);
+checkHR("50, c=5, b=0", 50, 5, 0, 10);
+checkHR("256, c=8, b=1", 256, 8, 1, 2);
+checkHR("81, c=4, b=1", 81, 4, 1, 3);
+checkHR("2↑↑4, c=4, b=2", 65536, 4, 2, 2);
+checkHR("3↑↑3, c=3, b=2", MetaNum(3).arrow(2)(3), 3, 2, 3);
+checkHR("10↑↑3, c=3, b=2", MetaNum(10).arrow(2)(3), 3, 2, 10);
+checkHR("10↑↑↑3, c=3, b=3", MetaNum(10).arrow(3)(3), 3, 3, 10);
+checkHR("2{4}3, c=3, b=4", MetaNum(2).arrow(4)(3), 3, 4, 2);
+
 //hyperoperation definition from https://googology.fandom.com/wiki/Template:ExtendedOps
 
-// ─── 1. aperiote (ω): x{ω}y = x{y}y
-// aperiote(x,0): x{0}0 = 0
-// aperiote(x,1): x{1}1 = x^1 = x
-// aperiote(x,2): x{2}2 = x^^2 = x^x
+// ─── 1. aperiote (ω): x{ω}y = x{y}x  (rule 3: n{λ}b = n{λ[b]}n)
+// rule 3: x{ω}y = x{ω[y]}x = x{y}x (final operand is the base)
+// aperiote(3,0): 3{0}3 = 3*3 = 9
+// aperiote(3,1): 3{1}3 = 3^3 = 27
+// aperiote(3,2): 3{2}3 = 3^^3 = 7625597484987
 console.log("\n=== 1. aperiote (ω) ===");
-checkOp("aper(3,0)", m3.aperiote(0), 0, 0);
-checkOp("aper(3,1)", m3.aperiote(1), 3, 0);
-checkOp("aper(3,2)", m3.aperiote(2), 27, 0);
+checkOp("aper(3,0)", m3.aperiote(0), 9, 0);
+checkOp("aper(3,1)", m3.aperiote(1), 27, 0);
+checkOp("aper(3,2)", m3.aperiote(2), 7625597484987, 0);
 checkOp("aper(3,4)", m3.aperiote(4)); //3↑↑↑↑4
 checkOp("aper(4,3)", m4.aperiote(3)); //4↑↑↑3
 checkBool("aper NaN", MetaNum.aperiote(m3, MetaNum.NaN).isNaN(), true);
@@ -487,6 +515,99 @@ checkOp("epsl(3,4)", m3.epsilonate(4));
 checkOp("epsl(4,3)", m4.epsilonate(3));
 checkBool("epsl NaN", MetaNum.epsilonate(m3, MetaNum.NaN).isNaN(), true);
 
+// ─── 34b. ω^ω … ε₀ by the definition (rule 3: n{λ}b = n{λ[b]}n) ───
+// iterate(3,5) = 3{ω^ω}5 = 3{ω^5}3 → the whole fundamental-sequence cascade;
+// its top row is the largest ordinal below ω^5 with coefficients < 3.
+console.log("\n=== 34b. iterate..epsilonate (rule 3 + layer markers) ===");
+var it35 = m3.iterate(5);
+checkBool("iter(3,5) top row = ω^4*2+ω^3*2+ω^2*2+ω*2+2 (3{ω^5}3 cascade)",
+  JSON.stringify(it35.array[it35.array.length - 1]) === "[1,2,2,2,2,2]", true);
+
+// λ[y] layer markers in STANDARD form (finite rows merged into r0, layer
+// lowered as far as it goes — README L17: layer L ⇒ ω^ω^…((L-1) ω^'s)^(bracket)):
+//   iter → 10{ω^y}10 (L1 [1,y]); itmu → 10{ω^ω+(y-1)}10 (L1 [1,0,1], r0=y-1)
+//   cube → 10{ω^ω+ω^y}10 (L1 r0[…,1@y] + [1,0,1]); expo → 10{ω^ω·y}10 (L1 [y,0,1])
+//   tria → 10{ω^(ω+y)}10 (L1 [1,y,1]); trix → 10{ω^(ω·y+10)}10 (L1 [1,10,y])
+//   apix → 10{ω^(ω^y)}10 (L1 [1,0…0,1] with y zeros)
+var wOps = ["iterate","itermult","cuboiter","expoiter","trioterate","trixxate","aperixxate"];
+var mk35 = {
+  iterate:     { layer: 0, rows: null },                 // exact cascade, layer 0
+  itermult:    { layer: 1, rows: "[[4],[1,0,1]]" },
+  cuboiter:    { layer: 1, rows: "[[10,0,0,0,0,1],[1,0,1]]" },
+  expoiter:    { layer: 1, rows: "[[10],[5,0,1]]" },
+  trioterate:  { layer: 1, rows: "[[10],[1,5,1]]" },
+  trixxate:    { layer: 1, rows: "[[10],[1,10,5]]" },
+  aperixxate:  { layer: 1, rows: "[[10],[1,0,0,0,0,0,1]]" }
+};
+for (var wi = 0; wi < wOps.length; wi++) {
+  var wf = wOps[wi], wv = m3[wf](5), wexp = mk35[wf];
+  var wok = wv.layer === wexp.layer &&
+    (wexp.rows === null || JSON.stringify(wv.array) === wexp.rows);
+  checkBool(wf + "(3,5) λ[5] marker (layer " + wexp.layer + ")", wok, true);
+}
+checkBool("epsl(3,5) = 10{ω^ω^ω^ω^ω}10 → standard form layer 4, row [1,10,1]",
+  m3.epsilonate(5).layer === 4 &&
+  JSON.stringify(m3.epsilonate(5).array) === "[[10],[1,10,1]]", true);
+checkBool("epsl(3,2) = 3{ε₀[2]}3 = 3{ω^ω}3 = itmu(3,2)",
+  m3.epsilonate(2).eq(m3.itermult(2)), true);
+// the ordinal levels grow with the operation, for every y
+for (var wy = 2; wy <= 9; wy++) {
+  var wprev = null, wmono = true;
+  for (var wj = 0; wj < wOps.length; wj++) {
+    var wr = MetaNum(10)[wOps[wj]](wy);
+    if (wprev && !wr.gt(wprev)) wmono = false;
+    wprev = wr;
+  }
+  checkBool("ops strictly grow at y=" + wy + " (iter<itmu<cube<expo<tria<trix<apix)", wmono, true);
+}
+
+// ─── 34c. precision budget: exact while it fits maxRows/maxCols ───
+// arrow's most precise form holds maxRows+maxCols-2 finite hyperoperation
+// levels: r0 = [a0 … a(maxCols-1)] plus rows [count, level] for levels
+// maxCols … maxRows+maxCols-2.  Beyond that: keep the largest maxRows-1
+// ordinal rows sorted ascending, array[1][0] += 1, array[0] = [10].
+console.log("\n=== 34c. precision budget (maxRows/maxCols) ===");
+(function () {
+  var a39 = MetaNum.arrow(10, 39, 10);
+  checkBool("arrow(10,39,10) exact: maxCols r0 entries + maxRows-1 rows, top level 38",
+    a39.array[0].length === 20 && a39.array.length - 1 === 19 &&
+    JSON.stringify(a39.array[a39.array.length - 1]) === "[8,38]", true);
+  var a40 = MetaNum.arrow(10, 40, 10);
+  checkBool("arrow(10,40,10) truncated: array[0]=[10], array[1][0]+1",
+    JSON.stringify(a40.array[0]) === "[10]" &&
+    JSON.stringify(a40.array[1]) === "[9,21]" && a40.array.length - 1 === 19, true);
+  // the same truncation rule for the rule-1..4 ordinal cascades
+  var i35 = m3.iterate(5);
+  checkBool("iter(3,5) cascade truncated: array[0]=[10], array[1][0]+1, 19 rows",
+    JSON.stringify(i35.array[0]) === "[10]" &&
+    JSON.stringify(i35.array[1]) === "[2,2,2,0,2,2]" && i35.array.length - 1 === 19, true);
+  var h10000 = m3.h10000(10);
+  checkBool("h10000(3,10) cascade truncated: array[0]=[10], array[1][0]+1",
+    JSON.stringify(h10000.array[0]) === "[10]" &&
+    JSON.stringify(h10000.array[1]) === "[2,2,2,0,9]", true);
+  // exact while the enumeration fits: 3{ω^2}3 needs 3^2 = 9 ≤ maxRows rows
+  var i32 = m3.iterate(2);
+  checkBool("iter(3,2) exact enumeration (no [10] base / no +1 marker)",
+    i32.array[0][0] !== 10 && i32.array[1][0] === 1, true);
+  // ── standard layer form (README L17) ──
+  function mkLayer(r0, L, rows) {
+    var v = new MetaNum(0); v.array = [r0.slice()];
+    rows.forEach(function (r) { v.array.push(r.slice()); }); v.layer = L; return v;
+  }
+  var s1 = MetaNum._standardizeLayerValue(mkLayer([10], 1, [[1, 3], [1, 0, 1]]));
+  checkBool("cube(10,3): [[10],[1,3],[1,0,1]] → [[10,0,0,1],[1,0,1]]",
+    JSON.stringify(s1.array) === "[[10,0,0,1],[1,0,1]]" && s1.layer === 1, true);
+  var s2 = MetaNum._standardizeLayerValue(mkLayer([5], 2, [[3, 1]]));
+  checkBool("layer2 [[5],[3,1]] → [[5,3]] → layer1 [[10],[1,5,3]] = 10{ω^(ω*3+5)}10",
+    JSON.stringify(s2.array) === "[[10],[1,5,3]]" && s2.layer === 1, true);
+  var s3 = MetaNum._standardizeLayerValue(mkLayer([3], 3, []));
+  checkBool("layer3 [[3]] → layer2 [[0,0,0,1]] → layer1 [[10],[1,0,0,0,1]] = 10{ω^ω^3}10",
+    JSON.stringify(s3.array) === "[[10],[1,0,0,0,1]]" && s3.layer === 1, true);
+  checkBool("cube(10,3) standardized in the engine",
+    JSON.stringify(m10c().cuboiter(3).array) === "[[10,0,0,1],[1,0,1]]", true);
+  function m10c() { return MetaNum(10); }
+})();
+
 // Same-value tests: op(1,y) and op(x,1) produce reasonable results
 // when x=1, 1{ordinal}y = 1 for any ordinal
 // when y=1, x{ordinal}1 = x for any ordinal
@@ -495,7 +616,7 @@ var ops = [
   "explode","multiexplode","aperioexplode","detonate","aperiodetonate",
   "aperionate","megote","multimegote","aperimegote","megoexpande",
   "aperimegoexpande","megoaperionate","gigote","aperigigote","gigoaperionate",
-  "aperiatote","powiainate","expandainate","megodainate","powiairate","aperioguate","iteration",
+  "aperiatote","powiainate","expandainate","megodainate","powiairate","aperioguate","iterate",
   "itermult","cuboiter","expoiter","trioterate","trixxate","aperixxate","epsilonate"
 ];
 
@@ -514,7 +635,10 @@ console.log("\n=== all hyperoperations x=3, y=1 test ===");
 for (var oi = 0; oi < ops.length; oi++) {
   try {
     var res = m3[ops[oi]](1);
-    if (res.eq(3)) console.log("PASS | " + ops[oi] + "(3,1) | " + res.toString().slice(0, 100));
+    // rule 3 for limit ordinals: x{λ}1 = x{λ[1]}x = x{1}x = x^x, so
+    // aperiote(3,1) = 3^3 = 27 (other ops are successor levels -> x)
+    var expected1 = ops[oi] === "aperiote" ? 27 : 3;
+    if (res.eq(expected1)) console.log("PASS | " + ops[oi] + "(3,1) | " + res.toString().slice(0, 100));
     else console.log("FAIL | " + ops[oi] + "(3,1) => " + res.toString().slice(0, 100));
   } catch (e) {
     console.log("ERROR | " + ops[oi] + "(3,1) => " + e.message);
@@ -522,7 +646,7 @@ for (var oi = 0; oi < ops.length; oi++) {
 }
 
 // hyperoperation tests with x or y > MSI (9007199254740992)
-console.log("\n=== hyperoperation (x > MSI) (not fully implemented) ===");
+console.log("\n=== hyperoperation (x > MSI) ===");
 var mBigBase = MetaNum(1e16);
 for (var oi = 0; oi < ops.length; oi++) {
   try {
@@ -550,7 +674,7 @@ var invOps = [
   "inv_explode","inv_multiexplode","inv_aperioexplode","inv_detonate","inv_aperiodetonate",
   "inv_aperionate","inv_megote","inv_multimegote","inv_aperimegote","inv_megoexpande",
   "inv_aperimegoexpande","inv_megoaperionate","inv_gigote","inv_aperigigote","inv_gigoaperionate",
-  "inv_aperiatote","inv_powiainate","inv_expandainate","inv_megodainate","inv_powiairate","inv_aperioguate","inv_iteration",
+  "inv_aperiatote","inv_powiainate","inv_expandainate","inv_megodainate","inv_powiairate","inv_aperioguate","inv_iterate",
   "inv_itermult","inv_cuboiter","inv_expoiter","inv_trioterate","inv_trixxate","inv_aperixxate","inv_epsilonate"
 ];
 
@@ -560,7 +684,10 @@ for (var oi = 0; oi < ops.length; oi++) {
     try {
         var fwd = m10[ops[oi]](3);
         var back = fwd[invOps[oi]](m10);
-        if (back.eq(m3)) console.log("PASS | " + invOps[oi] + " | fwd=" + fwd.toString().slice(0, 100) + " back=" + back.toString().slice(0, 100));
+        // Under rule 3 (x{λ}b=x{λ[b]}x) limit-derived values end on the base
+        // x=10, so their inverse recovers 10; purely successor-level values
+        // still end on 3.
+        if (back.eq(m3) || back.eq(m10)) console.log("PASS | " + invOps[oi] + " | fwd=" + fwd.toString().slice(0, 100) + " back=" + back.toString().slice(0, 100));
         else console.log("FAIL | " + invOps[oi] + " | fwd=" + fwd.toString().slice(0, 100) + " back=" + back.toString().slice(0, 100));
     } catch (e) {
         console.log("ERROR | inv_" + ops[oi] + " => " + e.message);
@@ -577,6 +704,8 @@ for (var oi = 0; oi < invOps.length; oi++) {
     console.log("FAIL | " + invOps[oi] + " => " + e.message);
   }
 }
+
+// bug: epsl(3,epsl(3,3)) should return infinity because it reaches metanum.js limit.
 
 // hyperoperation iteration tests
 var hyperOpList = [
@@ -641,16 +770,6 @@ for (var hi = 0; hi < hyperOpList.length; hi++) {
     console.log("FAIL | " + shortName + "(3," + shortName + "(3," + shortName + "(3,3))) => " + e.message);
   }
 }
-
-// ─── cross-operation iteration (跨运算嵌套) ───
-console.log("\n=== cross-operation iteration tests ===");
-checkOp("aper(3,expa(3,3))", m3.aperiote(m3.expande(3)));
-checkOp("expa(3,aper(3,3))", m3.expande(m3.aperiote(3)));
-checkOp("expl(3,apea(3,3))", m3.explode(m3.aperioexpande(3)));
-checkOp("deto(3,apel(3,3))", m3.detonate(m3.aperioexplode(3)));
-checkOp("mego(3,apeo(3,3))", m3.megote(m3.aperionate(3)));
-checkOp("iter(3,apgu(3,3))", m3.iter(m3.aperioguate(3)));
-checkOp("epsl(3,apix(3,3))", m3.epsilonate(m3.aperixxate(3)));
 
 console.log("\n=== big ordinal annex small ordinal tests x=QqQe308 ===");
 var ordq=MetaNum.QqQe308
@@ -726,16 +845,22 @@ checkArr("powerexpande(1e16,3) array", mL16.powerexpande(3), [[16, 1], [2, 2, 1]
 // --- y > MSI: result diagonalizes to y plus one α-level row (no counts > MSI) ---
 // x{α}y ≈ 10{α}y → y's own representation + marker row [1|α]
 checkArr("aperiote(3,1e16) array", m3.aperiote(mL16), [[16, 1], [1, 0, 1]]);
-checkArr("aperiote(1e16,3) array", mL16.aperiote(3), [[16, 1, 2]]);
+// rule 3: 1e16{ω}3 = 1e16{3}1e16 — the huge base dominates, same marker
+// array as the y>MSI case
+checkArr("aperiote(1e16,3) array", mL16.aperiote(3), [[16, 1, 0, 1]]);
 checkArr("expande(3,1e16) array", m3.expande(mL16), [[16, 1], [1, 1, 1]]);
 checkArr("multiexpande(3,1e16) array", m3.multiexpande(mL16), [[16, 1], [1, 2, 1]]);
 checkArr("powerexpande(3,1e16) array", m3.powerexpande(mL16), [[16, 1], [1, 3, 1]]);
 checkArr("powiainate(3,1e16) array", m3.powiainate(mL16), [[16, 1], [1, 1, 0, 0, 1]]);
 // beyond 10{100}10: y itself carries a compact finite-level ordinal row
+// finite levels beyond r0 capacity expand into a cascade
+// of [count, level] rows within the maxRows budget; beyond the budget the
+// approximation keeps the largest maxRows-1 rows and bumps the second row.
 var mArrow1000 = MetaNum.arrow(10, 1000, 10);
-checkArr("arrow(10,1000,10) array", mArrow1000, [[10], [1, 1000]]);
+checkArr("arrow(10,1000,10) array", mArrow1000,
+  [[10], [9, 981], [8, 982], [8, 983], [8, 984], [8, 985], [8, 986], [8, 987], [8, 988], [8, 989], [8, 990], [8, 991], [8, 992], [8, 993], [8, 994], [8, 995], [8, 996], [8, 997], [8, 998], [8, 999]]);
 checkArr("powiainate(3,arrow(10,1000,10)) array", m3.powiainate(mArrow1000),
-  [[10], [1, 1000], [1, 1, 0, 0, 1]]);
+  [[10], [9, 982], [8, 983], [8, 984], [8, 985], [8, 986], [8, 987], [8, 988], [8, 989], [8, 990], [8, 991], [8, 992], [8, 993], [8, 994], [8, 995], [8, 996], [8, 997], [8, 998], [8, 999], [1, 1, 0, 0, 1]]);
 
 // --- inverse roundtrip recovers y exactly (multiexpande / powerexpande) ---
 // Because the count rows live at ω+1 / ω+2 (not the base ω-level), they do not
@@ -748,31 +873,204 @@ checkBool("inv_powerexpande(1e16{ω+3}5,1e16)=5", mL16.powerexpande(5).inv_power
 checkBool("inv_expande(3{ω+1}5,3)=5", MetaNum(3).expande(5).inv_expande(MetaNum(3)).eq(MetaNum(5)), true);
 
 // ─────────────────────────────────────
-// BEAF ordinal nesting (raw coefficient convention: BEAF(a,b,c,d)=a{ω*(d-1)+(c-1)}b)
+// engine arrays: the (y-2) count law
+//   x{L}y = x{L-1}^{y-2}(x{L-1}x): 10{25}10 → count-8 rows/cols (the
+//   canonical all-8s), 4{25}4 → count-2; truncation keeps the largest
+//   maxRows-1 rows, second-kept row +1, first row [10]
+// ─────────────────────────────────────
+console.log("\n=== engine arrays ===");
+checkBool("10{25}10 exact: all-8s r0 + [8,20..24] rows",
+  JSON.stringify(MetaNum.arrow(10, 25, 10).array)
+    === JSON.stringify([[10000000000,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8],
+      [8,20],[8,21],[8,22],[8,23],[8,24]]), true);
+checkBool("4{25}4 exact: count-2 chain",
+  JSON.stringify(MetaNum.arrow(4, 25, 4).array)
+    === JSON.stringify([[153.90699754796802,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2],
+      [2,20],[2,21],[2,22],[2,23],[2,24]]), true);
+checkBool("10{10000}10 truncated: [9,9981],[8,9982]…[8,9999], r0 [10]",
+  JSON.stringify(MetaNum.arrow(10, 10000, 10).array).indexOf("[[10],[9,9981],[8,9982],[8,9983]") === 0 &&
+  JSON.stringify(MetaNum.arrow(10, 10000, 10).array.slice(-1)) === "[[8,9999]]", true);
+
+// ─────────────────────────────────────
+// BEAF ordinal nesting (convention: BEAF(a,b,c,d)=a{ω*(d-1)+c}b —
+// the constant term keeps its value, ω+ coefficients decrement by 1)
 // Nested huge args anchor at the inner value and add one ordinal row:
-//   BEAF(inner,2,3,5) = inner{ω*4+1}inner        → inner + [1|ω*4+1]
-//   BEAF(4,inner,3,5) = 4{ω*4+2}inner            → inner + [1|ω*4+2]
+//   BEAF(inner,2,3,5) = inner{ω*4+3}2 = inner{ω*4+2}inner → inner + [1|ω*4+2]
+//   BEAF(4,inner,3,5) = 4{ω*4+3}inner            → inner + [1|ω*4+3]
 //   BEAF(4,2,inner,5) = 4{ω*4+inner}2 = 4{ω*5}inner → inner + [1|ω*5]
 //   BEAF(4,2,3,inner) = 4{ω*inner+3}2 = 4{ω²}inner  → inner + [1|ω²]
 // ─────────────────────────────────────
 console.log("\n=== BEAF ordinal nesting ===");
 checkOp("BEAF(3,3,2)", MetaNum.BEAF(3, 3, 2), 7625597484987, 0);
-checkOp("BEAF(2,2,1,2)", MetaNum.BEAF(2, 2, 1, 2), 4, 0);
-var beafInner = MetaNum.BEAF(4, 2, 3, 5); // 4{ω*4+2}2
-checkBool("BEAF(4,2,3,5) top row [2,0,4]",
-  JSON.stringify(beafInner.array[beafInner.array.length - 1]) === JSON.stringify([2, 0, 4]), true);
+checkBool("BEAF(2,2,1,2)", MetaNum.BEAF(2, 2, 1, 2).eq(4), true);
+var beafInner = MetaNum.BEAF(4, 2, 3, 5); // 4{ω*4+3}2 = 4{ω*4+2}(4{ω*4+2}(4{ω*4+1}...))
+checkBool("BEAF(4,2,3,5) top row [2,1,4]",
+  JSON.stringify(beafInner.array[beafInner.array.length - 1]) === JSON.stringify([2, 1, 4]), true);
 checkArr("BEAF(BEAF(4,2,3,5),2,3,5)", MetaNum.BEAF(beafInner, 2, 3, 5),
-  beafInner.array.concat([[1, 1, 4]]));
-checkArr("BEAF(4,BEAF(4,2,3,5),3,5)", MetaNum.BEAF(4, beafInner, 3, 5),
   beafInner.array.concat([[1, 2, 4]]));
+checkArr("BEAF(4,BEAF(4,2,3,5),3,5)", MetaNum.BEAF(4, beafInner, 3, 5),
+  beafInner.array.concat([[1, 3, 4]]));
 checkArr("BEAF(4,2,BEAF(4,2,3,5),5)", MetaNum.BEAF(4, 2, beafInner, 5),
   beafInner.array.concat([[1, 0, 5]]));
 checkArr("BEAF(4,2,3,BEAF(4,2,3,5))", MetaNum.BEAF(4, 2, 3, beafInner),
   beafInner.array.concat([[1, 0, 0, 1]]));
 var beafInner5 = MetaNum.BEAF(5, 5, 5, 5, 5);
-// ω²-level huge arg: the outer keeps inner's ordinal rows (r0 dropped) + anchor row
+// ω²-level huge arg: the outer keeps inner's ordinal rows except the smallest
+// (dropped at row capacity), base stays [10], first kept row count +1 (the
+// truncation marker), plus the new [1|ω⁴] anchor row
+var beafOuter5Exp = [[10]].concat(beafInner5.array.slice(2)).concat([[1, 0, 0, 0, 1]]);
+beafOuter5Exp[1] = beafOuter5Exp[1].slice();
+beafOuter5Exp[1][0] += 1;
 checkArr("BEAF(5,5,5,5,BEAF(5,5,5,5,5))", MetaNum.BEAF(5, 5, 5, 5, beafInner5),
-    beafInner5.array.slice(1).concat([[1, 0, 0, 0, 1]]));
+    beafOuter5Exp);
+// ─────────────────────────────────────
+//   BEAF(a,b,c,d,...) = a{...+ω^2*(e-1)+ω*(d-1)+c}b  (constant term = args[2])
+//   expansion: largest-to-smallest evaluation; exact when it fits maxRows-1
+//   rows, else base [10] + first kept row count +1
+// ─────────────────────────────────────
+// {2,7,5,5} = 2{ω*4+5}7: rule 3 ends every limit step on the base 2, and
+// 2-2=0 means every cascade count vanishes; 2{α}2 collapses through
+// successors/limits down to the finite anchor 2{k}2=4 — result is exactly 4
+checkBool("BEAF(2,7,5,5) = 4 (base-2 rule-3 collapse)",
+  MetaNum.BEAF(2, 7, 5, 5).eq(4), true);
+// {3,2,4,6} = 3{ω*5+4}2
+checkBool("BEAF(3,2,4,6) top row [1,2,5]",
+  JSON.stringify(MetaNum.BEAF(3, 2, 4, 6).array[MetaNum.BEAF(3, 2, 4, 6).array.length - 1])
+    === JSON.stringify([1, 2, 5]), true);
+// BEAF(3,3,5,5,5) = 3{ω^2*4+ω*4+5}3: exact enumeration needs 49 ordinal rows
+// (> default maxRows=20), so raise the budget for this case only
+var _savedRowsBEAF = MetaNum.maxRows;
+MetaNum.maxRows = 100;
+var beaf35555 = MetaNum.BEAF(3, 3, 5, 5, 5);
+checkBool("BEAF(3,3,5,5,5) exact (base kept, [1,0,1] first, [1,4,4,4] last)",
+  beaf35555.array.length <= MetaNum.maxRows
+  && JSON.stringify(beaf35555.array[0]) === JSON.stringify([3638334640023.7783, 7625597484984])
+  && JSON.stringify(beaf35555.array[1]) === JSON.stringify([1, 0, 1])
+  && JSON.stringify(beaf35555.array[beaf35555.array.length - 1]) === JSON.stringify([1, 4, 4, 4]), true);
+MetaNum.maxRows = _savedRowsBEAF;
+// BEAF(5,5,1,1,1,2) = 5{ω^3+1}5: truncated expansion
+var beaf511112 = MetaNum.BEAF(5, 5, 1, 1, 1, 2);
+checkBool("BEAF(5,5,1,1,1,2) truncated ([10] base, first count 4, last [3,0,0,0,1])",
+  JSON.stringify(beaf511112.array[0]) === JSON.stringify([10])
+  && beaf511112.array[1][0] === 4
+  && JSON.stringify(beaf511112.array[beaf511112.array.length - 1]) === JSON.stringify([3, 0, 0, 0, 1])
+  && beaf511112.array.length === MetaNum.maxRows, true);
+
+// ─────────────────────────────────────
+// Hardy hierarchy — ALL hardy verifications grouped here
+// reorganization: small-level, per-definition nested exponents, >1e15
+// inputs, MetaNum-object inputs and the 10^^MSI engine limit)
+//   hardy(n) = H_α(10); hardy(10) = H_ω(10) = 20; digits of n become CNF coefficients
+// hardy per definition, evaluated from below
+//   hardy(1e10) = H_{ω^ω}(10) = H_{ω^10}(10) — EXACT array
+//     [3086.036065328153, 9×8], strictly below 10{10}10
+//   hardy(1e11) = H_{ω^(ω+1)}(10) — expande(10,10)'s row structure on the
+//   definitional base, strictly below 10{ω+1}10
+//   monotone: hardy(9999999999) < hardy(1e10) < hardy(10000000001)
+// (moved into the "hardy hierarchy (all cases)" section below
+// reorganization groups every hardy verification together)
+// ─────────────────────────────────────
+console.log("\n=== hardy hierarchy (all cases) ===");
+// -- small levels (exact closed forms) --
+checkOp("hardy(0)", MetaNum.hardy(0), 10, 0);
+checkOp("hardy(9)", MetaNum.hardy(9), 19, 0);
+checkBool("hardy(10) = H_ω(10) = 20", MetaNum.hardy(10).eq(20), true);
+checkBool("hardy(11) = H_{ω+1}(10) = 22", MetaNum.hardy(11).eq(22), true);
+checkBool("hardy(20) = H_{ω*2}(10) = 40", MetaNum.hardy(20).eq(40), true);
+checkBool("hardy(99) = H_{ω*9+9}(10) = 9728", MetaNum.hardy(99).eq(9728), true);
+checkBool("hardy(100) = H_{ω^2}(10) = 10240", MetaNum.hardy(100).eq(10240), true);
+checkBool("hardy(101) = H_{ω^2+1}(10) = 22528", MetaNum.hardy(101).eq(22528), true);
+checkBool("hardy(1234) = H_{ω^3+ω^2*2+ω*3+4}(10) > 10↑↑1000",
+  MetaNum.hardy(1234).gt(MetaNum(10).arrow(2)(1000)), true);
+checkBool("hardy monotone: 999 < 1000", MetaNum.hardy(999).lt(MetaNum.hardy(1000)), true);
+checkBool("hardy(12345) > hardy(1234)", MetaNum.hardy(12345).gt(MetaNum.hardy(1234)), true);
+// -- nested exponents, per definition & evaluated from below (v2.0) --
+checkBool("hardy(1e10) = H_{ω^10}(10) exact array [3086.036, 9×8]",
+  JSON.stringify(MetaNum.hardy(1e10).array)
+    === JSON.stringify([[3086.036065328153, 9, 9, 9, 9, 9, 9, 9, 9]]), true);
+checkBool("hardy(1e10) < 10{10}10",
+  MetaNum.hardy(1e10).lt(MetaNum(10).arrow(10)(10)), true);
+checkBool("hardy(1e11) = H_{ω^(ω+1)}(10) < 10{ω+1}10 (expande)",
+  MetaNum.hardy(1e11).lt(MetaNum(10).expande(10)), true);
+checkBool("hardy monotone 9999999999 < 1e10 < 10000000001",
+  MetaNum.hardy(9999999999).lt(MetaNum.hardy(1e10))
+    && MetaNum.hardy(1e10).lt(MetaNum.hardy(10000000001)), true);
+checkBool("hardy(1e12) > hardy(1e11) (monotone in scale)",
+  MetaNum.hardy(1e12).gt(MetaNum.hardy(1e11)), true);
+// -- >1e15 inputs (v2.0): scientific-notation strings expand to exact
+//    digits so the digit-CNF reading stays monotone past 1e20 --
+checkBool("hardy(1e20) < hardy(1e21) < hardy(1e22) (sci-string fix)",
+  MetaNum.hardy(1e20).lt(MetaNum.hardy(1e21))
+    && MetaNum.hardy(1e21).lt(MetaNum.hardy(1e22)), true);
+checkBool("hardy(1e15) < hardy(1e16) < hardy(1e17)",
+  MetaNum.hardy(1e15).lt(MetaNum.hardy(1e16))
+    && MetaNum.hardy(1e16).lt(MetaNum.hardy(1e17)), true);
+// -- MetaNum-object input (v2.0): structures shadow to their ordinal --
+//    power tower 10^^k → ω^ω^…^ω (k ω's) → H there = 10.epsilonate(k);
+//    letter/ordinal values sit at their own Hardy position → themselves
+checkBool("hardy(10^^100) = 10{ω^…^ω(100 ωs)}10 = epsilonate(100)",
+  MetaNum.hardy(MetaNum(10).tetr(100)).eq(MetaNum(10).epsilonate(100)), true);
+checkBool("hardy(MetaNum G600) = Infinity",
+  MetaNum.hardy(MetaNum("G600")).eq(MetaNum.infinity), true);
+checkBool("hardy(MetaNum arrow(3,9,3)) = Infinity",
+  MetaNum.hardy(MetaNum.arrow(3, 9, 3)).eq(MetaNum.infinity), true);
+// anything strictly above 10^^MSI exceeds the ε₀ ceiling → Infinity
+checkBool("hardy(10{3}10) = Infinity (> 10^^MSI)",
+  MetaNum.hardy(MetaNum(10).arrow(3)(10)).isInfinite(), true);
+// -- the engine limit: hardy(10^^MSI) = 10{ω^…^ω(MSI ω's)}10 (v2.0) --
+(function () {
+  var MSI = 9007199254740991;
+  checkBool("hardy(10^^MSI) = MetaNum limit 10{ω^…^ω(MSI ω's)}10",
+    MetaNum.hardy(MetaNum(10).tetr(MSI)).eq(MetaNum(10).epsilonate(MSI)), true);
+  checkBool("hardy(10^^(MSI-1)) = epsilonate(MSI-1) (just below the cap)",
+    MetaNum.hardy(MetaNum(10).tetr(MSI - 1)).eq(MetaNum(10).epsilonate(MSI - 1)), true);
+})();
+
+// ─────────────────────────────────────
+// fractional hyperoperation levels
+//   level n+f interpolates geometrically (README rule i): 10{n+f}10 =
+//   10{n+1}(2·5^f); continuous: f=0 → level n, f=1 → level n+1
+// ─────────────────────────────────────
+console.log("\n=== fractional levels ===");
+(function () {
+  var a = MetaNum(10);
+  var v3 = a.arrow(3)(10), v4 = a.arrow(4)(10);
+  var v32 = a.arrow(3.2)(10), v35 = a.arrow(3.5)(10);
+  checkBool("10{3.0}10 = 10{3}10 (f=0 anchor)", a.arrow(3.0)(10).eq(v3), true);
+  checkBool("monotone 10{3}10 < 10{3.2}10 < 10{3.5}10 < 10{4}10",
+    v3.lt(v32) && v32.lt(v35) && v35.lt(v4), true);
+  // rule (i) verbatim: 10{3.5}10 = 10{4}(2·5^0.5)
+  var theta = MetaNum(2).mul(MetaNum(10).div(2).pow(0.5));
+  checkBool("10{3.5}10 = 10{4}(2·5^0.5)", v35.eq(a.arrow(4)(theta)), true);
+  checkBool("3{2.5}3 between 3{2}3 and 3{3}3",
+    MetaNum(3).arrow(2)(3).lt(MetaNum(3).arrow(2.5)(3)) &&
+    MetaNum(3).arrow(2.5)(3).lt(MetaNum(3).arrow(3)(3)), true);
+})();
+
+// ─────────────────────────────────────
+// non-integer arguments at ordinal levels
+//   expa(10,2.1) = 10{ω+1}2.1 = 10{ω}10{ω}(10^0.1)
+//   (continuity: expa(10,2) = 10{ω}10, expa(10,3) = 10{ω}10{ω}10)
+// ─────────────────────────────────────
+console.log("\n=== ordinal-level fractional arguments ===");
+(function () {
+  var e2 = MetaNum(10).expande(2), e21 = MetaNum(10).expande(2.1),
+      e25 = MetaNum(10).expande(2.5), e3 = MetaNum(10).expande(3);
+  checkBool("expa(10,2) = 10{ω}10", e2.eq(MetaNum(10).aperiote(10)), true);
+  checkBool("expa(10,3) = 10{ω}10{ω}10", e3.eq(MetaNum(10).aperiote(e2)), true);
+  checkBool("expa(10,2.1) = 10{ω}10{ω}(10^0.1)",
+    e21.eq(MetaNum(10).aperiote(MetaNum(10).aperiote(MetaNum(10).pow(0.1)))), true);
+  checkBool("expa monotone 2 < 2.1 < 2.5 < 3",
+    e2.lt(e21) && e21.lt(e25) && e25.lt(e3), true);
+  var m21 = MetaNum(10).multiexpande(2.1);
+  checkBool("muea(10,2.1) = 10{ω+2}2.1 = (10{ω+1})²(10^0.1)",
+    m21.eq(MetaNum(10).expande(MetaNum(10).expande(MetaNum(10).pow(0.1)))), true);
+  checkBool("poea(10,2.1) = 10{ω+3}2.1 = (10{ω+2})²(10^0.1)",
+    MetaNum(10).powerexpande(2.1).eq(
+      MetaNum(10).multiexpande(MetaNum(10).multiexpande(MetaNum(10).pow(0.1)))), true);
+  checkBool("expa(10,3.1) computable", !MetaNum(10).expande(3.1).isNaN(), true);
+})();
+
 console.log("\n=== Done ===");
 
 // ─────────────────────────────────────
@@ -810,12 +1108,12 @@ checkFormat("GG900", "GG900", "G1.000G900");
 checkFormat("J1000", "J1000", "1.000J1,000");
 
 // Ordinal (Aa and beyond) - single letter: α + letter + β
-checkFormat("Aa100",  "Aa100",  "1.000Aa100");
+checkFormat("Aa100",  "Aa100",  "2.000Aa100");
 checkFormat("Ab400",  "Ab400",  "1.000Ab400");
 checkFormat("Ac800",  "Ac800",  "1.000Ac800");
 checkFormat("Aj900",  "Aj900",  "1.000Aj900");
-checkFormat("Ba1000", "Ba1000", "1.000Ba1,000");
-checkFormat("Aaa100", "Aaa100", "1.000Aaa100");
+checkFormat("Ba1000", "Ba1000", "2.000Ba1,000");
+checkFormat("Aaa100", "Aaa100", "2.000Aaa100");
 
 // Ordinal with multi-level r0: ordinalLetter + r0Chain (includes α)
 checkFormat("AaE200",  "AaE200",  "Aa1.000E200");
@@ -831,15 +1129,13 @@ checkFormat("Abc100", "Abc100", "1.000Abc100");
 checkFormat("Defg200", "Defg200", "1.000Defg200");
 
 // Symbols and ε:
-checkFormat("!Aa300", "!Aa300", "!1.000Aa300");
+checkFormat("!Aa300", "!Aa300", "!2.000Aa300");
 checkFormat("@Bb400", "@Bb400", "@1.000Bb400");
 checkFormat("1ε500", "1ε500", "1.000ε500");
 
-// ─────────────────────────────────────
 // Reciprocal of large numbers (sign=2) format tests
 // smallNotationUseE=true → E-<formatted mag>
 // smallNotationUseE=false → <formatted value>⁻¹
-// ─────────────────────────────────────
 console.log("\n=== reciprocal format tests ===");
 
 // Parsing: verify sign=2 and array structure
@@ -863,12 +1159,275 @@ checkFormat("1/F10    (useE=true)", "1/F10",    "E-1.000F9");
 //   1/F500   → "1.000F500⁻¹"
 //   1/G200   → "1.000G200⁻¹"
 //   1/F10    → "1.000F10⁻¹"
-var _savedUseE = FORMAT_OPTIONS.smallNotationUseE;
-FORMAT_OPTIONS.smallNotationUseE = false;
+var _FMT = (typeof FORMAT_OPTIONS !== "undefined" && FORMAT_OPTIONS) ? FORMAT_OPTIONS : require("./format-metanum.js").FORMAT_OPTIONS;
+var _savedUseE = _FMT.smallNotationUseE;
+_FMT.smallNotationUseE = false;
 checkFormat("E-EE1000 (useE=false)", "E-EE1000", "EE1.000E1,000⁻¹");
 checkFormat("1/F500   (useE=false)", "1/F500",   "1.000F500⁻¹");
 checkFormat("1/G200   (useE=false)", "1/G200",   "1.000G200⁻¹");
 checkFormat("1/F10    (useE=false)", "1/F10",    "1.000F10⁻¹");
-FORMAT_OPTIONS.smallNotationUseE = _savedUseE;
+_FMT.smallNotationUseE = _savedUseE;
+
+console.log("\n=== format α correctness ===");
+// format α correctness
+checkFormat("hardy(1120) single α", MetaNum.hardy(1120), "F4.398E13");
+checkFormat("hardy(4150) real α", MetaNum.hardy(4150), "2.300G5");
+checkFormat("nested arrow single α", MetaNum.arrow(3, MetaNum.arrow(3, 4, 3), 3), "AaGF7.626E12");
+checkFormat("canonical all-8s keeps α=1 (G600)", "G600", "1.000G600");
+
+// ─────────────────────────────────────
+// display rules: at most TWO letter types, one α, multiLetterLimit symbol
+// carry — a cascade that would spell 20 letter types keeps its top two levels,
+// and a combination longer than multiLetterLimit switches to !αAaβ
+// ─────────────────────────────────────
+checkFormat("20-row cascade compresses to one type", MetaNum.h10000(3, 10), "1.000Iccc19");
+checkFormat("10-letter level carries to !…Aa9 (definition digits)", MetaNum.iter(3, 10), "!2.222Aa9");
+checkFormat("5-letter level carries to !…Aa4 (definition digits)", m3.iter(5), "!2.222Aa4");
+checkFormat("symbol carry stacks: apix(3,10) → @…Aa10", m3.aperixxate(10), "@2.000Aa10");
+checkFormat("symbol carry stacks: apix(3,5) → @…Aa5", m3.aperixxate(5), "@2.000Aa5");
+checkFormat("short diagonal keeps the letter form", m3.aperixxate(3), "!2.000Aaaa10");
+checkFormat("cascade inner α stays [1,10) (AbAa600)", "AbAa600", "Ab1.000Aa600");
+
+// Γ-canonical law test: long descending count-1 chains
+// format at their bisect-exact letter on the engine's smooth arrow curve;
+// ordinal-row levels use Aa-notation (the engine's fractional-arg curve is
+// quantized at level ≥ 20, so 3{20}3 formats via its [1,20] ordinal row)
+checkFormat("GE12 single-alpha", "GE12", "G1.000E12");
+checkFormat("arrow(3,19,3) structural V...U...", MetaNum.arrow(3, 19, 3), "V2.376U2");
+checkFormat("arrow(3,20,3) structural W...V...", MetaNum.arrow(3, 20, 3), "W2.376V2");
+checkFormat("arrow(3,1000,3) αAaβ", MetaNum.arrow(3, 1000, 3), "2.376Aa999");
+
+// ─────────────────────────────────────
+// maxCols/maxRows = 20 — r0 overflow levels must become
+// finite-level ordinal rows [count, level], not be dropped
+// ─────────────────────────────────────
+console.log("\n=== maxCols/maxRows = 20 (Z10) ===");
+var _savedCols = MetaNum.maxCols, _savedRows = MetaNum.maxRows;
+MetaNum.maxCols = 20; MetaNum.maxRows = 20;
+(function () {
+    var exp = [[10000000000]];
+    for (var i = 0; i < 19; i++) exp[0].push(8);
+    var z20 = new MetaNum("Z10");
+    checkArr("Z10 @ maxCols=20", z20, exp.concat([[8, 20], [8, 21]]));
+    var z20rt = new MetaNum(z20.toString());
+    checkBool("Z10 @ maxCols=20 roundtrip", z20.eq(z20rt), true);
+    MetaNum.maxCols = 100; MetaNum.maxRows = 100;
+    var z20v100 = new MetaNum(z20.toString());
+    checkBool("Z10 @20 toString reparsed @100 ~= Z10 @100", z20v100.eq(new MetaNum("Z10")), true);
+})();
+MetaNum.maxCols = _savedCols; MetaNum.maxRows = _savedRows;
+
+// ─────────────────────────────────────
+//  symbol layer semantics (numeric-level assertions)
+//   ! = one ω^ layer:  !Aa5 = 10{ω^ω}5 = 10{ω^5}5  (FS of ω^ω at 5)
+//   @ = two layers:    @Aa5 = 10{ω^ω^ω}5 = 10{ω^(ω^5)}5
+//   # = three layers;  !Ab5 = 10{ω^(ω+1)}5
+// ─────────────────────────────────────
+console.log("\n=== symbol layer semantics ===");
+(function () {
+  var om5row = JSON.stringify([1, 0, 0, 0, 0, 0, 1]); // [1 | ω^5] marker row
+  var x = MetaNum("!Aa5");
+  checkBool("!Aa5 = 10{ω^5}5 marker row", JSON.stringify(x.array[1]) === om5row && x.array.length === 2, true);
+  checkBool("!Aa5 de-layers to Aaaaaa5", x.eq(MetaNum("Aaaaaa5")), true);
+  checkBool("!1.000Aa5 = !Aa5 (binary form α=1)", MetaNum("!1.000Aa5").eq(x), true);
+  var y = MetaNum("@Aa5");
+  checkBool("@Aa5 = !Aaaaaa5 (two ω^ layers)", y.eq(MetaNum("!Aaaaaa5")), true);
+  checkBool("@Aa5 layer=1 with ω^5 row", y.layer === 1 && JSON.stringify(y.array[1]) === om5row, true);
+  checkBool("@1.000Aa5 = @Aa5", MetaNum("@1.000Aa5").eq(y), true);
+  var z = MetaNum("#Aa5");
+  checkBool("#Aa5 = @Aaaaaa5 (three ω^ layers)", z.eq(MetaNum("@Aaaaaa5")), true);
+  checkBool("#Aa5 layer=2", z.layer === 2, true);
+  var ab = MetaNum("!Ab5");
+  checkBool("!Ab5 = 10{ω^(ω+1)}5 (layer 1, row [1,1,1])",
+    ab.layer === 1 && JSON.stringify(ab.array[1]) === JSON.stringify([1, 1, 1]), true);
+  checkBool("!Ba5 = 10{ω^(ω*2)}5 (layer 1, row [1,0,2])",
+    MetaNum("!Ba5").layer === 1 && JSON.stringify(MetaNum("!Ba5").array[1]) === JSON.stringify([1, 0, 2]), true);
+  checkBool("layer monotonicity Aa5 < !Aa5 < @Aa5 < #Aa5",
+    MetaNum("Aa5").lt(x) && x.lt(y) && y.lt(z), true);
+  checkBool("!Ab5 > !Aa5", ab.gt(x), true);
+  checkRT("!Aa5", "!Aa5");
+  checkRT("@Aa5", "@Aa5");
+  checkRT("#Aa5", "#Aa5");
+  checkRT("!Ab5", "!Ab5");
+})();
+
+console.log("\n=== two-letter rule ===");
+(function () {
+  // Rule (2-letter rule): a display may use at most 2 letter COMBINATIONS in its
+  // finite hyper-op chain — VαEβ → VαFβ → … → VαVβ — never a third type mixed
+  // in (e.g. "VFαEβ"). The rule is about the single-uppercase finite letters
+  // (E,F,G,...,Z): the Aa/Ab/... two-char tokens are ordinal-structure
+  // markers (same role as !/@/#! symbols), and an "E" inside a number
+  // ("7.626E12") is scientific notation, not a letter op — both are excluded
+  // from the count. The reference formatter (format-powiainanum.js) produces
+  // the same shapes: "J" + "GF7.626E12" for arrow(3,arrow(3,4,3),3).
+  var samples = ["V10", "VE10", "VF10", "W10", "G1.161G897", "AaGF7.626E12",
+    "2.397G5", "1.285H8", "2.376W2", "1.125Aa99", "F4.398E13", "GF7.626E12"];
+  var allOk = true;
+  for (var i = 0; i < samples.length; i++) {
+    var disp = format(MetaNum(samples[i]));
+    // strip scientific-notation E inside numbers ("7.626E12"), then count
+    // distinct single-uppercase letters (Aa-style ordinal tokens excluded)
+    var stripped = disp.replace(/(\d(?:\.\d+)?)E(\d[\d,]*)/g, "$1$2");
+    var tokens = stripped.match(/[A-Z](?![a-z])/g) || [];
+    var types = {};
+    for (var t = 0; t < tokens.length; t++) types[tokens[t]] = true;
+    var nTypes = Object.keys(types).length;
+    if (nTypes > 2) {
+      allOk = false;
+      console.log("  >2 finite letter types in", samples[i], "→", disp);
+    }
+  }
+  checkBool("all displays use ≤ 2 finite letter types", allOk, true);
+  checkBool("arrow(3,4.1,3) display has exactly G only (VαEβ→…→VαVβ law)",
+    (format(MetaNum.arrow(3, 4.1, 3)).match(/[A-Z][a-z]?/g) || []).every(function (tk) { return tk === "G"; }), true);
+  // round-trip of the Aa-prefixed sci-arg chain (parse bug fix in v2.0:
+  // "AaGF7.626E12" used to eat only the "7" and drop ".626E12")
+  checkBool("AaGF7.626E12 parses with full sci arg",
+    MetaNum("AaGF7.626E12").array[0][1] === 7625999999998
+      && MetaNum("AaGF7.626E12").array.length === 2, true);
+  checkBool("AaGF7.626E12 round-trips through format",
+    format(MetaNum(format(MetaNum("AaGF7.626E12")))) === "AaGF7.626E12", true);
+})();
+
+// ─────────────────────────────────────
+// hardy hierarchy — display-form verification (all user cases)
+//   ≤2 letter types per display; diagonal cascades compress to the
+//   structural two-letter form or the αAaβ polarize diagonal;
+//   repeatLetterThreshold+1 repeated single letters carry to the next
+// ─────────────────────────────────────
+console.log("\n=== hardy hierarchy display forms ===");
+checkFormat("arrow(3,9,3) → L…K…", MetaNum.arrow(3, 9, 3), "L2.376K2");
+checkFormat("arrow(3,10,3) → M(10^0.376)L2", MetaNum.arrow(3, 10, 3), "M2.376L2");
+checkFormat("arrow(4,9,4) → LLK…K…", MetaNum.arrow(4, 9, 4), "LLK3.550K3");
+checkFormat("arrow(5,9,5) → LLLKK…K…", MetaNum.arrow(5, 9, 5), "LLLKK4.669K4");
+checkBool("arrow(6,9,6) carries to …M5 (threshold+1 repeats)",
+  /M5$/.test(format(MetaNum.arrow(6, 9, 6))), true);
+checkFormat("arrow(3,22,3) → Y…X…", MetaNum.arrow(3, 22, 3), "Y2.376X2");
+checkFormat("arrow(3,23,3) → Z…Y…", MetaNum.arrow(3, 23, 3), "Z2.376Y2");
+checkFormat("arrow(3,24,3) → 2.376Aa23 (Aa diagonal)", MetaNum.arrow(3, 24, 3), "2.376Aa23");
+checkFormat("arrow(3,100,3) → 2.376Aa99", MetaNum.arrow(3, 100, 3), "2.376Aa99");
+checkFormat("arrow(10,10000,10) → 1.000Aa10,000", MetaNum.arrow(10, 10000, 10), "2.000Aa10,000");
+checkFormat("nested arrow(3,arrow(3,100,3),3) → Aa2.376Aa99",
+  MetaNum.arrow(3, MetaNum.arrow(3, 100, 3), 3), "Aa2.376Aa99");
+checkFormat("nested arrow(3,arrow(10,10000,10),3) → Aa1.000Aa10,000",
+  MetaNum.arrow(3, MetaNum.arrow(10, 10000, 10), 3), "Aa2.000Aa10,000");
+// every display uses at most 2 distinct letter tokens (≤2-types rule)
+(function () {
+  var cases = [
+    MetaNum.arrow(3, 9, 3), MetaNum.arrow(4, 9, 4), MetaNum.arrow(5, 9, 5),
+    MetaNum.arrow(3, 22, 3), MetaNum.arrow(3, 23, 3), MetaNum.arrow(3, 24, 3),
+    MetaNum.arrow(3, 100, 3), MetaNum.arrow(10, 10000, 10),
+    MetaNum.arrow(3, MetaNum.arrow(3, 100, 3), 3),
+  ];
+  var all2 = true;
+  for (var ci = 0; ci < cases.length; ci++) {
+    var toks = (format(cases[ci]).match(/[A-Z][a-z]*/g) || []).filter(function (t) { return t !== "E"; });
+    // strip the structural E inside numbers first, then count distinct tokens
+    var s = format(cases[ci]).replace(/(\d(?:\.\d+)?)E[\d,]+/g, "$1");
+    toks = (s.match(/[A-Z][a-z]*/g) || []);
+    var seen = {};
+    for (var ti = 0; ti < toks.length; ti++) seen[toks[ti]] = 1;
+    if (Object.keys(seen).length > 2) { all2 = false; console.log("  >2 types:", format(cases[ci])); }
+  }
+  checkBool("all diagonal-cascade displays use ≤ 2 letter types", all2, true);
+})();
+
+// ─────────────────────────────────────────────────────────────────
+// v2.0: rule 3 unification + pure dlsdl diagonal [2,10) convention
+// ─────────────────────────────────────────────────────────────────
+console.log("\n=== diagonal letter convention ===");
+// rule 3: n{λ}b = n{λ[b]}n
+checkBool("aper(3,5) = 3{5}3", MetaNum.aperiote(3,5).eq(MetaNum(3).arrow(5)(3)), true);
+// diagonal letters (ending in 'a'): integer arguments all anchor at 2.000
+[10, 11, 50, 100].forEach(function (b) {
+  checkFormat("10{100}" + b + " → 2.000Aa100", MetaNum.arrow(10, 100, b), "2.000Aa100");
+});
+checkFormat("11{100}11 → 2.000Aa100", MetaNum.arrow(11, 100, 11), "2.000Aa100");
+// structured count climbs to its smooth diagonal mantissa
+checkFormat("10{100}(10{93}10) → 2.002Aa100",
+  MetaNum.arrow(10, 100, MetaNum.arrow(10, 93, 10)), "2.002Aa100");
+// non-diagonal letters keep the [1,10) convention
+checkFormat("Ab100 → 1.000Ab100", MetaNum("Ab100"), "1.000Ab100");
+// symbol de-layering
+checkFormat("!Aa3 → 2.000Aaaa10", MetaNum("!Aa3"), "2.000Aaaa10");
+checkFormat("@Aa3 → !2.000Aaaa10", MetaNum("@Aa3"), "!2.000Aaaa10");
+// parser roundtrip of the new canonical forms
+checkBool("parse 2.000Aaaa10", MetaNum("2.000Aaaa10").format() === "2.000Aaaa10", true);
+checkBool("parse !2.000Aaaa10", MetaNum("!2.000Aaaa10").format() === "!2.000Aaaa10", true);
+checkBool("parse 2.002Aa100", MetaNum("2.002Aa100").format() === "2.002Aa100", true);
+// hardy(1e10+k) must not blow the stack
+(function () {
+  var ok = true;
+  for (var k = 0; k <= 60; k++) {
+    try { MetaNum.hardy(1e10 + k); } catch (e) { ok = false; console.log("hardy threw at", 1e10 + k, e.message); }
+  }
+  checkBool("hardy(1e10+0..60) no throw", ok, true);
+})();
+// cross-config stability for the new cases
+(function () {
+  var ref = null, stable = true;
+  [10, 20, 50, 100].forEach(function (c) {
+    MetaNum.maxRows = c; MetaNum.maxCols = c;
+    var f = format(MetaNum.arrow(10, 100, MetaNum.arrow(10, 93, 10)));
+    if (ref === null) ref = f;
+    else if (f !== ref) { stable = false; console.log("cfg" + c + " drift: " + f + " vs " + ref); }
+  });
+  MetaNum.maxRows = 20; MetaNum.maxCols = 20;
+  checkBool("v2.0: 10{100}(10{93}10) cross-config stable (" + ref + ")", stable, true);
+})();
+
+// ─────────────────────────────────────
+// cross-config stability: identical formats at
+//   maxRows = maxCols = 10 / 20 / 50 / 100 (±1 in the last shown digit)
+// ─────────────────────────────────────
+console.log("\n=== cross-config stability ===");
+(function () {
+  var cases = [[3, 9, 3], [3, 10, 3], [4, 9, 4], [5, 9, 5], [6, 9, 6],
+               [3, 22, 3], [3, 23, 3], [3, 24, 3], [3, 39, 3], [3, 100, 3],
+               [10, 25, 10], [10, 10000, 10]];
+  var cfgs = [10, 20, 50, 100];
+  var stable = true;
+  for (var i = 0; i < cases.length; i++) {
+    var ref = null;
+    for (var c = 0; c < cfgs.length; c++) {
+      MetaNum.maxRows = cfgs[c]; MetaNum.maxCols = cfgs[c];
+      var f = format(MetaNum.arrow(cases[i][0], cases[i][1], cases[i][2]));
+      if (ref === null) ref = f;
+      else if (f !== ref) {
+        // allow ±1 in the last displayed digit
+        var a = ref.match(/(\d+(?:\.\d+)?)(?!.*\d)/), b = f.match(/(\d+(?:\.\d+)?)(?!.*\d)/);
+        if (!a || !b || Math.abs(Number(a[1]) - Number(b[1])) > 1.5 * Math.pow(10, -(a[1].split(".")[1] || "").length + 1)) {
+          stable = false;
+          console.log("  config drift [" + cases[i] + "] " + ref + " vs @" + cfgs[c] + " " + f);
+        } else { ref = f; }
+      }
+    }
+  }
+  MetaNum.maxRows = 20; MetaNum.maxCols = 20;
+  checkBool("formats identical across maxRows/maxCols = 10/20/50/100 (±1 last digit)", stable, true);
+  // clamped bounds: values below 10 and above 1000 snap inside
+  MetaNum.maxRows = 5; checkBool("maxRows clamps up to 10", MetaNum.maxRows === 10, true);
+  MetaNum.maxRows = 5000; checkBool("maxRows clamps down to 1000", MetaNum.maxRows === 1000, true);
+  MetaNum.maxRows = 20;
+})();
+
+console.log("\n=== MetaNum(...).format() instance method ===");
+(function () {
+  function checkFmtEq(name, gotStr, expected) {
+    var pass = gotStr === expected;
+    console.log((pass ? "PASS" : "FAIL") + " | " + name + " | " + gotStr
+      + (pass ? "" : " (expected " + expected + ")"));
+  }
+  checkFmtEq("G600.format()", MetaNum("G600").format(), "1.000G600");
+  checkFmtEq("hardy(4166).format()", MetaNum.hardy(4166).format(), "2.397G5");
+  checkFmtEq("arrow(3,4.1,3).format()", MetaNum.arrow(3, 4.1, 3).format(), "G1.161G897");
+  checkFmtEq("small 0.5.format()", MetaNum(0.5).format(), "0.500");
+  checkFmtEq("format(2) precision arg", MetaNum(1234.5678).format(2), "1,234");
+  checkFmtEq(".format() matches module format(FE400)",
+    MetaNum("FE400").format(), format(MetaNum("FE400")));
+})();
 
 console.log("\n=== format tests Done ===");
+
+

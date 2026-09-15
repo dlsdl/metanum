@@ -16,9 +16,9 @@ const FORMAT_OPTIONS = {
   sciSignificantDigits: 3,   // 7. 科学计数法有效位数（=n则αEβ的α的小数部分保留n位）
   sciDecimalThreshold: 3,    // 8. 科学计数法小数阈值（=n则αEβ的β>=10^n时不显示小数部分）
   singleLetterDigits: 3,     // 9. 单字母计数法有效位数（αFβ,αGβ...αZβ中α的小数位数）
-  repeatLetterThreshold: 3,  // 10. 单字母重复阈值（=n则出现n个重复的单字母时用下一个字母计数法，n<2时以2计算）
+  repeatLetterThreshold: 3,  // 10. 单字母重复阈值（=n则出现n+1个重复的单字母时用下一个字母计数法，n<2时以2计算）
   multiLetterDigits: 3,      // 11. 多字母计数法有效位数（及以上的α的小数位数）
-  multiLetterRepeatThreshold: 3, // 12. 多字母组合重复阈值（=n则出现n个重复的多字母组合时用下一个字母计数法，n<2时以2计算）
+  multiLetterRepeatThreshold: 3, // 12. 多字母组合重复阈值（=n则出现n+1个重复的多字母组合时用下一个字母计数法，n<2时以2计算）
   multiLetterLimit: 4,        // 13. 多字母组合最大位数（=n则多字母组合的长度不超过n，超过则切换下一种计数法，n<2时以2计算）
   epsilonSignificantDigits: 6  // 14. epsilon有效位数（=n则αεβ中α的小数位数为n）
 }
@@ -288,6 +288,36 @@ function letterName(height) {
     return result
 }
 
+// ─── Letter token with the multiLetterLimit symbol carry ──────────
+// A k-letter combination (Aa, Aaa, Aaaa, …) sits at level ω^(k-1).  Once the
+// combination would be longer than FORMAT_OPTIONS.multiLetterLimit the
+// notation switches to the next one instead: the symbol form !αAaβ.  Per its
+// definition (!1.2345Aa4 = 10{ω^4+ω^3*2+ω^2*3+ω*4+5}10) β is the top
+// ω-exponent (k-1) and α's digits are the CNF coefficients — exactly the
+// digits of the letter itself (uppercase index, then the lowercase indices),
+// which keeps the diagonal mantissa inside [2,10) for the cascades.
+function letterTokenOf(height) {
+    let plain = letterName(height)
+    let limit = Math.max(2, FORMAT_OPTIONS.multiLetterLimit | 0)
+    if (plain.length <= limit) return { sym: "", letter: plain, arg: 0, mant: null }
+    let mant = plain.charCodeAt(0) - 64              // coefficient of ω^(k-1)
+    for (let i = 1; i < plain.length; i++) {
+        mant += (plain.charCodeAt(i) - 97) * Math.pow(10, -i)
+    }
+    if (mant < 2) mant = 2                           // diagonal [2,10) anchor
+    if (mant >= 10) mant = 9 + (mant - 10) / 170     // keep α ∈ [2,10)
+    return { sym: "!", letter: "Aa", arg: plain.length - 1, mant: mant }
+}
+
+// Emit α·letter·β for a token: the plain form is αΓβ, the carried form is the
+// symbol-first !αAaβ whose α is the definition mantissa and β the ω-exponent.
+function emitLetterToken(tok, alphaStr, betaStr, precision) {
+    if (!tok.sym) return alphaStr + tok.letter + betaStr
+    let a = (tok.mant === null || tok.mant === undefined) ? alphaStr
+        : regularFormat(tok.mant, precision)
+    return tok.sym + a + tok.letter + formatR0Arg(tok.arg, precision)
+}
+
 // ─── Symbol Name: Map layer to symbol ────────────────────────────
 const SYMBOLS = "!@#$%&~<>?"
 function symbolName(layer) {
@@ -343,9 +373,219 @@ function getOrdinalLetter(ordRows) {
     return tokens.join("")
 }
 
+// ─── Reference Polarize (verbatim port of PowiainaNum's myPolarize) ──
+// Recovers the display α ("bottom") and the diagonal level ("arrows") of an
+// r0 chain STRUCTURALLY, by climbing log10 level by level — the only method
+// that stays exact at high levels where the engine's own fractional-arg
+// bisect quantizes (level ≥ 20). Ground truth: format-powiainanum.js.
+//   their array = [base, [level, count, 1, 1], ...] sorted top-level-first
+//   ours: r0 = [base, cnt1, cnt2, ...] where cnt_i = count at level i
+function refPolarizeArraySort(array) {
+    array.sort(function (a, b) {
+        if (typeof a == 'number') return
+        else if (a[3] > b[3]) return -1
+        else if (a[3] < b[3]) return 1
+        else if (a[2] == 'x' && b[2] != 'x') return -1
+        else if (a[2] != 'x' && b[2] == 'x') return 1
+        else if (a[2] == 'x' && b[2] == 'x') return -1
+        else if (a[2] > b[2]) return -1
+        else if (a[2] < b[2]) return 1
+        else if (a[0] == 'x' && b[0] != 'x') return -1
+        else if (a[0] != 'x' && b[0] == 'x') return 1
+        else if (a[0] == 'x' && b[0] == 'x') return -1
+        else if (a[0] > b[0]) return -1
+        else if (a[0] < b[0]) return 1
+        else if (a[1] > b[1]) return -1
+        else if (a[1] < b[1]) return 1
+        return -1
+    })
+}
+function refPolarizeArrayMerge(array) {
+    let elemOffset = 0
+    for (let i = 0; i < array.length - 2; ++i) {
+        if (array[i][0] == array[i + 1][0] &&
+            array[i][2] == array[i + 1][2] &&
+            array[i][3] == array[i + 1][3]) {
+            array[i][1] += array[i + 1][1]
+            array.splice(i + 1, 1)
+            --i
+            elemOffset++
+        }
+    }
+    return elemOffset
+}
+// our r0 + [count, level] finite rows → their [base, [level, count, 1, 1]...]
+// (their row level = our level verbatim: their 3{21}3 rows top at [20,1] and their polarize
+// returns arrows 20, displayed "…20" — no off-by-one)
+function refPolarizeInput(r0, finiteRows) {
+    let arr = [r0[0]]
+    for (let i = 1; i < r0.length; i++) {
+        if (r0[i] > 0) arr.push([i, r0[i], 1, 1])
+    }
+    if (finiteRows) {
+        for (let i = 0; i < finiteRows.length; i++) {
+            let fr = finiteRows[i]
+            if (fr && fr.length === 2 && fr[0] > 0) arr.push([fr[1], fr[0], 1, 1])
+        }
+    }
+    return arr
+}
+function refPolarize(array, hasOperationRepeat = true) {
+    refPolarizeArraySort(array)
+    refPolarizeArrayMerge(array)
+    let ptr = array.length - 2
+    let b = () => array[array.length - 1]
+    let c = (x) => { array[array.length - 1] = x }
+    let repeatResult = 1000001
+    while (--repeatResult >= 0) {
+        if (b() >= 10) {
+            let a = Math.log10(b())
+            array.push([1, 1, 1, 1])
+            ptr++
+            refPolarizeArraySort(array)
+            let offset = refPolarizeArrayMerge(array)
+            ptr -= offset
+            c(a)
+        } else {
+            if (ptr == 0 && typeof array[ptr + 1] == 'number' &&
+                (hasOperationRepeat || (!hasOperationRepeat && array[ptr][1] == 1))) break
+            if (ptr != 0 && typeof array[ptr + 1] == 'number' && typeof array[ptr][0] == 'number' &&
+                array[ptr][1] == 1 &&
+                (array[ptr - 1][0] == 'x' || array[ptr - 1][2] > array[ptr][2] || array[ptr - 1][3] > array[ptr][3]) &&
+                array[ptr][0] > 2 && (ptr != 0 || array[ptr - 1][0] == 'x')) {
+                let arrow_count = array[ptr][0]
+                let base = b()
+                let Jx
+                if (arrow_count == 3) Jx = base
+                else Jx = arrow_count - 1 + Math.log(base / 2) / Math.log(5)
+                array[ptr][0] = 'x'
+                c(Jx)
+                refPolarizeArraySort(array)
+                let offset = refPolarizeArrayMerge(array)
+                ptr -= offset
+            }
+            if (typeof array[ptr + 1] == 'number' && array[ptr][0] == 'x' && b() < 10 && ptr != 0) {
+                let base = b()
+                let JRepeation = array[ptr][1]
+                let Kx = JRepeation + Math.log10(base)
+                array[ptr][1] = 1
+                array[ptr][0] = 1
+                array[ptr][2]++
+                c(Kx)
+                refPolarizeArraySort(array)
+                let offset = refPolarizeArrayMerge(array)
+                ptr -= offset
+            }
+            if (((ptr == 0 && !hasOperationRepeat && array[ptr][1] != 1) || ptr != 0) &&
+                array[ptr][0] != 'x' && b() < 10) {
+                if (b() == 1 && ptr > 0 && array[ptr - 1][0] > array[ptr][0] && array[ptr][1] == 1) {
+                    array[ptr][0] = array[ptr - 1][0]
+                } else {
+                    let right = array[ptr][1] + Math.log10(b())
+                    array[ptr][0]++
+                    array[ptr][1] = 1
+                    c(right)
+                }
+                refPolarizeArraySort(array)
+                let offset = refPolarizeArrayMerge(array)
+                ptr -= offset
+            }
+        }
+    }
+    return {
+        bottom: b(),
+        repeation: array[ptr][1],
+        arrows: array[ptr][0],
+    }
+}
+// Convert a finite-chain polarize triple (bottom, repeation, arrows) into the
+// dlsdl diagonal-letter display pair (mantissa, β) for a diagonal letter
+// (Aa, Ba, Ca, Aaa, … — multi-letter tokens ending in 'a').
+// The value behaves as 10{arrows+1}(t) with t = log10(bottom)+repeation.
+// Pure dlsdl convention for diagonal letters (α = 2·5^f ∈ [2,10)):
+//   t ∈ [2,10)  -> mantissa t, β = arrows
+//                   (3{100}3 -> 2.376Aa99; 10{100}(10{93}10)-> 2.002Aa100)
+//   t ≥ 10      -> the count climbs one level per geometric smooth-log step
+//                   f → 1+log10(f); the exact anchor t=10 is mantissa 2 at
+//                   β=arrows+1 (10{100}10 -> 2.000Aa100, Aa100 itself)
+//   t ∈ [1,2)  -> below the β anchor: mantissa 2·5^(t-1), β=arrows-1
+// Truncation-marker normalization for finite rows: when the engine truncated
+// an overflow cascade it reset r0 to [10] and bumped the LOWEST kept row's
+// count by 1 over the uniform per-level fill (xCnt). That +1 marks the
+// dropped tail, not a real operation — read the row as carrying xCnt so
+// truncated displays match the untruncated anchor (cross-config stability).
+function normalizedFiniteRows(r0, finiteRows) {
+    if (!finiteRows || finiteRows.length === 0 || r0[0] !== 10) return finiteRows
+    let sorted = finiteRows.slice().sort((a, b) => a[1] - b[1])
+    let c0 = sorted[0][0] || 0
+    let c1 = sorted.length > 1 ? (sorted[1][0] || 0) : 0
+    if (c0 === c1 + 1) {
+        let copy = finiteRows.slice()
+        for (let i = 0; i < copy.length; i++) {
+            if (copy[i][1] === sorted[0][1]) copy[i] = [c1, copy[i][1]]
+        }
+        return copy
+    }
+    return finiteRows
+}
+
+function aaDiagonalPair(pol) {
+    let t = Math.log10(pol.bottom) + pol.repeation
+    let beta = pol.arrows
+    // discrete integer argument (10{arrows+1}(t) with integer t): climb the
+    // raw count C=t-1 at level arrows; C ≤ 9 is the anchor band (one smooth
+    // application 10{arrows+1}2 … through arg 9) -> mantissa 2 at β=arrows+1
+    let discrete = Math.abs(pol.bottom - 1) < 1e-12 && pol.repeation === Math.floor(pol.repeation)
+    if (discrete && t - 1 <= 9 + 1e-9 && t >= 2) {
+        return { mant: 2, beta: pol.arrows + 1 }
+    }
+    if (t >= 9.999999999) {
+        // v = 10{arrows+1}(t) = {arrows}^{t-1}(10): the raw level-(arrows)
+        // application count is (t-1); run the geometric smooth-log climb
+        // from a scalar count all the way to the diagonal band at
+        // β = arrows+1. Integer arguments far below the next anchor land at
+        // mantissa 2.000 (10{100}10 … 10{100}100 are all 2.000Aa100).
+        let n = pol.arrows
+        let s = Math.log10(Math.max(t - 1, 1))
+        for (let level = 1; level < n + 2; level++) {
+            s = (s >= 9.999999999) ? 2 : 1 + Math.log10(s)
+        }
+        let mant = s < 2 ? 1 + s : s
+        return { mant: Math.min(mant, 10), beta: n + 1 }
+    }
+    if (t < 2) return { mant: 2 * Math.pow(5, t - 1), beta: beta - 1 }
+    // t in [2,10): genuinely smooth (fractional compact row, or a non-10 base
+    // fixed point such as 3{100}3 -> 2.376) is shown directly; the discrete
+    // integer-argument anchor case was handled at the top of the function.
+    return { mant: t, beta: beta }
+}
+
+// Structural α/diagonal recovery for a value whose finite-level chain (r0
+// cols + [count, level] rows) reaches the Aa diagonal region. Mirrors the
+// reference convention: 3{24}3 → bottom 2.375812, arrows 23 (the "2.376Aa23"
+// display); 3{100}3 → bottom 2.375812, arrows 99 ("Aa2.376Aa99" inner part).
+function polarizeFiniteChain(r0, finiteRows) {
+    try {
+        finiteRows = normalizedFiniteRows(r0, finiteRows)
+        let arr = refPolarizeInput(r0.slice(0), finiteRows)
+        if (arr.length === 1) return null
+        return refPolarize(arr, true)
+    } catch (e) {
+        return null
+    }
+}
+
 // ─── Main Format Function ────────────────────────────────────────
 
-function format(num, precision=2, small=false) {
+// Parse an already-formatted r0 argument back to a number (e.g. "1,000"
+// → 1000, "1.000E1,000" → null: carries its own E structure)
+function formatR0ArgStr(argStr) {
+    var s = String(argStr).replace(/,/g, "")
+    if (/^\d+(\.\d+)?$/.test(s)) return Number(s)
+    return null
+}
+
+function format(num, precision=3, small=false) {
     if (MetaNum.isNaN(num)) return "NaN"
     let sciSigDigits = FORMAT_OPTIONS.sciSignificantDigits // for E notation
     let sciPrecision = Math.max(sciSigDigits, precision)
@@ -383,8 +623,42 @@ function format(num, precision=2, small=false) {
                         return prefix + regularFormat(mant, sciPrecision) + "E-" + commaFormat(expPart)
                     }
                 }
-                // Tier 2: mag is large → E-<formatted mag (log10 of reciprocal)>
-                var magStr = format(mag, precision, small)
+                // Tier 2: mag is large → "E-" + letter-law form of mag =
+                // log10 of the reciprocal base. Letter law (README): a chain
+                // of n same-level ops collapses to ONE next-level op with
+                // arg+n, so log10 shifts only the OUTERMOST letter:
+                //   E-chain (EE1000): log10 = E1000 (one E stripped)
+                //   F-chain (F500):   log10 = F499 (arg −1, same letter)
+                //   Γ ≥ G (G200):     log10 = G200 (Γβ−1+1 = Γβ: the leading
+                //                     F(G(β−1)) collapses back to G(β))
+                // Roundtrip exact: "E-1.000G200" parses back to 1/G200,
+                // "E-1.000F499" to 1/F500 (test_mixed format block)
+                var recipStr = format(recipFmt, precision, small)
+                var magStr = recipStr
+                // leading run of E letters (e.g. "EE1.000E1,000"): strip one E
+                var eRun = recipStr.match(/^(E+)(.*)$/)
+                var rm = recipStr.match(/^(\d(?:\.\d+)?)([A-Z])((?:\d[\d,]*)?)$/)
+                if (eRun && !rm) {
+                    var restStr = eRun[2]
+                    if (eRun[1].length >= 2) {
+                        // "EE…" → "E…" (log10 of an E-chain drops one E)
+                        magStr = eRun[1].slice(0, -1) + restStr
+                    } else if (eRun[1].length === 1) {
+                        // single "EαEβ" / "Eβ": log10 is the β part
+                        var betaPart = restStr.replace(/^\d(?:\.\d+)?(?=[A-Z])/, "")
+                        if (/^[A-Z]/.test(betaPart) || /^[\d,]/.test(betaPart)) magStr = betaPart
+                    }
+                } else if (rm) {
+                    var rAlpha = rm[1], rLetter = rm[2], rArg = rm[3]
+                    if (rLetter === "E" && rArg !== "") {
+                        // E-chain with numeric arg (E200): log10 keeps E-arg
+                        magStr = rAlpha + "E" + rArg
+                    } else if (rLetter === "F" && rArg !== "") {
+                        // F-chain: arg −1
+                        magStr = rAlpha + "F" + commaFormat(Math.max(0, Number(rArg.replace(/,/g, "")) - 1))
+                    }
+                    // G and above: display unchanged
+                }
                 return prefix + "E-" + magStr
             }
             // Format as aE-b (e.g., 0.0000000001 → 1.000E-10)
@@ -465,8 +739,18 @@ function format(num, precision=2, small=false) {
         if (r0[i] > 0) maxLevel = i
     }
 
-    // ── Handle r0-only with maxLevel >= 23: convert to Aa notation ──
+    // ── Handle r0-only with maxLevel >= 23: Aa-diagonal (v2.0) ──
+    // The cascade collapses to αAaβ with (bottom, repeation, arrows) from
+    // polarizeFiniteChain (the structural climb), mantissa normalized into
+    // [1,10) carrying decades into β — identical to the finite-row display
+    // so format stays cross-config stable.
     if (maxLevel >= 23) {
+        let pol = polarizeFiniteChain(r0.slice(0), null)
+        if (pol && isFinite(pol.bottom) && pol.bottom > 0 && isFinite(pol.arrows)) {
+            let pair = aaDiagonalPair(pol)
+            return regularFormat(pair.mant, multiPrecision) + "Aa" + commaFormat(pair.beta)
+        }
+        // fallback: legacy base-9 coefficient form
         let coeff = r0[maxLevel]
         let pow9 = 9
         for (let i = maxLevel - 1; i >= 1; i--) {
@@ -537,17 +821,45 @@ function formatLayer(num, precision, precision2, precision3, precision4) {
         return innerStr + "ε" + commaFormat(num.layer)
     }
 
+    // Compact diagonal: the symbol row [1,0…0,1] with m=compactBase zeros is
+    // 10{ω^m}10 — a DIAGONAL letter (A + m a's) at argument 10. Diagonal
+    // letter combinations use the pure dlsdl α=2·5^f ∈ [2,10) convention:
+    // integer m anchors mantissa 2. For layers above ! the symbol of the
+    // layer below prefixes the same inner form:
+    //   !Aa3 = 2.000Aaaa10,  @Aa3 = !2.000Aaaa10.
+    // multiLetterLimit symbol carry: once the diagonal letter would be longer
+    // than the limit (m+1 letters) it switches to one more symbol and the Aa
+    // argument takes over the exponent — 10{ω^10}10 → !2.000Aa10, and layer 1
+    // on top stacks the symbols (no-symbol → ! → @ → # …):
+    //   apix(3,10) = 10{ω^(ω^10)}10 → @2.000Aa10.
     if (canCompact && compactBase >= 2) {
-        let bottom = Math.pow(10, compactBase - Math.floor(compactBase))
-        let top = Math.floor(compactBase)
-        if (top === compactBase) {
-            // Exact integer, use compact form !Aa[r0[0]]
-            return sym + regularFormat(bottom, precision4) + "Aa" + commaFormat(top)
+        let mInt = Math.floor(compactBase)
+        let frac = compactBase - mInt
+        let mant = 2 * Math.pow(5, frac)
+        let limit = Math.max(2, FORMAT_OPTIONS.multiLetterLimit | 0)
+        if (mInt + 1 > limit) {
+            let total = num.layer + 1
+            let body = regularFormat(mant, precision4) + "Aa" + formatR0Arg(mInt, precision4)
+            if (total <= SYMBOLS.length) return SYMBOLS[total - 1] + body
+            return body + "ε" + commaFormat(total)
         }
+        // Stored layer L (the parser de-layers small !Aa rows):
+        //  L=0 (!Aa3) -> no prefix; L=1 (@Aa3) -> "!"; L=2 (#Aa3) -> "@!"
+        let prefixSyms = ""
+        for (let sl = num.layer; sl >= 1; sl--) prefixSyms += symbolName(sl)
+        return prefixSyms + regularFormat(mant, precision4) +
+               "A" + "a".repeat(mInt) + "10"
     }
 
-    // For !, @, #, $, %, &, ~, <, >, ? symbols: prefix the symbol
+    // For !, @, #, $, %, &, ~, <, >, ? symbols: prefix the symbol.  When the
+    // inner display itself had to carry (its letter exceeded multiLetterLimit)
+    // the symbols stack instead of doubling: layer 1 + inner "!…" → "@…".
     let innerStr = format(inner, precision, false)
+    if (innerStr.length > 1 && SYMBOLS.indexOf(innerStr[0]) >= 0) {
+        let total = num.layer + 1
+        if (total <= SYMBOLS.length) return SYMBOLS[total - 1] + innerStr.slice(1)
+        return innerStr.slice(1) + "ε" + commaFormat(total)
+    }
     return sym + innerStr
 }
 
@@ -568,6 +880,69 @@ function formatR0Arg(value, precision) {
     if (m >= 9.999999999999999) { m = 1; e += 1 }
     // Always show mantissa (αEβ format, e.g. 1.000E700)
     return regularFormat(m, precision) + "E" + commaFormat(e)
+}
+
+// ─── Gamma-Arg Recovery ─────────────────────────────────────────
+// Recover the real argument x with 10{level}x = v (the Γ-canonical argument of
+// v at letter `level`), by bisection on the engine's own smooth arrow curve.
+// Returns null when x exceeds the double-precision bisect range. The doubling
+// guard runs to 200: E-notation arguments (hardy(1120)'s F-arg ≈ 4.4e13) need
+// ~45 doublings before the bracket closes.
+function gammaArgOf(v, level, iters) {
+    if (iters === undefined) iters = 60
+    let G = function (x) { return MetaNum(10).arrow(level)(x) }
+    // v must sit inside [Γ(1), Γ(HUGE)]: find integer hi with Γ(hi) >= v
+    let lo = 1, hi = 2
+    let guard = 0
+    while (G(hi).lt(v)) {
+        lo = hi
+        hi *= 2
+        if (++guard > 200) return null
+    }
+    // bisect the fractional part
+    for (let i = 0; i < iters; i++) {
+        let mid = (lo + hi) / 2
+        if (G(mid).lt(v)) lo = mid; else hi = mid
+        if (hi - lo < 1e-12) break
+    }
+    return lo
+}
+
+// Format a recovered Γ-argument x as the binary form αΓβ:
+//   α = 10^frac(x) (in [1, 10)), β = floor(x) (may itself carry E notation).
+// Once β ≥ 10^sciThreshold the α only perturbs β by log10(α) < 1, far below
+// the displayed precision: write the letter bare and let the canonical β
+// carry the single α (hardy(1120) → "F4.398E13").
+function formatGammaBinary(x, level, precision) {
+    let sciBound = Math.pow(10, FORMAT_OPTIONS.sciThreshold)
+    let beta = Math.floor(x + 1e-12)
+    let frac = x - beta
+    if (frac < 0) { frac += 1; beta -= 1 }
+    if (frac >= 1) { frac -= 1; beta += 1 }
+    if (beta >= sciBound) {
+        let alpha = Math.pow(10, frac)
+        return letterName(level) + formatR0Arg(beta + Math.log10(alpha), precision)
+    }
+    if (frac < 1e-11 || frac > 1 - 1e-11) {
+        // exact integer argument: bare letter + β
+        return letterName(level) + formatR0Arg(beta, precision)
+    }
+    let alpha = Math.pow(10, frac)
+    return regularFormat(alpha, precision) + letterName(level) + formatR0Arg(beta, precision)
+}
+
+// Distinct letter types in a display string: single-uppercase letters and
+// Aa-style multi-letter tokens, ignoring an E inside a number ("7.626E12"
+// sci notation, not an op) and !/@/# symbol prefixes.
+function distinctLetterTypes(str) {
+    let stripped = String(str).replace(/(\d(?:\.\d+)?)E(\d[\d,]*)/g, "$1$2")
+    let tokens = stripped.match(/[A-Z][a-z]*/g) || []
+    let seen = {}
+    let out = []
+    for (let i = 0; i < tokens.length; i++) {
+        if (!seen[tokens[i]]) { seen[tokens[i]] = true; out.push(tokens[i]) }
+    }
+    return out
 }
 
 // ─── Format r0 as Chain ────────────────────────────────────────
@@ -591,8 +966,61 @@ function formatR0AsChain(r0, precision) {
     let count = r0[maxLevel]
     let effThreshold = Math.max(2, FORMAT_OPTIONS.repeatLetterThreshold)
 
-    if (count <= effThreshold) {
-        // Non-collapse: peel off one letter at maxLevel, recurse on inner
+    // Detect a descending run of count-1 letters (e.g. the VUTS…G chain that
+    // the engine produces for arrow(3,19,3) = 3{19}3). Such a chain is the
+    // diagonalized expansion of the top letter applied twice, so it must be
+    // compressed to the ΓαΓβ binary form instead of being spelled out.
+    let runLen = 0
+    if (count === 1) {
+        runLen = 1
+        while (maxLevel - runLen >= 2 && r0[maxLevel - runLen] === 1) runLen++
+    }
+
+    // ── ≤2-letter-types rule ──
+    // When the full structural spelling would use MORE than two letter
+    // types, spell only the top two levels' letters and compress everything
+    // below into the second letter's Binary-Canonical form
+    // "bottom Γ₂ repeation" — the polarize triple of the chain below the
+    // top letter (bisect fails there: the arg exceeds double range):
+    //   3{9}3 → "L2.376K2"        (user: "L…K…")
+    //   3{10}3 → "M2.376L2"       (user: "M(10^0.376)L2")
+    //   4{9}4 → "LLK3.550K3"      (user: "LLK…K…")
+    //   5{9}5 → "LLLKK4.669K4"    (user: "LLLKK…K…")
+    // A top count ≥ repeatLetterThreshold+1 carries to the next single
+    // letter instead (6{9}6 → "5.760M5" via the collapse paths below).
+    if (maxLevel >= 2 && maxLevel <= 22 && count <= effThreshold) {
+        let spellTypes = 0
+        for (let s = 2; s <= maxLevel; s++) {
+            if ((r0[s] || 0) > 0) spellTypes++
+        }
+        if (spellTypes > 2) {
+            let second = 0
+            for (let s = maxLevel - 1; s >= 2; s--) {
+                if (r0[s] > 0) { second = s; break }
+            }
+            if (second >= 2) {
+                let c2 = r0[second]
+                if (c2 <= effThreshold) {
+                    let restR0 = r0.slice(0)
+                    restR0[maxLevel] = 0
+                    let pol = polarizeFiniteChain(restR0, null)
+                    if (pol && pol.arrows === second && isFinite(pol.bottom) &&
+                        pol.bottom >= 1 && isFinite(pol.repeation)) {
+                        let prefix = letterName(maxLevel).repeat(count) +
+                                     letterName(second).repeat(Math.max(c2 - 1, 0))
+                        return prefix + regularFormat(pol.bottom, precision) +
+                               letterName(second) + commaFormat(pol.repeation)
+                    }
+                }
+            }
+        }
+    }
+
+    if (count <= effThreshold && runLen <= effThreshold) {
+        // Non-collapse: peel off one letter at maxLevel, recurse on inner.
+        // Long descending count-1 runs (runLen > threshold) fall through to the
+        // Γ-canonical collapse below (2-letter rule: the diagonal
+        // chain formats at its bisect-exact letter, not spelled out VUTS…).
         let innerR0 = r0.slice(0)
         innerR0[maxLevel] = count - 1
         if (innerR0[maxLevel] === 0) {
@@ -624,11 +1052,27 @@ function formatR0AsChain(r0, precision) {
         if ((r0[i] || 0) !== 8) all8 = false
     }
 
+    // sciThreshold boundary: once the top-level argument reaches 10^sciThreshold
+    // the binary form αΓβ = Γ(β+log α) renders the argument in its own canonical
+    // (αEβ) form and the outer letter is written bare — α must appear only once,
+    // at the innermost value (2-letter rule: "G1.000E12", not "1.000G1.000E12")
+    let sciBound = Math.pow(10, FORMAT_OPTIONS.sciThreshold)
+
     if (all8) {
         // all-8s promotion: E^count(10^10) → F(count+2), F^count(F10) → G(count+2), etc.
         let arg = count + 2
         let level = maxLevel + 1
         let letter = letterName(level)
+        if (level >= 23) {
+            // Promotion into a diagonal letter: the all-8s r0 is the exact
+            // diagonal 10{L+1}10 = Aa(L+1), whose dlsdl binary form anchors
+            // mantissa 2 (α=2·5^0): 10{23}10 -> "2.000Aa23".
+            return regularFormat(2.0, precision) + "Aa" + commaFormat(maxLevel + 1)
+        }
+        if (arg >= sciBound) {
+            // Γ(β) with β ≥ 10^sciThreshold: bare letter + canonical argument
+            return letter + formatR0Arg(arg, precision)
+        }
         // Format: α + letter + β (always show α)
         let alpha = Math.pow(10, arg - Math.floor(arg))
         if (alpha < 1) alpha *= 10
@@ -637,22 +1081,150 @@ function formatR0AsChain(r0, precision) {
         return alphaStr + letter + betaStr
     }
 
-    // Non-all-8s promotion: fall back to metaPolarize for the polarized form
+    // ── Γ-canonical recovery (2-letter rule) ──
+    // Two rules, both driven by the engine's own smooth arrow curve:
+    //   (a) structural top count < threshold AND inner top < maxLevel: keep
+    //       the structural top letter Γᵀ bare and format the inner chain
+    //       recursively — at most 2 letter types appear (2-letter rule:
+    //       VαEβ → VαFβ → … → VαVβ, never a mixed "VFαEβ").
+    //   (b) otherwise: collapse to the single letter Γ = the HIGHEST level L
+    //       whose recovered argument x (bisect 10{L}x = v) is ≥ 2, in binary
+    //       form αΓβ (2-letter rule: hardy(4166) → "2.397G5", arrow(3,4.3,3) →
+    //       "1.285H8", arrow(3,4.1,3) → "G1.161G897").
+    // Verified laws: n ops of level L on a Γ^{L+1}-structured value collapse
+    // to ONE Γ^{L+1} with arg+n (F^4(G(1.3796)) = G(5.3796) — bisect-exact).
     let r0Num = new MetaNum({ sign: 1, layer: 0, array: [r0.slice(0)] })
+
+    if (count < effThreshold && maxLevel >= 2 && runLen <= effThreshold) {
+        // (a) structural top letter: peel ONE op of level maxLevel and format
+        // the inner chain recursively (exact even when the argument itself is
+        // letter-structured, e.g. arrow(3,4.1,3) = G(F^895-chain) →
+        // "G" + format(F^895-chain) = "G1.161G897")
+        let innerR0 = r0.slice(0)
+        innerR0[maxLevel] = count - 1
+        if (innerR0[maxLevel] === 0) {
+            innerR0 = innerR0.slice(0, maxLevel)
+        }
+        let innerStr = formatR0AsChain(innerR0, precision)
+        let hasLetter = /[A-Z]/.test(innerStr)
+        if (!hasLetter) {
+            let base = r0[0]
+            let alpha = Math.pow(10, base - Math.floor(base))
+            if (alpha < 1) alpha *= 10
+            return regularFormat(alpha, precision) + letterName(maxLevel) + innerStr
+        }
+        // inner carries letters: bare outer letter (2-letter rule) — the
+        // inner top must be LOWER (descending chain); ascending or same-level
+        // chains fall through to collapse
+        let innerTop = 0
+        for (let it = innerR0.length - 1; it >= 1; it--) {
+            if (innerR0[it] > 0) { innerTop = it; break }
+        }
+        if (innerTop < maxLevel) {
+            // ≤2 letter types rule: count the distinct letter
+            // types the peeled prefix + innerStr would use. If the inner chain
+            // spells a THIRD type, collapse the inner to the binary form at
+            // maxLevel-1 instead — VαEβ → VαFβ → … → VαVβ, never a mixed
+            // "VFαEβ" (e.g. arrow(3,9,3) → "L2.376K2": the MLKJIHG F-chain
+            // spells only L and K, the M..J part collapses into K's arg).
+            let topLetter = letterName(maxLevel)
+            let innerTypes = distinctLetterTypes(innerStr)
+            if (innerTypes.length >= 2
+                && innerTypes.indexOf(topLetter) < 0
+                && innerTypes.indexOf(letterName(innerTop)) < 0) {
+                // inner already uses its own 2 types: cannot keep the structural
+                // letter — collapse below
+            } else {
+                let wouldTypes = {}
+                wouldTypes[topLetter] = true
+                for (let wt = 0; wt < innerTypes.length; wt++) wouldTypes[innerTypes[wt]] = true
+                if (Object.keys(wouldTypes).length <= 2) {
+                    return letterName(maxLevel) + innerStr
+                }
+                // 3rd type would appear: collapse the inner chain to the binary
+                // form at innerTop — arg recovered on the engine curve when
+                // possible (level < 20), else structurally via refPolarize
+                let innerNum = new MetaNum({ sign: 1, layer: 0, array: [innerR0.slice(0)] })
+                let bx = (innerTop <= 19) ? gammaArgOf(innerNum, innerTop, 40) : null
+                if (bx !== null && isFinite(bx) && bx >= 2) {
+                    return letterName(maxLevel) + formatGammaBinary(bx, innerTop, precision)
+                }
+                let pol2 = polarizeFiniteChain(innerR0, null)
+                if (pol2 && pol2.arrows >= 2 && pol2.arrows <= 22) {
+                    let aStr = regularFormat(Math.max(pol2.bottom, 1.0001), precision)
+                    return letterName(maxLevel) + aStr + letterName(pol2.arrows) + commaFormat(pol2.repeation)
+                }
+                // polarize reached the multi-letter region: Aa-diagonal form
+                if (pol2 && pol2.arrows >= 23) {
+                    let aStr = regularFormat(Math.max(pol2.bottom, 1.0001), precision)
+                    return letterName(maxLevel) + aStr + "Aa" + commaFormat(pol2.arrows)
+                }
+            }
+        }
+    }
+
+    // (b) collapse: the structural chain (n repeats of the top letter Γᵀ on
+    // an inner value whose own canonical letter is Γᵀ⁺¹, e.g. F^895(G(2.06)))
+    // compresses to ONE Γᵀ⁺¹ with arg+n — bisect at the STRUCTURAL next
+    // letter first (maxLevel+1); if its arg falls below 2, search upward for
+    // the highest level whose arg ≥ 2 (2-letter rule: hardy(4166) → "2.397G5",
+    // arrow(3,4.3,3) → "1.285H8")
+    let structuralNext = Math.min(maxLevel + 1, 22)
+    let sx = gammaArgOf(r0Num, structuralNext, 40)
+    if (sx !== null && isFinite(sx) && sx >= 2) {
+        return formatGammaBinary(sx, structuralNext, precision)
+    }
+    for (let lv = 22; lv >= 2; lv--) {
+        if (lv === structuralNext) continue
+        let x = gammaArgOf(r0Num, lv, 40)
+        if (x !== null && isFinite(x) && x >= 2) {
+            return formatGammaBinary(x, lv, precision)
+        }
+    }
+
+    // Γ-arg not recoverable as a double (arg beyond bisect range): fall back
+    // to metaPolarize for the polarized form
     let pol = metaPolarize(r0.slice(0), r0Num)
     let h = pol.height
     let rep = pol.repeat || 1
     let top = pol.top
     let bottom = pol.bottom
 
+    if (runLen > effThreshold) {
+        // The descending count-1 run is the diagonalized expansion of the top
+        // letter applied twice: force the ΓαΓβ form (issues.md: arrow(3,19,3)
+        // → "VαVβ", not "VUTS…G…")
+        rep = 2
+        h = maxLevel
+    }
+
     // Convert repeated letters to next level when over threshold
     if (rep > 1 && rep >= effThreshold) {
         let newH = h + 1
         let newTop = rep + 1
         let newLetter = letterName(newH)
-        // Format: α + letter + β (always show α)
-        let alpha = bottom
-        if (alpha < 1) alpha = Math.pow(10, alpha)
+        if (newTop >= sciBound) {
+            // bare letter + canonical argument (single α at the innermost value)
+            return newLetter + formatR0Arg(newTop + Math.log10(bottom < 1 ? Math.pow(10, bottom) : bottom), precision)
+        }
+        // Format: α + letter + β. Canonical all-8s arrays (built from the
+        // 10^10 base: G600, ZZ10, ...) carry no recoverable mantissa below
+        // 10^10, so α = 1.000 by construction. Every other value recovers
+        // its real α by stripping newTop slog's — the residue lands in
+        // [1,10) and is exactly the α of the binary form αΓβ = Γ(β+log α)
+        // (issues.md: hardy(4150) → "2.300G5", not "1.000G5")
+        let alpha = 1.0
+        let all8s = (r0[0] === 10000000000)
+        for (let ai = 2; ai < pol.height && all8s; ai++) {
+            if ((r0[ai] || 0) !== 8) all8s = false
+        }
+        if (!all8s) {
+            try {
+                let av = r0Num.clone()
+                for (let si = 0; si < newTop && av.gt(MetaNum(1e15)); si++) av = av.slog()
+                if (av.gte(1) && av.lt(10)) alpha = av.toNumber()
+            } catch (e) { /* keep α = 1.0 */ }
+        }
         let alphaStr = regularFormat(alpha, precision)
         let betaStr = formatR0Arg(newTop, precision)
         return alphaStr + newLetter + betaStr
@@ -665,14 +1237,32 @@ function formatR0AsChain(r0, precision) {
             // Repeated letters: outerLetters + α + lastLetter + β
             let outerLetters = letter.repeat(rep - 1)
             let alpha = bottom
-            if (alpha < 1) alpha = Math.pow(10, alpha)
+            let logAlpha = 0
+            if (alpha < 1) {
+                logAlpha = alpha
+                alpha = Math.pow(10, alpha)
+            } else {
+                logAlpha = Math.log10(alpha)
+            }
+            let betaVal = top + logAlpha
+            if (top >= sciBound) {
+                // bare letters + canonical argument (single α at the innermost value)
+                return outerLetters + letter + formatR0Arg(betaVal, precision)
+            }
             let alphaStr = regularFormat(alpha, precision)
             let betaStr = formatR0Arg(top, precision)
             return outerLetters + alphaStr + letter + betaStr
         }
-        // Single letter: α + letter + β
+        // Single letter: α + letter + β — but once β ≥ 10^sciThreshold the
+        // α only perturbs β by log10(α) < 1, far below the displayed
+        // precision: write the letter bare and let β carry the single α
+        // (issues.md: hardy(1120) → "F4.398E13", not "4.295F4.398E13")
         let alpha = bottom
         if (alpha < 1) alpha = Math.pow(10, alpha)
+        let betaVal = top + Math.log10(alpha)
+        if (top >= sciBound) {
+            return letter + formatR0Arg(betaVal, precision)
+        }
         let alphaStr = regularFormat(alpha, precision)
         let betaStr = formatR0Arg(top, precision)
         return alphaStr + letter + betaStr
@@ -689,39 +1279,127 @@ function formatR0AsChain(r0, precision) {
 
 // ─── Format with Ordinal Rows ────────────────────────────────────
 
+// finite-row chain display (≤2-letter-types rule):
+// r0 cols + [count, level] rows form one hyperoperation cascade. Display:
+//   top level ≥ 23 (Aa region): the αAaβ diagonal — (bottom, repeation,
+//     arrows) from polarizeFiniteChain, mantissa normalized into [1,10)
+//     carrying decades into β: 3{24}3 → "2.376Aa23", 3{100}3 → "2.376Aa99",
+//     10{10000}10 → "1.000Aa10,000" (bottom 1, repeation 10 carries).
+//   top level ≤ 22 (single letters): the structural two-letter form
+//     Γ_top×c₁ + Γ_second×(c₂−1) + bottom + Γ_second + repeation:
+//     3{22}3 → "Y2.376X2", 3{23}3 → "Z2.376Y2" (user: "Y…X…", "Z…Y…").
+//   c₁ ≥ repeatLetterThreshold+1 carries to the next single letter.
+function formatFiniteRowChain(r0, finiteRows, precision) {
+    function levelCount(lv) {
+        if (lv < r0.length && (r0[lv] || 0) > 0) return r0[lv]
+        for (let i = 0; i < finiteRows.length; i++) {
+            if (finiteRows[i][1] === lv) return finiteRows[i][0]
+        }
+        return 0
+    }
+    let topLv = 0, c1 = 0
+    for (let i = 1; i < r0.length; i++) {
+        if ((r0[i] || 0) > 0) { topLv = i; c1 = r0[i] }
+    }
+    for (let i = 0; i < finiteRows.length; i++) {
+        if (finiteRows[i][1] > topLv) { topLv = finiteRows[i][1]; c1 = finiteRows[i][0] }
+    }
+    if (topLv === 0) return formatR0Arg(r0[0], precision)
+    let effThreshold = Math.max(2, FORMAT_OPTIONS.repeatLetterThreshold)
+
+    if (topLv >= 23) {
+        let pol = polarizeFiniteChain(r0, finiteRows)
+        if (pol && isFinite(pol.bottom) && pol.bottom > 0 && isFinite(pol.arrows)) {
+            let pair = aaDiagonalPair(pol)
+            return regularFormat(pair.mant, precision) + "Aa" + commaFormat(pair.beta)
+        }
+        // fallback: legacy coefficient form on the top row
+        let lastRow = finiteRows[finiteRows.length - 1]
+        if (lastRow) return lastRow[0] + "Aa" + commaFormat(lastRow[1])
+        return formatR0AsChain(r0.slice(0), precision)
+    }
+
+    // carry: c₁ ≥ threshold+1 top-letter repeats advance to the next letter
+    if (c1 >= effThreshold + 1) {
+        let lv = topLv + 1
+        if (lv <= 19) {
+            let num = new MetaNum({ sign: 1, layer: 0, array: [r0.slice(0)].concat(finiteRows.map(r => r.slice(0))) })
+            let bx = gammaArgOf(num, lv, 40)
+            if (bx !== null && isFinite(bx) && bx >= 2) return formatGammaBinary(bx, lv, precision)
+        }
+        let pol = polarizeFiniteChain(r0, finiteRows)
+        if (pol && isFinite(pol.bottom) && pol.bottom > 0 && isFinite(pol.arrows)) {
+            if (lv >= 23) {
+                // carry lands on the Aa diagonal: convert the polarize triple
+                // via the same linear mantissa/β rule as the topLv>=23 path
+                // (10{23}10 -> 1.000Aa23, not "1.000Aa10")
+                let pair = aaDiagonalPair(pol)
+                return regularFormat(pair.mant, precision) + "Aa" + commaFormat(pair.beta)
+            }
+            if (pol.bottom >= 1) {
+                return regularFormat(pol.bottom, precision) + letterName(lv) + commaFormat(pol.repeation)
+            }
+        }
+    }
+
+    // structural two-letter form (≤ 22: single-letter region)
+    let secondLv = 0, c2 = 0
+    for (let s = topLv - 1; s >= 1; s--) {
+        let c = levelCount(s)
+        if (c > 0) { secondLv = s; c2 = c; break }
+    }
+    if (secondLv >= 1 && c2 <= effThreshold) {
+        let restR0 = r0.slice(0, Math.min(secondLv + 1, r0.length))
+        let restRows = finiteRows.filter(r => r[1] <= secondLv)
+        let pol = polarizeFiniteChain(restR0, restRows)
+        if (pol && pol.arrows === secondLv && isFinite(pol.bottom) && pol.bottom >= 1) {
+            let prefix = letterName(topLv).repeat(Math.min(c1, effThreshold)) +
+                         letterName(secondLv).repeat(Math.max(c2 - 1, 0))
+            return prefix + regularFormat(pol.bottom, precision) + letterName(secondLv) + commaFormat(pol.repeation)
+        }
+        // low levels: engine-curve bisect at the second letter
+        if (secondLv <= 19) {
+            let num = new MetaNum({ sign: 1, layer: 0, array: [restR0].concat(restRows.map(r => r.slice(0))) })
+            let bx = gammaArgOf(num, secondLv, 40)
+            if (bx !== null && isFinite(bx) && bx >= 2) {
+                let prefix = letterName(topLv).repeat(Math.min(c1, effThreshold))
+                return prefix + formatGammaBinary(bx, secondLv, precision)
+            }
+        }
+    }
+
+    // fallback: single binary at the top letter
+    let polF = polarizeFiniteChain(r0, finiteRows)
+    if (polF && isFinite(polF.bottom) && polF.bottom >= 1) {
+        return regularFormat(polF.bottom, precision) + letterName(topLv) + commaFormat(polF.repeation)
+    }
+    return formatR0AsChain(r0.slice(0), precision)
+}
+
 function formatOrdinal(num, precision, precision4) {
     let r0 = num.array[0]
     let ordRows = num.array.slice(1)
 
-    // Check if all rows are 2-element [count, value] (ω-level operations)
-    let allTwoElement = true
+    // v2.1 classification: Format-B finite rows [count, level] form the
+    // hyperoperation cascade; Format-A ordinal rows [count, v…, diag] are the
+    // ω-diagonalization markers displayed as letter prefixes.
+    let finiteRows = []
+    let ordinalRows = []
     for (let i = 0; i < ordRows.length; i++) {
-        if (ordRows[i].length !== 2) { allTwoElement = false; break }
+        if (ordRows[i].length === 2) finiteRows.push(ordRows[i])
+        else ordinalRows.push(ordRows[i])
     }
-
-    if (allTwoElement) {
-        // 2-element format: [count, value] = count × ω^value
-        let isTruncated = r0.length === 1 && r0[0] === 10
-
-        if (isTruncated) {
-            // Truncated: show only the last row as count Aa value
-            let lastRow = ordRows[ordRows.length - 1]
-            return lastRow[0] + "Aa" + commaFormat(lastRow[1])
-        }
-
-        // Non-truncated: show all rows from last to first
-        let tokens = []
-        for (let i = ordRows.length - 1; i >= 0; i--) {
-            let row = ordRows[i]
-            let tok = row[0] > 1 ? row[0] + "Aa" + commaFormat(row[1]) : "Aa" + commaFormat(row[1])
-            tokens.push(tok)
-        }
-        let base = r0[0]
-        let bottom = Math.pow(10, base - Math.floor(base))
-        let top = Math.floor(base)
-        let baseStr = regularFormat(bottom, precision4)
-        return tokens.join("") + baseStr
+    if (finiteRows.length > 0 && ordinalRows.length === 0) {
+        return formatFiniteRowChain(r0, finiteRows, precision4)
     }
+    if (finiteRows.length > 0 && ordinalRows.length > 0) {
+        let prefixLetter = getOrdinalLetter(ordinalRows)
+        if (prefixLetter) {
+            return prefixLetter + formatFiniteRowChain(r0, finiteRows, precision4)
+        }
+        // no letter recovered: fall through to the legacy machinery below
+    }
+    ordRows = ordinalRows
 
     // Get the letter name from ordinal rows (3+ element format)
     // ── Check for ω-level rows (diag=1, all vals=0) → J-like format ──
@@ -788,9 +1466,19 @@ function formatOrdinal(num, precision, precision4) {
                 return regularFormat(mantissa, precision4) + finalLetter + commaFormat(finalParam)
             } else if (totalAaCount > 1) {
                 // Repeated Aa below threshold: use AaAa... prefix
+                let tokAa = letterTokenOf(baseHeight)
+                if (tokAa.sym) {
+                    // multiLetterLimit symbol carry: the diagonal letter reads
+                    // as one more symbol with the chain as its argument
+                    return tokAa.sym + regularFormat(2, precision4) + tokAa.letter + argStr
+                }
                 return letter.repeat(totalAaCount) + argStr
             } else {
                 // Single Aa
+                let tokAa = letterTokenOf(baseHeight)
+                if (tokAa.sym) {
+                    return tokAa.sym + regularFormat(2, precision4) + tokAa.letter + argStr
+                }
                 return letter + argStr
             }
         } else {
@@ -816,8 +1504,24 @@ function formatOrdinal(num, precision, precision4) {
                 let outerLetters = letter.repeat(totalAaCount - 1)
                 return outerLetters + alphaStr + letter + betaStr
             } else {
-                // Single letter: α + letter + β
-                return alphaStr + letter + betaStr
+                // Single DIAGONAL letter (the row ends in 'a': Aa, Aaa,
+                // Ba, …): pure dlsdl convention α=2·5^f ∈ [2,10).
+                //  - symbol-de-layered row (base == #zeros, e.g. !Aa3): the
+                //    base is the LETTER INDEX, argument is fixed 10
+                //    (!Aa3 -> 2.000Aaaa10)
+                //  - ordinary letter application: base is the argument β
+                //    (Aa100 -> 2.000Aa100)
+                let diagMant = 2 * Math.pow(5, base - Math.floor(base))
+                let diagBeta = (base === aaZeroCount) ? 10 : top
+                // multiLetterLimit symbol carry: A + aaZeroCount a's is
+                // aaZeroCount+1 letters — past the limit the diagonal reads
+                // as one more symbol with the Aa argument taking the exponent
+                // (10{ω^10}10 → !2.000Aa10)
+                if (aaZeroCount + 1 > Math.max(2, FORMAT_OPTIONS.multiLetterLimit | 0)) {
+                    return "!" + regularFormat(diagMant, precision4) +
+                           "Aa" + formatR0Arg(aaZeroCount, precision4)
+                }
+                return regularFormat(diagMant, precision4) + letter + commaFormat(diagBeta)
             }
         }
     }
@@ -885,6 +1589,13 @@ function formatOrdinal(num, precision, precision4) {
             // r0 has E/F/G levels: format as letter(s) + chain (e.g., Ab1.000E500)
             let r0Str = formatR0AsChain(r0, precision4)
             let letter = letterName(baseLetterHeight)
+            let tokAdv = letterTokenOf(baseLetterHeight + 1)
+            if (totalRepeat >= collapseAt && tokAdv.sym) {
+                // Collapse to next letter — carried when it exceeds the limit;
+                // the r0 chain stays as the β of the carried form
+                return tokAdv.sym + regularFormat(tokAdv.mant, precision4) +
+                       tokAdv.letter + r0Str
+            }
             if (totalRepeat >= collapseAt) {
                 // Collapse to next letter
                 let mantissa = Math.log10(Math.max(alpha, 0.001)) + totalRepeat
@@ -902,7 +1613,12 @@ function formatOrdinal(num, precision, precision4) {
 
         // Simple r0 (no E/F/G levels)
         if (totalRepeat >= collapseAt) {
-            // Advance to next letter with mantissa
+            // Advance to next letter with mantissa — carried when the letter
+            // exceeds multiLetterLimit (!αAaβ, repeats below display precision)
+            let tokAdv = letterTokenOf(baseLetterHeight + 1)
+            if (tokAdv.sym) {
+                return emitLetterToken(tokAdv, regularFormat(tokAdv.mant, precision4), betaStr, precision4)
+            }
             let mantissa = Math.log10(Math.max(alpha, 0.001)) + totalRepeat
             let newHeight = baseLetterHeight + 1
             let letter = letterName(newHeight)
@@ -910,11 +1626,34 @@ function formatOrdinal(num, precision, precision4) {
         } else if (totalRepeat > 1) {
             // Repeated letters: outerLetters + α + lastLetter + β
             let letter = letterName(baseLetterHeight)
+            let tokRep = letterTokenOf(baseLetterHeight)
+            if (tokRep.sym) {
+                return emitLetterToken(tokRep, alphaStr, betaStr, precision4)
+            }
             let outerLetters = letter.repeat(totalRepeat - 1)
             return outerLetters + alphaStr + letter + betaStr
         } else {
-            // Single letter: α + letter + β
+            // Single letter. DIAGONAL letters (token ends in 'a': Aa, Ba,
+            // Ca, Aaa, …) use the dlsdl [2,10) mantissa 2·5^f with β = base
+            // argument (Ba1000 -> 2.000Ba1,000); successor letters (Ab, Bb,
+            // … keep the ordinary [1,10) α/β form).
             let letter = letterName(baseLetterHeight)
+            // multiLetterLimit symbol carry for a single long letter: the
+            // diagonal keeps its 2·5^f mantissa, the ordinary letters use the
+            // definition digits (!αAaβ), and β becomes the ω-exponent
+            let tokSingle = letterTokenOf(baseLetterHeight)
+            if (tokSingle.sym) {
+                if (letter.length >= 2 && letter[letter.length - 1] === "a") {
+                    let diagMant = 2 * Math.pow(5, base - Math.floor(base))
+                    return tokSingle.sym + regularFormat(diagMant, precision4) +
+                           tokSingle.letter + formatR0Arg(tokSingle.arg, precision4)
+                }
+                return emitLetterToken(tokSingle, alphaStr, betaStr, precision4)
+            }
+            if (letter.length >= 2 && letter[letter.length - 1] === "a") {
+                let diagMant = 2 * Math.pow(5, base - Math.floor(base))
+                return regularFormat(diagMant, precision4) + letter + betaStr
+            }
             return alphaStr + letter + betaStr
         }
     }
@@ -959,6 +1698,18 @@ function formatOrdinal(num, precision, precision4) {
             // Sort heights ascending
             heights.sort((a, b) => a - b)
 
+            // README: at most TWO finite letter types survive — a longer
+            // cascade keeps only its top two levels and compresses the rest
+            // into the second letter's binary form (its repeat count).
+            if (heights.length > 2) {
+                let keepLo = heights[heights.length - 2]
+                for (let i = 0; i < heights.length - 2; i++) {
+                    letterCounts[keepLo] = (letterCounts[keepLo] || 0) + (letterCounts[heights[i]] || 0)
+                    delete letterCounts[heights[i]]
+                }
+                heights = Object.keys(letterCounts).map(Number).sort((a, b) => a - b)
+            }
+
             // Collapse from lowest to highest
             let effThreshold = Math.max(2, FORMAT_OPTIONS.multiLetterRepeatThreshold)
             let collapseAt = effThreshold + 1
@@ -979,48 +1730,73 @@ function formatOrdinal(num, precision, precision4) {
             heights = Object.keys(letterCounts).map(Number).sort((a, b) => a - b)
 
             if (heights.length >= 1) {
-                // Compute r0 alpha
+                // ── Display rules (README "format-metanum rules (v2.0)") ──
+                //   * at most TWO finite letter types survive (VαEβ … VαVβ):
+                //     a longer cascade keeps its top two levels and compresses
+                //     the rest into the second letter's binary form;
+                //   * exactly one α, attached to the innermost (lowest) letter;
+                //   * a combination longer than multiLetterLimit carries to the
+                //     symbol notation !αAaβ instead of growing another letter.
+                let effTh = Math.max(2, FORMAT_OPTIONS.multiLetterRepeatThreshold)
+
+                // (1) the single α / β pair
                 let base = r0[0]
                 let r0Alpha = Math.pow(10, base - Math.floor(base))
                 if (r0Alpha < 1) r0Alpha *= 10
+                let frac = base - Math.floor(base)
+                if (frac < 0) frac += 1
 
-                // Find the innermost height (lowest) that has collapse info
-                let innerHeight = heights[0] // lowest = innermost
-                let collapseCount = collapseInfo[innerHeight] || 0
+                let collapseCount = 0
+                for (let ci = 0; ci < heights.length; ci++) {
+                    collapseCount += collapseInfo[heights[ci]] || 0
+                }
 
                 let alphaStr, betaStr
                 if (collapseCount > 0) {
-                    // Innermost letter collapsed: α and β come from the mantissa
-                    // α = 10^(fractional part) ∈ [1, 10), β = floor(mantissa) (integer)
+                    // Collapsed repeats: α and β come from the mantissa
+                    // α = 10^(fractional part) ∈ [1, 10), β = floor(mantissa)
                     let mantissa = Math.log10(Math.max(r0Alpha, 0.001)) + collapseCount
                     let alphaVal = Math.pow(10, mantissa - Math.floor(mantissa))
                     if (alphaVal < 1) alphaVal *= 10
                     alphaStr = regularFormat(alphaVal, precision4)
                     betaStr = commaFormat(Math.floor(mantissa))
                 } else {
-                    // No collapse at innermost: α and β come directly from r0[0]
                     alphaStr = regularFormat(r0Alpha, precision4)
                     betaStr = formatR0Arg(Math.floor(base), precision4)
                 }
+                // Diagonal combinations (letters ending in 'a': Aa, Ba, Aaa, …)
+                // use the pure dlsdl mantissa α = 2·5^f ∈ [2, 10) — but only
+                // when the diagonal letter IS the value's canonical letter
+                // (single-type display).  Inside a cascade the α is the inner
+                // value's own mantissa and keeps the ordinary [1,10) form
+                // (AbAa600 → Ab1.000Aa600).
+                let diagMant = function (tok) {
+                    if (collapseCount > 0) return alphaStr
+                    if (descHeights.length > 1) return alphaStr
+                    if (!(tok.letter.length >= 2 && tok.letter[tok.letter.length - 1] === "a")) return alphaStr
+                    return regularFormat(2 * Math.pow(5, frac), precision4)
+                }
 
-                // Build output: outerLetters + alphaStr + lastLetter + betaStr
-                // Descending order (highest first = outermost)
+                // (3) compose: descending order (highest first = outermost)
                 let descHeights = heights.slice().reverse()
-                let lastHeight = descHeights[descHeights.length - 1] // lowest = innermost
-                let lastLetter = letterName(lastHeight)
-                let lastCount = letterCounts[lastHeight] || 1
-
-                let outerLetters = ""
-                for (let i = 0; i < descHeights.length - 1; i++) {
-                    let h = descHeights[i]
-                    let cnt = letterCounts[h] || 1
-                    outerLetters += letterName(h).repeat(cnt)
+                let topTok = letterTokenOf(descHeights[0])
+                if (topTok.sym) {
+                    // the top level needs the symbol notation — it dwarfs every
+                    // lower level, so the display is the single !αAaβ form
+                    return emitLetterToken(topTok, alphaStr, betaStr, precision4)
                 }
-                if (lastCount > 1) {
-                    outerLetters += lastLetter.repeat(lastCount - 1)
+                let outerLetters = topTok.letter.repeat(
+                    Math.min(letterCounts[descHeights[0]] || 1, effTh))
+                if (descHeights.length >= 2) {
+                    let loH = descHeights[1]
+                    let loTok = letterTokenOf(loH)
+                    let loCnt = letterCounts[loH] || 1
+                    if (loCnt > 1) {
+                        outerLetters += loTok.letter.repeat(Math.min(loCnt - 1, effTh))
+                    }
+                    return outerLetters + diagMant(loTok) + loTok.letter + betaStr
                 }
-
-                return outerLetters + alphaStr + lastLetter + betaStr
+                return diagMant(topTok) + topTok.letter + betaStr
             }
         }
     }
@@ -1089,5 +1865,5 @@ function formatSmall(num, precision=2) {
 // ─── Exports ─────────────────────────────────────────────────────
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { format, formatWhole, formatSmall, metaPolarize, letterName, symbolName, getOrdinalLetter, formatR0AsChain, FORMAT_OPTIONS }
+    module.exports = { format, formatWhole, formatSmall, metaPolarize, letterName, symbolName, getOrdinalLetter, formatR0AsChain, FORMAT_OPTIONS, polarizeFiniteChain, gammaArgOf, formatGammaBinary }
 }
