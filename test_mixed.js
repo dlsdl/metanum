@@ -873,6 +873,241 @@ checkBool("inv_powerexpande(1e16{ω+3}5,1e16)=5", mL16.powerexpande(5).inv_power
 checkBool("inv_expande(3{ω+1}5,3)=5", MetaNum(3).expande(5).inv_expande(MetaNum(3)).eq(MetaNum(5)), true);
 
 // ─────────────────────────────────────
+// h11/h12/h13 (ω+1 / ω+2 / ω+3): the TOP row carries y-2 applications
+// (rule 2: x{α}y = x{α-1}^(y-2)(x{α-1}x)), and every row BELOW it comes from
+// decomposing x{α-1}x — whose operand is the BASE x — so it carries x-2,
+// the same count the finite r0 coefficients carry.
+//   10{ω+3}20 = 10{ω+2}^18 10{ω+1}^8 10{ω}^8 10{ω}10
+//             → [8,0,1] [8,1,1] [18,2,1]   (not three 18-rows)
+// ─────────────────────────────────────
+console.log("\n=== h11/h12/h13 count law ===");
+checkBool("h13(10,20) = 10{ω+3}20 → [8,0,1] [8,1,1] [18,2,1]",
+  JSON.stringify(MetaNum(10).h13(20).array.slice(1)) === "[[8,0,1],[8,1,1],[18,2,1]]", true);
+checkBool("h12(10,20) = 10{ω+2}20 → [8,0,1] [18,1,1]",
+  JSON.stringify(MetaNum(10).h12(20).array.slice(1)) === "[[8,0,1],[18,1,1]]", true);
+checkBool("h11(10,20) = 10{ω+1}20 → [18,0,1] (single row stays y-2)",
+  JSON.stringify(MetaNum(10).h11(20).array.slice(1)) === "[[18,0,1]]", true);
+// the lower rows are the BASE's count (x-2) and never move with y
+var hRows = { 3: 1, 5: 3, 10: 8 };
+for (var hx in hRows) {
+  var lowC = hRows[hx];
+  for (var hy = 3; hy <= 20; hy++) {
+    var hr = MetaNum(Number(hx)).h13(hy).array.slice(1);
+    var hok = JSON.stringify(hr) === JSON.stringify(
+      [[lowC, 0, 1], [lowC, 1, 1], [hy - 2, 2, 1]]);
+    if (!hok) { checkBool("h13(" + hx + "," + hy + ") rows", false, true); break; }
+  }
+  checkBool("h13(" + hx + ",3..20): lower rows fixed at x-2=" + lowC + ", top row y-2", true, true);
+}
+// y-monotone and level-monotone on the enumeration path
+for (var hy2 = 3; hy2 <= 20; hy2++) {
+  var hprev = null, hch = true;
+  for (var hi = 0; hi < 3; hi++) {
+    var hv = MetaNum(10)[["h11", "h12", "h13"][hi]](hy2);
+    if (hprev && !hv.gt(hprev)) hch = false;
+    hprev = hv;
+  }
+  if (!hch) { checkBool("h11<h12<h13 at y=" + hy2, false, true); break; }
+}
+checkBool("h11 < h12 < h13 for y = 3..20", true, true);
+checkBool("inv_powerexpande(10{ω+3}20,10) = 20",
+  MetaNum(10).h13(20).inv_powerexpande(MetaNum(10)).eq(MetaNum(20)), true);
+
+// ─────────────────────────────────────
+// Every level from ω*2 up follows the same law:
+//   successor α = β+1 → rows of x{β}x, each x-2, + one β-row carrying y-2
+//   limit α           → rule 3 turns y into the fundamental-sequence index, so
+//                       EVERY row carries x-2 (stay expanded up to MSI)
+// ─────────────────────────────────────
+console.log("\n=== h20+ : expanded form & count law ===");
+// successor h21 (ω*2+1): 10{ω*2+1}20 = the ω..ω+9 cascade (x-2 = 8) + ω*2 row y-2
+checkBool("h21(10,20) = [8,0..9,1] rows + [18,0,2]",
+  JSON.stringify(MetaNum(10).h21(20).array.slice(1)) ===
+  "[[8,0,1],[8,1,1],[8,2,1],[8,3,1],[8,4,1],[8,5,1],[8,6,1],[8,7,1],[8,8,1],[8,9,1],[18,0,2]]", true);
+// h22 (ω*2+2): one more row at ω*2 (x-2), top row ω*2+1 carries y-2
+checkBool("h22(10,20) = cascade + [8,0,2] + [18,1,2]",
+  JSON.stringify(MetaNum(10).h22(20).array.slice(1)) ===
+  "[[8,0,1],[8,1,1],[8,2,1],[8,3,1],[8,4,1],[8,5,1],[8,6,1],[8,7,1],[8,8,1],[8,9,1],[8,0,2],[18,1,2]]", true);
+// base-driven lower rows: x=3 → the cascade stops at ω+2 and every count is 1
+checkBool("h21(3,20): lower rows carry x-2 = 1",
+  JSON.stringify(MetaNum(3).h21(20).array.slice(1)) === "[[1,0,1],[1,1,1],[1,2,1],[18,0,2]]", true);
+// and the lower rows never move with y
+(function () {
+  var lowRows = JSON.stringify(MetaNum(10).h21(3).array.slice(1, 11));
+  var ok = true;
+  for (var y = 4; y <= 20; y++) {
+    var r = MetaNum(10).h21(y).array.slice(1);
+    if (JSON.stringify(r.slice(0, 10)) !== lowRows || r[10][0] !== y - 2) ok = false;
+  }
+  checkBool("h21(10,3..20): lower rows fixed at 8, ω*2 row = y-2", ok, true);
+})();
+
+// limit ops stay EXPANDED for 100 < y ≤ MSI (no one-row marker)
+(function () {
+  var MSI = 9007199254740991;
+  for (var i = 0; i < 3; i++) {
+    var lf = ["h20", "h30", "h100"][i];
+    for (var k = 0; k < 3; k++) {
+      var ly = [101, 1000, MSI][k];
+      var lr = MetaNum(10)[lf](ly);
+      // maxRows-1 ordinal rows, base collapsed to [10], first kept row marked +1
+      checkBool(lf + "(10," + ly + ") stays expanded (" + (lr.array.length - 1) + " rows)",
+        lr.array.length - 1 === MetaNum.maxRows - 1 && lr.array[0].length === 1 &&
+        lr.array[1][0] === 9, true);
+    }
+  }
+  // top row carries the fundamental-sequence index y-1
+  checkBool("h20(10,1000) top row = ω+999",
+    JSON.stringify(MetaNum(10).h20(1000).array[19]) === "[8,999,1]", true);
+  checkBool("h20(10,MSI) top row = ω+(MSI-1)",
+    MetaNum(10).h20(MSI).array[19][1] === MSI - 1, true);
+})();
+
+// ─────────────────────────────────────
+// Fractional y for every level from ω*2 up (README "Non-integer arguments"):
+// a limit level takes its fundamental sequence at the FULL fractional index and
+// the fractional coefficients resolve against the base x (ω^(k)·(c+f) =
+// ω^(k)·c + ω^(k-1)·(x·f)); a leftover fractional constant becomes a fractional
+// argument one level up: x{γ+f}x = x{γ+1}(2·(x/2)^f).
+// ─────────────────────────────────────
+console.log("\n=== h20+ with fractional y ===");
+checkBool("10{ω*2}2.1 = 10{ω+3}(2*5^0.1)",
+  MetaNum(10).h20(2.1).eq(MetaNum(10).powerexpande(2 * Math.pow(5, 0.1))), true);
+checkBool("3{ω*2}2.1 = 3{ω+3}(2*1.5^0.1)",
+  MetaNum(3).h20(2.1).eq(MetaNum(3).powerexpande(2 * Math.pow(1.5, 0.1))), true);
+checkBool("10{ω^2}2.1 = 10{ω*2+1}10",
+  MetaNum(10).h100(2.1).eq(MetaNum(10).h21(10)), true);
+checkBool("3{ω^2}2.1 = 3{ω*2+1}(2*1.5^0.3)",
+  MetaNum(3).h100(2.1).eq(MetaNum(3).h21(2 * Math.pow(1.5, 0.3))), true);
+// 10{ω^ω}2.1 = 10{ω^2.1}10 = 10{ω^2*10^0.1}10 → ω^2+ω*2+5.8925… → next level
+(function () {
+  var rf = MetaNum._resolveFracLevel([0, 0, Math.pow(10, 0.1)], 10);
+  var up = rf.ord.slice(); up[0] += 1;
+  checkBool("10{ω^ω}2.1 = 10{ω^2+ω*2+6}(2*5^0.8925…) (level " +
+    JSON.stringify(up) + ")",
+    JSON.stringify(up) === "[6,2,1]" &&
+    MetaNum(10).iterate(2.1).eq(
+      MetaNum._hyperopFromOrdinal(MetaNum(10), MetaNum(2 * Math.pow(5, rf.frac)), up)), true);
+})();
+// the fraction is not thrown away: y and floor(y) differ
+checkBool("h20(10,2.1) != h20(10,2) and lies strictly between 2 and 3",
+  MetaNum(10).h20(2.1).gt(MetaNum(10).h20(2)) &&
+  MetaNum(10).h20(2.1).lt(MetaNum(10).h20(3)), true);
+checkBool("h100(10,10.25) lies strictly between 10 and 11",
+  MetaNum(10).h100(10.25).gt(MetaNum(10).h100(10)) &&
+  MetaNum(10).h100(10.25).lt(MetaNum(10).h100(11)), true);
+// monotone in y across the integers for the LIMIT levels
+(function () {
+  var limOps = ["h20", "h30", "h100", "h110", "h1000", "h10000", "iterate"];
+  var bad = 0, firstBad = "";
+  for (var i = 0; i < limOps.length; i++) {
+    for (var b = 0; b < 2; b++) {
+      var bx = [3, 10][b];
+      for (var m = 2; m <= 10; m++) {
+        var a = MetaNum(bx)[limOps[i]](m), c = MetaNum(bx)[limOps[i]](m + 0.001);
+        var d = MetaNum(bx)[limOps[i]](m + 0.5), e = MetaNum(bx)[limOps[i]](m + 1);
+        if (!(c.gte(a) && d.gte(c) && e.gte(d))) {
+          bad++; if (!firstBad) firstBad = limOps[i] + "(" + bx + "," + m + ")";
+        }
+      }
+    }
+  }
+  checkBool("limit levels monotone across fractional y", bad === 0, true,
+    bad === 0 ? "" : " first failure: " + firstBad);
+})();
+// the SUCCESSOR rule with a fractional argument is written in the same expanded
+// form: the α-1 row carries the m applications (ceil(y)-2 = m-1) and the cascade
+// below it is generated at the fundamental-sequence index x^f, so the value grows
+// with f inside the interval and converges to the next integer at f → 1
+checkBool("h21(10,2.001) < h21(10,2.5) < h21(10,2.99) < h21(10,3)",
+  MetaNum(10).h21(2.001).lt(MetaNum(10).h21(2.5)) &&
+  MetaNum(10).h21(2.5).lt(MetaNum(10).h21(2.99)) &&
+  MetaNum(10).h21(2.99).lt(MetaNum(10).h21(3)), true);
+checkBool("h31(10,5.1) < h31(10,5.5) < h31(10,5.9) < h31(10,6)",
+  MetaNum(10).h31(5.1).lt(MetaNum(10).h31(5.5)) &&
+  MetaNum(10).h31(5.5).lt(MetaNum(10).h31(5.9)) &&
+  MetaNum(10).h31(5.9).lt(MetaNum(10).h31(6)), true);
+// the expanded form keeps the count law: every row below the top one carries
+// x-2, and the α-1 row carries y-2 — a fractional y-2, which is what makes
+// h21(10,2+ε) start at 10{ω*2}10 and grow to 10{ω*2}10{ω*2}10 at y = 3
+(function () {
+  var ok = true;
+  for (var k = 0; k < 6; k++) {
+    var fy = [2.001, 2.1, 2.5, 3.5, 10.25, 100.75][k];
+    var rr = MetaNum(10).h21(fy).array.slice(1);
+    for (var i = 0; i < rr.length - 1; i++) if (rr[i][0] !== 8) ok = false;
+    if (Math.abs(rr[rr.length - 1][0] - (fy - 2)) > 1e-9) ok = false;
+  }
+  checkBool("h21(10, fractional): lower rows = x-2 = 8, ω*2 row = y-2", ok, true);
+  // the endpoints: 2+ε is (just above) h21(10,2) = 10{ω*2}10, 3-ε → h21(10,3)
+  checkBool("h21(10,2+1e-15) = 10{ω*2}10 cascade + a vanishing ω*2 row",
+    MetaNum(10).h21(2 + 1e-15).array.length === 12 &&
+    MetaNum(10).h21(2 + 1e-15).array[11][0] < 1e-9, true);
+  checkBool("h21(10,2.999999) → h21(10,3) from below",
+    MetaNum(10).h21(2.999999).lt(MetaNum(10).h21(3)) &&
+    MetaNum(10).h21(2.999999).gt(MetaNum(10).h21(2)), true);
+})();
+// row coefficients stay integer (a fractional constant is carried to the base)
+(function () {
+  var ok = true;
+  for (var f of ["h21", "h22", "h31", "h101", "h111", "h1001"]) {
+    for (var k = 0; k < 5; k++) {
+      var fy = [2.001, 2.5, 3.5, 10.25, 100.75][k];
+      var arr = MetaNum(10)[f](fy).array;
+      for (var i = 1; i < arr.length; i++) {
+        for (var j = 1; j < arr[i].length; j++) {
+          if (arr[i][j] !== Math.floor(arr[i][j])) ok = false;
+        }
+      }
+    }
+  }
+  checkBool("fractional y: every ordinal row coefficient is an integer", ok, true);
+})();
+
+// no crash / NaN over the whole range with fractional operands
+(function () {
+  var allOps = ["h20","h21","h22","h30","h31","h100","h101","h110","h111",
+    "h1000","h1001","h10000","iterate"];
+  var bad = 0;
+  for (var i = 0; i < allOps.length; i++) {
+    for (var b = 0; b < 4; b++) {
+      var bx = [3, 10, 1e6, 1e16][b];
+      for (var k = 0; k < 5; k++) {
+        var by = [2.0001, 2.5, 3.5, 10.25, 1000.5][k];
+        try {
+          var v = MetaNum(bx)[allOps[i]](by);
+          if (v.isNaN()) bad++;
+        } catch (e) { bad++; }
+      }
+    }
+  }
+  checkBool("no throw/NaN for fractional y over h20..h10000 + iterate", bad === 0, true);
+})();
+
+// inverse round-trip over the whole small-operand range, successors and limits
+(function () {
+  var pairs = [["h11","inv_expande"],["h12","inv_multiexpande"],["h13","inv_powerexpande"],
+    ["h20","inv_aperioexpande"],["h21","inv_explode"],["h22","inv_multiexplode"],
+    ["h30","inv_aperioexplode"],["h31","inv_detonate"],["h100","inv_aperionate"],
+    ["h101","inv_megote"],["h110","inv_aperimegote"],["h111","inv_megoexpande"],
+    ["h1000","inv_aperiatote"],["h1001","inv_powiainate"]];
+  var bad = 0, firstBad = "";
+  for (var i = 0; i < pairs.length; i++) {
+    for (var b = 0; b < 3; b++) {
+      var bx = [3, 5, 10][b];
+      for (var y = 3; y <= 20; y++) {
+        var v = MetaNum(bx)[pairs[i][0]](y);
+        if (!v[pairs[i][1]](MetaNum(bx)).eq(MetaNum(y))) {
+          bad++; if (!firstBad) firstBad = pairs[i][0] + "(" + bx + "," + y + ")";
+        }
+      }
+    }
+  }
+  checkBool("inverse round-trip for h11..h1001 (x=3/5/10, y=3..20)", bad === 0,
+    true, bad === 0 ? "" : " first failure: " + firstBad);
+})();
+
+// ─────────────────────────────────────
 // engine arrays: the (y-2) count law
 //   x{L}y = x{L-1}^{y-2}(x{L-1}x): 10{25}10 → count-8 rows/cols (the
 //   canonical all-8s), 4{25}4 → count-2; truncation keeps the largest
@@ -1180,13 +1415,50 @@ checkFormat("canonical all-8s keeps α=1 (G600)", "G600", "1.000G600");
 // carry — a cascade that would spell 20 letter types keeps its top two levels,
 // and a combination longer than multiLetterLimit switches to !αAaβ
 // ─────────────────────────────────────
-checkFormat("20-row cascade compresses to one type", MetaNum.h10000(3, 10), "1.000Iccc19");
+checkFormat("20-row cascade compresses to two letter types", MetaNum.h10000(3, 10), "Iccc1.000Iccb10");
 checkFormat("10-letter level carries to !…Aa9 (definition digits)", MetaNum.iter(3, 10), "!2.222Aa9");
 checkFormat("5-letter level carries to !…Aa4 (definition digits)", m3.iter(5), "!2.222Aa4");
 checkFormat("symbol carry stacks: apix(3,10) → @…Aa10", m3.aperixxate(10), "@2.000Aa10");
 checkFormat("symbol carry stacks: apix(3,5) → @…Aa5", m3.aperixxate(5), "@2.000Aa5");
 checkFormat("short diagonal keeps the letter form", m3.aperixxate(3), "!2.000Aaaa10");
 checkFormat("cascade inner α stays [1,10) (AbAa600)", "AbAa600", "Ab1.000Aa600");
+
+// ─────────────────────────────────────
+// issue #14: stacking the SAME function must nest the letter — the rows are a
+// composition, so the top row leads and the row below it (which collapses from
+// its repeat count) keeps the single α and β:
+//   poea(10,poea(10,100)) = Ad(Ad(99)) → "Ad1.000Ad99"  (not "1.000Ad114")
+// ─────────────────────────────────────
+var stacked = [
+  ["expande (ω+1)", "expande", "2.398Ab99", "Ab2.398Ab99"],
+  ["multiexpande (ω+2)", "multiexpande", "1.000Ac99", "Ac1.000Ac99"],
+  ["powerexpande (ω+3)", "powerexpande", "1.000Ad99", "Ad1.000Ad99"],
+  ["explode (ω*2+1)", "explode", "1.000Bb99", "Bb1.000Bb99"],
+  ["multiexplode (ω*2+2)", "multiexplode", "1.000Bc99", "Bc1.000Bc99"],
+  ["megoexpande (ω²+1)", "megoexpande", "1.000Abb99", "Abb1.000Abb99"],
+  ["multimegote (ω²+2)", "multimegote", "1.000Aac99", "Aac1.000Aac99"],
+  ["powiainate (ω³+1)", "powiainate", "1.000Aaab99", "Aaab1.000Aaab99"]
+];
+for (var si = 0; si < stacked.length; si++) {
+  var sf = stacked[si][1], s1 = MetaNum(10)[sf](100), s2 = MetaNum(10)[sf](s1), s3 = MetaNum(10)[sf](s2);
+  checkFormat("stacked " + stacked[si][0] + " (1st)", s1, stacked[si][2]);
+  checkFormat("stacked " + stacked[si][0] + " (x2)", s2, stacked[si][3]);
+  checkBool("stacked " + stacked[si][0] + " grows and keeps nesting",
+    s2.gt(s1) && s3.gt(s2) && format(s3).indexOf(format(s2).slice(0, 2)) === 0, true);
+}
+// apea (ω*2) with an operand above MSI: apea(apea(a)) must stay visible
+(function () {
+  var p1 = MetaNum(10).aperioexpande(MetaNum(1e16));
+  var p2 = MetaNum(10).aperioexpande(p1);
+  var p3 = MetaNum(10).aperioexpande(p2);
+  checkFormat("apea(1e16) (ω*2 level = Ba)", p1, "Ba1.000E16");
+  checkFormat("apea(apea(1e16)) nests", p2, "BaBa1.000E16");
+  checkFormat("apea^3(1e16) nests further", p3, "BaBaBa1.000E16");
+  checkBool("apea stacking is strictly monotone", p2.gt(p1) && p3.gt(p2), true);
+})();
+// a row coefficient above 25 (ω+81 from a ω*2 fundamental sequence) has no
+// letter in the grid — clamp down instead of wrapping into a higher letter
+checkFormat("ω*2 level reads Ba (no coefficient wrap)", MetaNum(10).aperioexpande(100), "1.000Ba154");
 
 // Γ-canonical law test: long descending count-1 chains
 // format at their bisect-exact letter on the engine's smooth arrow curve;

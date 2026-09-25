@@ -2916,7 +2916,7 @@
   //     enumeration representation (one row per ordinal below α, count = y-2)
   //   - everything else (any operand beyond MSI, x = 2, or enumeration too large):
   //     unified ordinal engine (README rules 1-4)
-  Q._hyperopFromOrdinalRaw = function (x, y, coeffs) {
+  Q._hyperopFromOrdinalRaw = function (x, y, coeffs, skipFrac) {
     x = new MetaNum(x);
     y = new MetaNum(y);
     if (x.isNaN() || y.isNaN()) return MetaNum.NaN.clone();
@@ -2924,8 +2924,29 @@
     if (y.lte(MetaNum.ZERO)) return MetaNum.NaN.clone();
     if (x.eq(MetaNum.ONE)) return MetaNum.ONE.clone();
     if (y.eq(MetaNum.ONE)) return x.clone();
+
     var cf0 = trimCoeffs((coeffs || []).slice());
     if (cf0.length === 0) return x.mul(y); // rule 1: x{0}y = x*y
+    // Fractional level coefficients come from a fundamental sequence taken at a
+    // non-integer index.  On the diagonal ω = x, so ω^(k)·(c+f) = ω^(k)·c +
+    // ω^(k-1)·(x·f) — resolve top-down until only the constant term can still be
+    // fractional, then turn that leftover into a fractional argument one level
+    // higher:  x{γ+f}x = x{γ+1}(2·(x/2)^f)   (README: 10{ω*2}2.1 = 10{ω+2.1}10 =
+    // 10{ω+3}2·5^0.1; continuous at f=0 since x{γ+1}2 = x{γ}x).
+    if (coeffsHaveFraction(cf0)) {
+      var xnf = x.toNumber();
+      if (isFinite(xnf) && xnf >= 2) {
+        var rs = Q._resolveFracLevel(cf0, xnf);
+        if (rs.frac > 0) {
+          var up = rs.ord.slice();
+          while (up.length < 1) up.push(0);
+          up[0] = (up[0] || 0) + 1;
+          var argF = 2 * Math.pow(xnf / 2, rs.frac);
+          return Q._hyperopFromOrdinal(x, new MetaNum(argF), trimCoeffs(up));
+        }
+        cf0 = rs.ord;
+      }
+    }
     // Non-integer argument at ordinal levels (issues.md addition 3):
     //   successor level α (c0 > 0):  x{α}(m+f) = x{α-1} applied m times to x^f
     //     (e.g. expa(10,2.1) = 10{ω+1}2.1 = 10{ω}10{ω}(10^0.1); continuous at
@@ -2944,13 +2965,33 @@
       // exactly and composition identities stay stable across paths
       var yf = new MetaNum(Number((yFracNum - ym).toPrecision(15)));
       if ((cf0[0] || 0) > 0) {
+        var xnfS = x.toNumber();
+        var xOkS = isFinite(xnfS) && xnfS >= 3 && xnfS <= MAX_SAFE_INTEGER;
+        // α-1 ≥ ω*2 only: for the ω+1/ω+2/ω+3 levels the applications after the
+        // first still have an operand inside MSI, so the engine evaluates them by
+        // the definition (10{ω}(10{ω}(10^0.1))) and that identity is exact.
+        var pred = succCoeffs(cf0);
+        var bigLevel = (pred[1] || 0) >= 2;
+        for (var bi = 2; bi < pred.length; bi++) if ((pred[bi] || 0) > 0) bigLevel = true;
+        if (xOkS && bigLevel && ym <= 100000) {
+          // successor rule written in the EXPANDED form (the same generator the
+          // integer arguments use): x{α}(m+f) = x{α-1}^m(x^f) means the α-1 row
+          // carries m applications — ceil(y)-2 = m-1 — and the cascade below it
+          // takes its first fundamental sequence at the fractional start value
+          // x^f, which is what interpolates the cascade depth between the two
+          // neighbouring integers (exactly what the finite levels do: 10{3}2.1
+          // starts from 10^0.1).  The base is x{x^f}x when that descent is the
+          // ω one (ω+1 levels), x{x}x otherwise.
+          return Q._expandedHyperop(x, new MetaNum(ym + 1), cf0,
+            Math.pow(xnfS, Number((yFracNum - ym).toPrecision(15))));
+        }
         if (ym <= 100000) {
           // successor rule: x{α}(m+f) = x{α-1} applied m times to x^f
           var succ = cf0.slice();
           succ[0] = succ[0] - 1;
           succ = trimCoeffs(succ);
           var v = x.pow(yf);
-          for (var it = 0; it < ym; it++) v = Q._hyperopFromOrdinalRaw(x, v, succ);
+          for (var it = 0; it < ym; it++) v = Q._hyperopFromOrdinalRaw(x, v, succ, true);
           return v;
         }
         // Successor level with an iteration count beyond direct evaluation:
@@ -2959,9 +3000,16 @@
         return Q._ordinalHyperop(x, y, cf0);
       }
       if (ym >= 1) {
-        // limit level: fundamental sequence at m = floor(y); rule 3 puts the
-        // base x as the final operand: x{λ}y = x{λ[m]}x
-        return Q._hyperopFromOrdinalRaw(x, x, fsCoeffs(cf0, ym));
+        // limit level: rule 3 with the FULL (fractional) index — x{λ}y =
+        // x{λ[y]}x.  λ[y] can carry fractional coefficients (10{ω*2}2.1 =
+        // 10{ω+2.1}10), which the fractional-level rule above resolves, so the
+        // fraction of y is never thrown away (flooring it would make
+        // h20(10,2.1) = h20(10,2)).
+        // Nested (skipFrac: the successor rule is already iterating a fractional
+        // start value) the index is floored — otherwise every application would
+        // take another fractional fundamental sequence and recurse forever.
+        var fsIdx = skipFrac ? Math.floor(yFracNum) : yFracNum;
+        return Q._hyperopFromOrdinalRaw(x, x, fsCoeffs(cf0, fsIdx), skipFrac);
       }
     }
     var cf = cf0;
@@ -2970,9 +3018,11 @@
     if (deg >= 1 && x.array.length === 1 && x.layer === 0
         && y.array.length === 1 && y.layer === 0) {
       var xC = metaFiniteCount(x), yC = metaFiniteCount(y);
-      if (xC >= 3 && xC <= MAX_SAFE_INTEGER && yC >= 3 && yC <= MAX_SAFE_INTEGER
-          && Math.pow(yC, deg) <= MetaNum.maxRows) {
-        return Q._enumHyperop(x, y, cf);
+      // Finite operands in [3, MSI] always take the EXPANDED cascade form — a
+      // limit operation keeps its fundamental-sequence rows all the way up to
+      // MSI (100 < y ≤ MSI included), truncated to the largest maxRows-1 rows.
+      if (xC >= 3 && xC <= MAX_SAFE_INTEGER && yC >= 3 && yC <= MAX_SAFE_INTEGER) {
+        return Q._expandedHyperop(x, y, cf);
       }
     }
     return Q._ordinalHyperop(x, y, cf);
@@ -2992,214 +3042,146 @@
     return r;
   };
 
-  // Legacy (HEAD-compatible) enumeration-based hyperoperation for small operands.
-  Q._enumHyperop = function (x, y, coeffs) {
-    var xNum = x.toNumber();
-    var yNum = y.toNumber();
-    var maxRows = MetaNum.maxRows; // 100
-    var baseArrowLevel = Math.max(Math.floor(isFinite(xNum) ? xNum : 3), 3);
-    var baseResult = x.arrow(baseArrowLevel)(x);
-    var rows = Q._generateOrdinalRows(coeffs,
-      isFinite(xNum) ? Math.floor(xNum) : baseArrowLevel,
-      isFinite(yNum) ? Math.floor(yNum) : baseArrowLevel,
-      maxRows);
+  // ---------------------------------------------------------------------------
+  // Expanded (cascade) form of x{α}y for FINITE operands in [3, MSI] — README
+  // rules 1-4 written out row by row.  The rows are generated TOP-DOWN so a
+  // huge fundamental sequence (y up to MSI) costs nothing: generation stops as
+  // soon as the array budget is filled, keeping the LARGEST rows.
+  //
+  //   successor α = β + m  (m = c0 > 0):  x{α}y = x{β+m-1}^(y-2)(x{β+m-1}x),
+  //     so the row at β+m-1 carries y-2 applications and every row below it
+  //     (β+m-2 … β, then the cascade of β) comes from decomposing with the
+  //     BASE x as operand and therefore carries x-2 (h13(10,20) → [8,0,1],
+  //     [8,1,1], [18,2,1] — only the top row follows y).
+  //   limit α (c0 = 0): rule 3 gives x{α}opd = x{α[opd]}x, so the operand turns
+  //     into the base x and every row carries x-2 — including for 100 < y ≤ MSI
+  //     (h20(10,1000) stays an expanded cascade, not a one-row marker).
+  // ---------------------------------------------------------------------------
+  // `fsOpd` is the operand of the FIRST fundamental-sequence step.  The default
+  // is the base x; the fractional successor rule passes the fractional start
+  // value x^f instead (x{α}(m+f) = x{α-1}^m(x^f)), which is what interpolates the
+  // cascade depth between two integers.  baseIdx (returned as `.baseIdx`) is the
+  // index used by the last descent — the finite level the cascade bottoms out at.
+  Q._cascadeRows = function (xn, cf, yn, budget, fsOpd) {
+    var rows = [];
+    if (!(budget >= 1)) return { rows: rows, baseIdx: xn };
+    var cfs = trimCoeffs((cf || []).slice());
+    var opd = Math.min(yn, MAX_SAFE_INTEGER);
+    var first = (cfs[0] || 0) > 0;      // successor: the outer count is y-2
+    var fracOpd = (fsOpd === undefined) ? null : fsOpd;
+    var baseIdx = xn;
+    var fracRem = 0;                    // fractional constant carried to the base
+    var guard = 0;
+    while (rows.length < budget && guard++ < 10000) {
+      if (!coeffsHaveOmegaPart(cfs)) break;             // finite level: no row
+      if ((cfs[0] || 0) > 0) {
+        var mRaw = cfs[0];
+        var m = Math.floor(mRaw);
+        // a fractional constant term (from a fundamental sequence taken at a
+        // fractional index) is not a valid CNF coefficient — keep the integer
+        // part as rows and carry the remainder into the base's finite level
+        // index (x{10.16}x), which is exactly how the ω level interpolates
+        var mFr = Number((mRaw - m).toPrecision(15));
+        if (mFr > 1e-9) fracRem = mFr;
+        var beta = trimCoeffs(cfs.slice());
+        beta[0] = 0;
+        beta = trimCoeffs(beta);
+        var steps = Math.min(m, budget - rows.length + 1);
+        for (var s = 0; s < steps; s++) {
+          var j = m - 1 - s;                            // rows β+m-1 … β
+          var cnt = (first ? opd : xn) - 2;
+          first = false;
+          if (cnt < 1) continue;
+          if (cnt > MAX_SAFE_INTEGER) cnt = MAX_SAFE_INTEGER;
+          var ord = beta.slice();
+          if (j > 0) ord[0] = (ord[0] || 0) + j;        // β + j
+          ord = trimCoeffs(ord);
+          if (!coeffsHaveOmegaPart(ord)) continue;      // finite: lives in r0
+          rows.push([cnt].concat(ord));
+        }
+        cfs = beta;                                     // continue below β
+        opd = Math.min(xn, MAX_SAFE_INTEGER);           // everything below the top
+        continue;                                       // row is base-operand
+      }
+      // limit: fundamental sequence at the current operand (rule 3)
+      var idx = (fracOpd !== null) ? fracOpd : opd;
+      fracOpd = null;
+      baseIdx = idx;
+      var nxt = fsCoeffs(cfs, idx);
+      if (coeffsHaveFraction(nxt)) {
+        // a fractional index makes the coefficients fractional (ω^k·(c+f)) —
+        // resolve them against the base so every row coefficient stays an
+        // integer, carrying the leftover constant fraction into the base
+        var rs2 = Q._resolveFracLevel(nxt, xn);
+        cfs = rs2.ord;
+        if (rs2.frac > 0) fracRem = rs2.frac;
+      } else {
+        cfs = trimCoeffs(nxt);
+      }
+      opd = Math.min(xn, MAX_SAFE_INTEGER);             // operand becomes x
+    }
+    rows.baseIdx = baseIdx + fracRem;                   // descending by ordinal
+    return rows;
+  };
+
+  Q._expandedHyperop = function (x, y, cf, fsOpd) {
+    var maxRows = MetaNum.maxRows;
+    var xn = Math.floor(metaFiniteCount(x));
+    var yn = Math.floor(metaFiniteCount(y));
+    var budget = maxRows - 1;                           // ordinal rows the array holds
+    var desc = Q._cascadeRows(xn, cf, yn, budget + 1, fsOpd); // +1 detects truncation
+    var truncated = desc.length > budget;
+    if (truncated) desc = desc.slice(0, budget);   // keep the LARGEST rows
+    var rows = desc.reverse();                          // ascending
+    // base r0 = x{idx}x (rule 3 at the ω level: x{ω}x = x{x}x) — the finite part;
+    // idx is the operand of the descent that bottoms out, i.e. the fractional
+    // start value x^f when the cascade came from the fractional successor rule
+    var baseIdx = (desc.baseIdx === undefined) ? xn : desc.baseIdx;
+    // arrow() evaluates fractional levels too (10{10.2589}10 ≠ 10{10}10), so the
+    // carried fraction survives into the base
+    var baseResult = x.arrow(Math.max(baseIdx, 3))(x);
     var result = baseResult.clone();
-    var maxOrdinalRows = maxRows - 1;
-    if (rows.length > maxOrdinalRows) {
-      // Truncation: keep the largest maxOrdinalRows rows (rows ascend), the
-      // base defaults to [10] and the first kept row's count marks it with +1
-      rows = rows.slice(rows.length - maxOrdinalRows);
+    if (truncated) {
       result.array = [[10]];
-      rows[0][0] = (rows[0][0] || 0) + 1;
+      rows[0][0] = (rows[0][0] || 0) + 1;               // truncation marker
       if (rows[0][0] > MAX_SAFE_INTEGER) rows[0][0] = MAX_SAFE_INTEGER;
     } else {
       result.array = [baseResult.array[0].slice()];
     }
     for (var i = 0; i < rows.length; i++) result.array.push(rows[i]);
-    if (result.array.length > 1) result.layer = 0;
-    return result;
+    result.layer = 0;
+    return result.normalize();
   };
 
-  // Legacy (HEAD-compatible) ordinal row enumeration: one row per ordinal below
-  // `coeffs` (coefficients bounded by `cardinal`), each with count = cardinal-2.
-  Q._generateOrdinalRows = function (coeffs, base, cardinal, maxRows) {
-    var rows = [];
-    var m = base;
-    var n = cardinal;
-
-    function compareOrd(a, b) {
-      var maxLen = Math.max(a.length, b.length);
-      for (var i = maxLen - 1; i >= 0; i--) {
-        var va = (i < a.length) ? (a[i] || 0) : 0;
-        var vb = (i < b.length) ? (b[i] || 0) : 0;
-        if (va < vb) return -1;
-        if (va > vb) return 1;
-      }
-      return 0;
+  // Any coefficient with a non-zero fractional part?
+  function coeffsHaveFraction(coeffs) {
+    for (var i = 0; i < coeffs.length; i++) {
+      var c = coeffs[i] || 0;
+      if (c !== Math.floor(c)) return true;
     }
+    return false;
+  }
 
-    function addOrd(a, b) {
-      if (!b || b.length === 0 || (b.length === 1 && b[0] === 0)) return a.slice();
-      if (!a || a.length === 0 || (a.length === 1 && a[0] === 0)) return b.slice();
-      var result = a.slice();
-      var k = 0;
-      while (k < result.length && (result[k] || 0) === 0) k++;
-      if (k >= result.length) {
-        return b.slice();
-      } else if (k === 0) {
-        result[0] = (result[0] || 0) + (b[0] || 0);
-        for (var i = 1; i < b.length; i++) {
-          result[i] = (result[i] || 0) + (b[i] || 0);
-        }
-      } else {
-        result[k] = 0;
-        result = result.slice(0, k);
-        for (var i = 0; i < b.length; i++) {
-          result.push(b[i] || 0);
-        }
+  // Resolve fractional CNF coefficients against the base x (see the comment in
+  // _hyperopFromOrdinalRaw): ω^(k)·(c+f) = ω^(k)·c + ω^(k-1)·(x·f) top-down.
+  // Returns the integer level plus the fractional part left in the constant term.
+  Q._resolveFracLevel = function (cf, xn) {
+    var r = trimCoeffs((cf || []).slice());
+    for (var k = r.length - 1; k >= 1; k--) {
+      var c = r[k] || 0;
+      var fl = Math.floor(c);
+      var fr = Number((c - fl).toPrecision(15));
+      if (fr > 1e-9) {
+        r[k] = fl;
+        r[k - 1] = (r[k - 1] || 0) + xn * fr;
       }
-      while (result.length > 0 && result[result.length - 1] === 0) result.pop();
-      return result;
     }
-
-    function isZero(ord) {
-      if (!ord || ord.length === 0) return true;
-      for (var i = 0; i < ord.length; i++) {
-        if ((ord[i] || 0) !== 0) return false;
-      }
-      return true;
-    }
-
-    function buildRow(ord, count) {
-      var maxIdx = ord.length - 1;
-      while (maxIdx >= 0 && (ord[maxIdx] || 0) === 0) maxIdx--;
-      if (maxIdx < 0) return null;
-      var row = [count];
-      for (var i = 0; i <= maxIdx - 1; i++) row.push(ord[i] || 0);
-      row.push(ord[maxIdx]);
-      return row;
-    }
-
-    // Enumerate all ordinals below ω^k with coefficients < n
-    function enumBelowOmegaK(k, n) {
-      if (k === 0) {
-        return [[0]];
-      }
-      if (k === 1) {
-        var result = [];
-        for (var i = 0; i < n; i++) {
-          result.push([i]);
-        }
-        return result;
-      }
-      var result = [];
-      for (var a = 0; a < n; a++) {
-        var sub = enumBelowOmegaK(k - 1, n);
-        for (var i = 0; i < sub.length; i++) {
-          var combined = sub[i].slice();
-          while (combined.length < k) combined.push(0);
-          combined[k - 1] = a;
-          result.push(combined);
-        }
-      }
-      return result;
-    }
-
-    // Enumerate all ordinals below a given ordinal
-    function enumBelow(alpha, n) {
-      if (isZero(alpha)) return [];
-
-      if ((alpha[0] || 0) > 0) {
-        var pred = alpha.slice();
-        pred[0]--;
-        while (pred.length > 0 && pred[pred.length - 1] === 0) pred.pop();
-        if (pred.length === 0) pred = [0];
-        var result = enumBelow(pred, n);
-        result.push(pred.slice());
-        return result;
-      }
-
-      var k = alpha.length - 1;
-      while (k >= 0 && (alpha[k] || 0) === 0) k--;
-      if (k < 0) return [];
-
-      var ck = alpha[k] || 0;
-      var rest = alpha.slice(0, k);
-      while (rest.length > 0 && rest[rest.length - 1] === 0) rest.pop();
-
-      var result = [];
-
-      for (var j = 0; j < ck; j++) {
-        var sub = enumBelowOmegaK(k, n);
-        for (var i = 0; i < sub.length; i++) {
-          var combined = sub[i].slice();
-          while (combined.length <= k) combined.push(0);
-          combined[k] = j;
-          result.push(combined);
-        }
-      }
-
-      if (!isZero(rest)) {
-        var restSub = enumBelow(rest, n);
-        for (var i = 0; i < restSub.length; i++) {
-          var combined = restSub[i].slice();
-          while (combined.length <= k) combined.push(0);
-          combined[k] = ck;
-          result.push(combined);
-        }
-      }
-
-      return result;
-    }
-
-    var count = n - 2;
-    if (count < 1) return rows;
-
-    var allOrdinals = enumBelow(coeffs, n);
-
-    var seen = {};
-    var uniqueOrdinals = [];
-    for (var i = 0; i < allOrdinals.length; i++) {
-      var ord = allOrdinals[i];
-      if (isZero(ord)) continue;
-
-      // Normalize: remove trailing zeros
-      var normalized = ord.slice();
-      while (normalized.length > 0 && normalized[normalized.length - 1] === 0) {
-        normalized.pop();
-      }
-
-      // Skip ordinals below ω (finite ordinals: only constant term, length <= 1)
-      if (normalized.length <= 1) continue;
-
-      var key = normalized.join(',');
-      if (seen[key]) continue;
-      seen[key] = true;
-      uniqueOrdinals.push(normalized);
-    }
-
-    uniqueOrdinals.sort(function (a, b) {
-      return compareOrd(a, b);
-    });
-
-    var allRows = [];
-    for (var i = 0; i < uniqueOrdinals.length; i++) {
-      var row = buildRow(uniqueOrdinals[i], count);
-      if (row) allRows.push(row);
-    }
-
-    // When enumerating more rows than fit, keep the largest maxRows-1
-    // ordinals (rows are sorted ascending, so drop from the front)
-    if (allRows.length > maxRows - 1) {
-      var maxOrdinalRows = maxRows - 1;
-      allRows = allRows.slice(allRows.length - maxOrdinalRows);
-    }
-
-    for (var i = 0; i < allRows.length; i++) {
-      rows.push(allRows[i]);
-    }
-
-    return rows;
+    var c0 = r[0] || 0;
+    var fl0 = Math.floor(c0);
+    var fr0 = Number((c0 - fl0).toPrecision(15));
+    if (!(fr0 > 1e-9)) fr0 = 0;
+    r[0] = fl0;
+    return { ord: trimCoeffs(r), frac: fr0 };
   };
 
   // Helper: number of leading iterate applications (of level `beta`) starting
@@ -3216,6 +3198,26 @@
     }
     return steps + 1;
   }
+
+  // Inverse of a LIMIT level taken through the expanded cascade: x{λ}y = x{λ[y]}x
+  // makes every row depend on y only through the fundamental sequence, so instead
+  // of reading a count row we search the (monotone) forward map.
+  Q._invExpandedLimit = function (base, value, coeffs) {
+    var lo = 3, hi = MAX_SAFE_INTEGER, best = 0;
+    var v3 = Q._expandedHyperop(base, new MetaNum(3), coeffs);
+    if (value.lt(v3)) return base.clone();
+    while (lo <= hi) {
+      var mid = lo + Math.floor((hi - lo) / 2);
+      if (Q._expandedHyperop(base, new MetaNum(mid), coeffs).lte(value)) {
+        best = mid; lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    if (best === 0) return base.clone();
+    var vb = Q._expandedHyperop(base, new MetaNum(best), coeffs);
+    return vb.eq(value) ? new MetaNum(best) : base.clone();
+  };
 
   // Helper: generic inverse hyperoperation from ordinal level.
   // Forward paths and the rows they leave:
@@ -3249,14 +3251,29 @@
     }
     if (cf.length === 0) return z;
 
-    // enumeration path (base z is a small finite number ≥ 3): top row count = y-2
+    // expanded cascade path (base z is a small finite number ≥ 3): the forward
+    // operation wrote the rule-1..4 cascade rows.
+    //   successor α: the row at α-1 carries exactly y-2 applications → +2
+    //   limit α: every row carries x-2 and y only appears inside the
+    //     fundamental-sequence rows, so it is recovered from the forward map
     var zC = metaFiniteCount(z);
     if (z.array.length === 1 && z.layer === 0 && zC >= 3 && zC <= MAX_SAFE_INTEGER) {
-      var lastRow = x.array[x.array.length - 1];
-      if (lastRow && lastRow.length >= 2 && (lastRow[0] || 0) > 0) {
-        return new MetaNum((lastRow[0] || 0) + 2);
+      if ((cf[0] || 0) > 0) {
+        var pred = succCoeffs(cf);
+        var predRow = null;
+        for (var pi = x.array.length - 1; pi >= 1; pi--) {
+          var prow = x.array[pi];
+          if (prow && prow.length >= 2 && (prow[0] || 0) > 0 &&
+              cmpCoeffsLevel(rowToCoeffs(prow), pred) === 0) { predRow = prow; break; }
+        }
+        if (predRow) return new MetaNum((predRow[0] || 0) + 2);
+        var lastRow = x.array[x.array.length - 1];
+        if (lastRow && lastRow.length >= 2 && (lastRow[0] || 0) > 0) {
+          return new MetaNum((lastRow[0] || 0) + 2);
+        }
+        return z;
       }
-      return z;
+      return Q._invExpandedLimit(z, x, cf);
     }
 
     // engine path: count row [c | β] with β = α-1 (successor α only)
@@ -3636,8 +3653,21 @@
       return Q._layerMarker([10], 1, [[1, m]]);
     }
     if (yc <= MAX_SAFE_INTEGER) {
-      // fractional y: rule 3 takes the fundamental sequence at floor(y)
-      return P.iterate.call(x, new MetaNum(Math.max(2, Math.floor(yc))));
+      // fractional y: (ω^ω)[y] = ω^y = ω^(m+f) = ω^m·ω^f, and on the diagonal
+      // ω^f reads as x^f — so the level is ω^m·(x^f), whose coefficients carry
+      // x^f at index m (README: 10{ω^ω}2.1 = 10{ω^2.1}10 = 10{ω^2*10^0.1}10).
+      // Flooring y would lose the fraction and make iterate(10,2.1)=iterate(10,2).
+      var mf = Math.max(2, Math.floor(yc));
+      var ff = Number((yc - Math.floor(yc)).toPrecision(15));
+      var xnf = x.toNumber();
+      var cfac = (isFinite(xnf) && xnf >= 2 && ff > 0) ? Math.pow(xnf, ff) : 1;
+      if (mf < MetaNum.maxCols) {
+        var cfw = [];
+        for (var cw = 0; cw < mf; cw++) cfw.push(0);
+        cfw.push(cfac);
+        return Q._hyperopFromOrdinal(x, x, cfw);
+      }
+      return Q._layerMarker([10], 1, [[cfac, mf]]);
     }
     // ordinal / out-of-range operand: y plus one ω^ω marker row
     return Q._ordinalOperandOp(y, 1, [1, 0, 1]);

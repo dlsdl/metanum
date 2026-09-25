@@ -367,7 +367,7 @@ MetaNum(10).arrow(3.2)(10);   // monotone between 10{3}10 and 10{4}10
 
 The same continuity applies to the ω-and-above operations. Successor levels
 follow `x{α}(m+f) = x{α-1}` applied m times to `x^f`; the ω level matches
-`aperiote` exactly, so the issue's composition identity holds verbatim:
+`aperiote` exactly, so composition identity holds verbatim:
 
 ```javascript
 MetaNum(10).expande(2.1);      // 10{ω+1}2.1 = 10{ω}10{ω}(10^0.1)
@@ -375,9 +375,45 @@ MetaNum(10).expande(2);        // 10{ω}10 (continuous at the integers)
 MetaNum(10).multiexpande(2.1); // (10{ω+1})²(10^0.1)
 ```
 
-Limit levels take the fundamental sequence at `floor(y)`; successor levels
-with an iteration count beyond direct evaluation diagonalize through the
-engine's huge-argument convention (y plus one α-level marker row).
+**Limit levels take the fundamental sequence at the full (fractional) `y`**, so
+the fraction is never dropped (`h20(10,2.1)` ≠ `h20(10,2)`). The sequence can
+then carry fractional coefficients, which resolve against the base x because on
+the diagonal ω reads as x:
+
+- ω^(k)·(c+f) = ω^(k)·c + ω^(k-1)·(x·f), applied top-down (ω^0.1 = x^0.1), so
+  only the constant term can still be fractional;
+- a leftover fractional constant γ+f is one level of interpolation:
+  **x{γ+f}x = x{γ+1}(2·(x/2)^f)** — continuous at f=0 because x{γ+1}2 = x{γ}x.
+
+**Successor levels** keep `x{α}(m+f) = x{α-1}` applied m times to `x^f`, and they
+are stored in the same **expanded** form as the integer arguments: the α-1 row
+carries the m applications (`ceil(y)-2 = m-1`) and the cascade below it is
+generated at the fundamental-sequence index `x^f`, so the value grows with f
+inside the interval and converges to the next integer as f → 1:
+
+```javascript
+MetaNum(10).h21(2.0001);  // Ba2.218Ab9     f → 0: cascade bottoming at ω
+MetaNum(10).h21(2.5);     // Ba1.772Ad9     the cascade deepens with f
+MetaNum(10).h21(2.99);    // Ba2.447Aj9  →  converges to h21(10,3) = Ba1.000Ak9
+```
+
+For the ω+1 / ω+2 / ω+3 levels the applications after the first still have an
+operand inside MSI, so those are evaluated directly by the rule (that is the
+`10{ω}10{ω}(10^0.1)` composition above) — which is also the exact identity.
+An iteration count beyond direct evaluation diagonalizes through the engine's
+huge-argument convention (y plus one α-level marker row). Then we have:
+
+10{ω\*2}2.1=10{ω+2.1}10=10{ω+3}2\*5^0.1 (because 10{ω+2}10=10{ω+3}2)
+
+3{ω\*2}2.1=3{ω+2.1}3=3{ω+3}2\*1.5^0.1
+
+10{ω^2}2.1=10{ω\*2.1}10=10{ω\*2+10\*0.1}10=10{ω\*2+1}10
+
+3{ω^2}2.1=3{ω\*2.1}3=3{ω\*2+3\*0.1}10=3{ω\*2+0.3}3=3{ω\*2+1}2\*1.5^0.3
+
+10{ω^ω}2.1=10{ω^2.1}10=10{ω^2\*10^0.1}10=10{ω^2\*1.258925}10=10{ω^2\*1+ω\*2+5.8925}10=10{ω^2\*1+ω\*2+6}2*5^0.8925
+
+3{ω^ω}2.1=3{ω^2.1}3=3{ω^2\*3^0.1}3=3{ω^2\*1.116123}3=3{ω^2\*1+1.045107}3=3{ω^2\*1+2}2*1.5^0.045107
 
 ## BEAF Operations
 
@@ -554,6 +590,50 @@ where α\[b] denotes the b-th element of the fundamental sequence assign to the 
 - ω^α\[n]=ω^(α\[n]) if and only if α is a limit ordinal
 - (ω^(α_1)+ω^(α_2)+...+ω^(α_k))\[n]=ω^(α_1)+ω^(α_2)+...+ω^(α_k)\[n], where α_1>=α_2>=...>=α_k
 - ε₀\[0]=1 and ε₀\[n+1]=ω^ε₀\[n]
+
+### The application count of each ordinal row
+
+Expanding rules 2-3 all the way down shows that **only the top row depends on
+the argument b** — every row below it is produced by decomposing with the base
+n as the operand:
+
+- successor α: n{α}b = n{α-1}^(b-2) (n{α-1}n), so the α-1 row carries **b-2**
+  applications and every lower row (which comes from n{α-1}n, n{α-2}n, …
+  whose operand is n) carries **n-2**;
+- limit α: rule 3 first rewrites n{α}b = n{α\[b]}n, so the operand is n at
+  every level and **all** rows carry **n-2**.
+
+```javascript
+MetaNum(10).h13(20);   // 10{ω+3}20 = 10{ω+2}^18 10{ω+1}^8 10{ω}^8 10{ω}10
+// array → [[1e10,8,8,8,8,8,8,8,8], [8,0,1], [8,1,1], [18,2,1]]
+//            ω+2 row = 18 = y-2,  ω+1 and ω rows = 8 = x-2
+MetaNum(10).h12(20);   // 10{ω+2}20 → [8,0,1] [18,1,1]
+MetaNum(3).h13(20);    // 3{ω+3}20  → [1,0,1] [1,1,1] [18,2,1]   (x-2 = 1)
+```
+
+The same n-2 count is what the finite r0 coefficients carry (10{10}10 → all-8s),
+so a row below the top one never moves when b changes.
+
+The law is uniform for **every** level from ω+1 to ω^4:
+
+| kind | rows | top row count | lower rows |
+|---|---|---|---|
+| successor α = β+1 | rows of n{β}n, then one β-row | **b-2** | **n-2** |
+| limit α | rows of n{α\[b]}n | **n-2** | **n-2** |
+
+```javascript
+MetaNum(10).h21(20);   // 10{ω*2+1}20 = 10{ω*2}^18 (10{ω*2}10)
+// 10{ω*2}10 = 10{ω+10}10 → the ω..ω+9 cascade, every count x-2 = 8
+// array → [[…,8,…], [8,0,1] … [8,9,1], [18,0,2]]
+MetaNum(10).h22(20);   // … + [8,0,2] + [18,1,2]   (ω*2 row = 8, ω*2+1 row = 18)
+MetaNum(3).h21(20);    // 3{ω*2+1}20 → [1,0,1] [1,1,1] [1,2,1] [18,0,2]  (x-2 = 1)
+```
+
+A limit operation stays **expanded** for every argument up to MSI: rule 3 turns
+b into a fundamental-sequence index, so 100 < b ≤ MSI still yields the largest
+`maxRows-1` fundamental-sequence rows (with the standard truncation marker)
+instead of collapsing to a one-row marker — `h20(10,1000)` keeps 19 rows whose
+top one is ω+999, and `h20(10,MSI)` keeps rows up to ω+(MSI-1).
 
 ## Examples
 
@@ -902,8 +982,8 @@ Implementation of dlsdl's letter notation for large number library, currently me
 - **Γ-canonical α/β (bisect law)**: the true α and β of a value v at letter Γ
   are recovered by bisecting 10{L}x = v on the engine's own smooth arrow curve
   (Γ = E,F,G,... single letters, L = level). α = 10^frac(x), β = floor(x):
-  `format(arrow(3,4.1,3))` → `G1.161G897` (not `G1.000G898`),
-  `format(arrow(3,4.3,3))` → `1.285H8` (not `1.000H8`),
+  `format(arrow(3,4.1,3))` → `G1.161G897`,
+  `format(arrow(3,4.3,3))` → `1.285H8`,
   `format(hardy(4166))` → `2.397G5`.
 - **+count collapse**: n operations of level L applied to a Γ^{L+1}-structured
   value collapse to ONE Γ^{L+1} with arg + n (F⁴(G(1.3796)) = G(5.3796)),
@@ -922,7 +1002,7 @@ Implementation of dlsdl's letter notation for large number library, currently me
   22→21, 23→22 stay two-letter (`Y2.376X2`, `Z2.376Y2`), level ≥ 23 cascades
   display as the αΓβ polarize diagonal. Diagonal letter combinations
   (multi-letter tokens whose last lowercase letter is `a`: Aa, Ba, Ca, Aaa,
-  Aaaa, …) use the **pure dlsdl α=2·5^f ∈ [2,10) convention**; the other
+  Aaaa, …) use the **pure dlsdl α=2·5^f ∈[2,10) convention**; the other
   letters (Ab, Bb, …) keep the ordinary α∈[1,10) convention. The polarize
   triple t = log₁₀(bottom)+repeation maps as: t∈[2,10) smooth → α=t,
   β=arrows; discrete integer arguments (10{L}b with 2≤b≤100) all sit at the
@@ -934,7 +1014,7 @@ Implementation of dlsdl's letter notation for large number library, currently me
   nested ordinals prefix the ω-row letter:
   3{3{100}3}3 → `Aa2.376Aa99`, 3{10{10000}10}3 → `Aa2.000Aa10,000`.
   Symbol de-layering follows the same convention: !Aa3 = 10{ω³}10 →
-  `2.000Aaaa10` (layer 0), @Aa3 = 10{ω^{ω³}}10 → `!2.000Aaaa10`.
+  `2.000Aaaa10` (layer 0), @Aa3 = 10{ω^(ω³)}10 → `!2.000Aaaa10`.
 - **multiLetterLimit symbol carry**: a multi-letter combination of k letters
   sits at level ω^(k-1).  Once it would be longer than multiLetterLimit the
   notation switches to the next one instead of growing another letter: the
@@ -952,9 +1032,23 @@ Implementation of dlsdl's letter notation for large number library, currently me
   table the ε form takes over (`format(epsilonate(3,15))` → `1.000Ak10ε14`).
   Diagonal combinations in symbol forms keep the pure dlsdl α = 2·5^f ∈ [2,10)
   mantissa (integer exponents anchor 2.000).
-- **Cascade compression**: a 20-row ordinal cascade that would spell 20 letter
-  types keeps its top two levels and folds the rest into the second letter's
-  repeat count: `format(h10000(3,10))` → `1.000Iccc19`.
+- **Cascade compression**: the ordinal rows are a COMPOSITION, so the top row
+  leads the display and the row below it (which collapses from its repeat count)
+  keeps the single α and β — a 20-row cascade keeps its top two levels:
+  `format(h10000(3,10))` → `Iccc1.000Iccb10`.
+- **Stacking the same function nests the letter** (issue #14): `n{α}(n{α}y)` is
+  one more application of the same level on top of the inner value, so the
+  letter appears twice. `poea(10,poea(10,100))` = Ad(Ad(99)) → `Ad1.000Ad99`
+  (before: the rows were folded into one letter, `1.000Ad114`), and the same
+  holds for ω+1, ω+2, ω*2+1, ω*2+2, ω²+1, ω²+2, ω³+1 —
+  `Ab2.398Ab99`, `Ac1.000Ac99`, `Bb1.000Bb99`, `Bc1.000Bc99`,
+  `Abb1.000Abb99`, `Aac1.000Aac99`, `Aaab1.000Aaab99`; with an operand above
+  MSI, `apea(apea(1e16))` → `BaBa1.000E16`.
+- **A coefficient above 25 has no letter in the grid** (the letters hold
+  ω·d+v with 0 ≤ v ≤ 25), so a ω*2 fundamental-sequence row (ω+81, ω+99, …)
+  clamps down to the largest letter below it instead of wrapping into a higher,
+  wrong letter: `format(apea(10,100))` → `1.000Ba154` (the ω*2 level), not the
+  wrapped ω*4+3 letter.
   Formats are identical at maxRows=maxCols=10/20/50/100.
 
 ### Precision budget (maxRows / maxCols)

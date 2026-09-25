@@ -1472,7 +1472,19 @@ function formatOrdinal(num, precision, precision4) {
                     // as one more symbol with the chain as its argument
                     return tokAa.sym + regularFormat(2, precision4) + tokAa.letter + argStr
                 }
-                return letter.repeat(totalAaCount) + argStr
+                // past the collapse threshold the repeats shift the argument and
+                // advance the letter — a raw repeat would try to build a string
+                // with `count` copies (Aaa repeated 1e9 times cannot be built)
+                let repArgStr = argStr
+                if (totalAaCount > 64) {
+                    let r0Bottom = Math.pow(10, r0[0] - Math.floor(r0[0]))
+                    let repParam = totalAaCount + 1
+                    let mantissa = Math.log10(Math.max(r0Bottom, 0.001)) +
+                        Math.log10(Math.max(repParam, 1)) * 0.4 + 1.6
+                    return regularFormat(mantissa, precision4) +
+                           letterName(baseHeight + 1) + commaFormat(repParam)
+                }
+                return letter.repeat(totalAaCount) + repArgStr
             } else {
                 // Single Aa
                 let tokAa = letterTokenOf(baseHeight)
@@ -1494,11 +1506,16 @@ function formatOrdinal(num, precision, precision4) {
             let collapseAt = effThreshold + 1
 
             if (totalAaCount >= collapseAt) {
-                // Collapse to next letter (Aa→Ab, Ab→Ac, etc.)
-                let mantissa = Math.log10(Math.max(alpha, 0.001)) + totalAaCount
+                // Collapse to next letter (Aa→Ab, Ab→Ac, etc.): the repeats
+                // shift the argument (arg = count+1) and the mantissa keeps
+                // the [1,10) convention (2.398Ab99 — the same α the GRAHAMS
+                // branch above produces), never the raw count as α
+                let arg = totalAaCount + 1
+                let mantVal = Math.log10(Math.max(alpha, 0.001)) +
+                    Math.log10(Math.max(arg, 1)) * 0.4 + 1.6
                 let newHeight = baseHeight + 1
                 let newLetter = letterName(newHeight)
-                return regularFormat(mantissa, precision4) + newLetter + betaStr
+                return regularFormat(mantVal, precision4) + newLetter + formatR0Arg(arg, precision4)
             } else if (totalAaCount > 1) {
                 // Repeated letters: outerLetters + α + lastLetter + β
                 let outerLetters = letter.repeat(totalAaCount - 1)
@@ -1543,8 +1560,12 @@ function formatOrdinal(num, precision, precision4) {
         // Calculate height for this letter
         let height = 0
         if (nVals === 1) {
-            // 2-letter: Aa=23, Ab=24, ..., Az=48, Ba=49, ...
-            height = 23 + (diag - 1) * 26 + vals[0]
+            // 2-letter: Aa=23, Ab=24, ..., Az=48, Ba=49, ...  A coefficient
+            // above 25 (ω+81, ω+99, … from a ω*2 fundamental sequence) has no
+            // letter in the grid — clamp down to the largest letter below it
+            // rather than wrapping into a higher, wrong letter.
+            let v0 = vals[0] > 25 ? 25 : vals[0]
+            height = 23 + (diag - 1) * 26 + v0
         } else {
             // 3+ letters: need to calculate offset
             // vals are stored in reverse letter order (e.g. "bc" -> [2,1]),
@@ -1597,13 +1618,18 @@ function formatOrdinal(num, precision, precision4) {
                        tokAdv.letter + r0Str
             }
             if (totalRepeat >= collapseAt) {
-                // Collapse to next letter
+                // Collapse to next letter — the repeat count shifts the
+                // argument, so the mantissa keeps the [1,10) convention
                 let mantissa = Math.log10(Math.max(alpha, 0.001)) + totalRepeat
+                let mantVal = Math.pow(10, mantissa - Math.floor(mantissa))
+                if (mantVal < 1) mantVal *= 10
                 let newLetter = letterName(baseLetterHeight + 1)
-                return regularFormat(mantissa, precision4) + newLetter + r0Str
+                return regularFormat(mantVal, precision4) + newLetter + r0Str
             } else if (totalRepeat > 1) {
-                // Repeated letters + chain
-                let outerLetters = letter.repeat(totalRepeat - 1)
+                // Repeated letters + chain: one token per application, the
+                // innermost one in front of the chain (Ba(Ba(1e16)) → the
+                // stacked "BaBa1.000E16" — apea(apea(a)) must stay visible)
+                let outerLetters = letter.repeat(totalRepeat)
                 return outerLetters + r0Str
             } else {
                 // Single letter + chain
@@ -1620,9 +1646,18 @@ function formatOrdinal(num, precision, precision4) {
                 return emitLetterToken(tokAdv, regularFormat(tokAdv.mant, precision4), betaStr, precision4)
             }
             let mantissa = Math.log10(Math.max(alpha, 0.001)) + totalRepeat
+            // the repeat count shifts the argument, so the mantissa keeps the
+            // [1,10) convention (the ω-level form recovers the base mantissa
+            // the way the single-row Aa cascade does: 2.398Ab99)
+            let mantVal = (baseLetterHeight === 23)
+                ? Math.log10(Math.max(alpha, 0.001)) +
+                  Math.log10(Math.max(totalRepeat + 1, 1)) * 0.4 + 1.6
+                : Math.pow(10, mantissa - Math.floor(mantissa))
+            if (mantVal < 1) mantVal *= 10
             let newHeight = baseLetterHeight + 1
             let letter = letterName(newHeight)
-            return regularFormat(mantissa, precision4) + letter + betaStr
+            return regularFormat(mantVal, precision4) + letter +
+                   formatR0Arg(totalRepeat + 1, precision4)
         } else if (totalRepeat > 1) {
             // Repeated letters: outerLetters + α + lastLetter + β
             let letter = letterName(baseLetterHeight)
@@ -1678,12 +1713,22 @@ function formatOrdinal(num, precision, precision4) {
                 let vals = row.slice(1, row.length - 1)
                 let nVals = vals.length
                 if (nVals === 1) {
-                    height = 23 + (diag - 1) * 26 + vals[0]
+                    // the letter grid holds ω·d+v with 0 ≤ v ≤ 25; a larger
+                    // coefficient (a ω*2 fundamental sequence produces ω+81,
+                    // ω+99, …) has no letter, so clamp it down to the largest
+                    // letter below the ordinal instead of wrapping into a
+                    // higher, wrong letter (ω+81 must not display as ω*4+3)
+                    let v0 = vals[0] > 25 ? 25 : vals[0]
+                    height = 23 + (diag - 1) * 26 + v0
                 } else {
+                    // vals are the CNF coefficients a1, a2, …, a(x-1) of
+                    // ord = ω^(x-1)·ax + … + ω·a2 + a1 — little-endian, the same
+                    // order letterName()/getOrdinalLetter() decode the letter:
+                    // the LAST val is the first lowercase letter of the token.
                     let offset = 0
                     for (let k = 2; k <= nVals; k++) offset += Math.pow(26, k)
                     let n = (diag - 1) * Math.pow(26, nVals)
-                    for (let j = 0; j < nVals; j++) n += vals[j] * Math.pow(26, nVals - 1 - j)
+                    for (let j = 0; j < nVals; j++) n += vals[j] * Math.pow(26, j)
                     height = 23 + offset + n
                 }
             }
@@ -1694,109 +1739,107 @@ function formatOrdinal(num, precision, precision4) {
             letterCounts[height] = (letterCounts[height] || 0) + count
         }
 
-        if (heights.length >= 2) {
+        if (heights.length >= 1) {
             // Sort heights ascending
             heights.sort((a, b) => a - b)
 
             // README: at most TWO finite letter types survive — a longer
-            // cascade keeps only its top two levels and compresses the rest
-            // into the second letter's binary form (its repeat count).
+            // cascade keeps only its top two levels, every lower row
+            // compresses into the second letter's argument (they are below
+            // display precision, and folding them into its repeat COUNT would
+            // overstate the level: 8 ω's + 8 (ω+1)'s ≠ 16 more (ω+2)'s).
             if (heights.length > 2) {
                 let keepLo = heights[heights.length - 2]
-                for (let i = 0; i < heights.length - 2; i++) {
-                    letterCounts[keepLo] = (letterCounts[keepLo] || 0) + (letterCounts[heights[i]] || 0)
-                    delete letterCounts[heights[i]]
-                }
+                for (let i = 0; i < heights.length - 2; i++) delete letterCounts[heights[i]]
                 heights = Object.keys(letterCounts).map(Number).sort((a, b) => a - b)
             }
 
-            // Collapse from lowest to highest
-            let effThreshold = Math.max(2, FORMAT_OPTIONS.multiLetterRepeatThreshold)
-            let collapseAt = effThreshold + 1
-            let collapseInfo = {} // height -> collapsedFromCount
-
-            for (let h of heights.slice()) {
-                let count = letterCounts[h] || 0
-                if (count >= collapseAt) {
-                    let nextH = h + 1
-                    if (!(nextH in letterCounts) && heights.indexOf(nextH) < 0) heights.push(nextH)
-                    letterCounts[nextH] = (letterCounts[nextH] || 0) + 1
-                    collapseInfo[nextH] = count
-                    delete letterCounts[h]
-                }
-            }
-
-            // Re-sort after collapse
-            heights = Object.keys(letterCounts).map(Number).sort((a, b) => a - b)
-
             if (heights.length >= 1) {
                 // ── Display rules (README "format-metanum rules (v2.0)") ──
-                //   * at most TWO finite letter types survive (VαEβ … VαVβ):
-                //     a longer cascade keeps its top two levels and compresses
-                //     the rest into the second letter's binary form;
-                //   * exactly one α, attached to the innermost (lowest) letter;
+                //   * the rows are a COMPOSITION: the top row is the outermost
+                //     operation, so it leads the display and the row below it
+                //     supplies the single α and β (at most TWO letter types —
+                //     every lower row compresses into that inner argument);
+                //   * "+count collapse": count >= multiLetterRepeatThreshold+1
+                //     repeats of a letter collapse to ONE next letter with
+                //     arg count+1 (F⁴(G(1.3796)) = G(5.3796));
+                //   * stacking the same function therefore nests the letter:
+                //     poea(10,poea(10,100)) = Ad(Ad(99)) → "Ad1.000Ad99";
                 //   * a combination longer than multiLetterLimit carries to the
-                //     symbol notation !αAaβ instead of growing another letter.
+                //     symbol notation !αAaβ.
                 let effTh = Math.max(2, FORMAT_OPTIONS.multiLetterRepeatThreshold)
+                let collapseAt = effTh + 1
 
-                // (1) the single α / β pair
                 let base = r0[0]
                 let r0Alpha = Math.pow(10, base - Math.floor(base))
                 if (r0Alpha < 1) r0Alpha *= 10
                 let frac = base - Math.floor(base)
                 if (frac < 0) frac += 1
 
-                let collapseCount = 0
-                for (let ci = 0; ci < heights.length; ci++) {
-                    collapseCount += collapseInfo[heights[ci]] || 0
-                }
-
-                let alphaStr, betaStr
-                if (collapseCount > 0) {
-                    // Collapsed repeats: α and β come from the mantissa
-                    // α = 10^(fractional part) ∈ [1, 10), β = floor(mantissa)
-                    let mantissa = Math.log10(Math.max(r0Alpha, 0.001)) + collapseCount
-                    let alphaVal = Math.pow(10, mantissa - Math.floor(mantissa))
-                    if (alphaVal < 1) alphaVal *= 10
-                    alphaStr = regularFormat(alphaVal, precision4)
-                    betaStr = commaFormat(Math.floor(mantissa))
-                } else {
-                    alphaStr = regularFormat(r0Alpha, precision4)
-                    betaStr = formatR0Arg(Math.floor(base), precision4)
-                }
-                // Diagonal combinations (letters ending in 'a': Aa, Ba, Aaa, …)
-                // use the pure dlsdl mantissa α = 2·5^f ∈ [2, 10) — but only
-                // when the diagonal letter IS the value's canonical letter
-                // (single-type display).  Inside a cascade the α is the inner
-                // value's own mantissa and keeps the ordinary [1,10) form
-                // (AbAa600 → Ab1.000Aa600).
-                let diagMant = function (tok) {
-                    if (collapseCount > 0) return alphaStr
-                    if (descHeights.length > 1) return alphaStr
-                    if (!(tok.letter.length >= 2 && tok.letter[tok.letter.length - 1] === "a")) return alphaStr
-                    return regularFormat(2 * Math.pow(5, frac), precision4)
-                }
-
-                // (3) compose: descending order (highest first = outermost)
-                let descHeights = heights.slice().reverse()
-                let topTok = letterTokenOf(descHeights[0])
-                if (topTok.sym) {
-                    // the top level needs the symbol notation — it dwarfs every
-                    // lower level, so the display is the single !αAaβ form
-                    return emitLetterToken(topTok, alphaStr, betaStr, precision4)
-                }
-                let outerLetters = topTok.letter.repeat(
-                    Math.min(letterCounts[descHeights[0]] || 1, effTh))
-                if (descHeights.length >= 2) {
-                    let loH = descHeights[1]
-                    let loTok = letterTokenOf(loH)
-                    let loCnt = letterCounts[loH] || 1
-                    if (loCnt > 1) {
-                        outerLetters += loTok.letter.repeat(Math.min(loCnt - 1, effTh))
+                // α of a "+count collapse" (the ω-level form recovers the base
+                // mantissa the way the single-row Aa cascade does: 2.398Ab99)
+                let collapseMant = function (h, count) {
+                    let arg = count + 1
+                    if (h === 23) {
+                        return regularFormat(Math.log10(Math.max(r0Alpha, 0.001)) +
+                            Math.log10(Math.max(arg, 1)) * 0.4 + 1.6, precision4)
                     }
-                    return outerLetters + diagMant(loTok) + loTok.letter + betaStr
+                    return regularFormat(r0Alpha, precision4)
                 }
-                return diagMant(topTok) + topTok.letter + betaStr
+                // one collapsed level: α + next letter + (count+1)
+                let collapseStr = function (h, count) {
+                    let tok = letterTokenOf(h + 1)
+                    if (tok.sym) {
+                        return tok.sym + regularFormat(tok.mant, precision4) +
+                               tok.letter + formatR0Arg(count + 1, precision4)
+                    }
+                    return collapseMant(h, count) + tok.letter + formatR0Arg(count + 1, precision4)
+                }
+
+                let hTop = heights[heights.length - 1]
+                let cTop = letterCounts[hTop] || 1
+                let hLow = heights.length >= 2 ? heights[heights.length - 2] : -1
+                let cLow = hLow < 0 ? 0 : (letterCounts[hLow] || 1)
+
+                // (1) a single row level: collapse, or repeats with α + letter + β
+                if (hLow < 0) {
+                    if (cTop >= collapseAt) return collapseStr(hTop, cTop)
+                    let tok = letterTokenOf(hTop)
+                    if (tok.sym) return emitLetterToken(tok, regularFormat(r0Alpha, precision4),
+                        formatR0Arg(Math.floor(base), precision4), precision4)
+                    let aStr = (tok.letter.length >= 2 && tok.letter[tok.letter.length - 1] === "a")
+                        ? regularFormat(2 * Math.pow(5, frac), precision4)
+                        : regularFormat(r0Alpha, precision4)
+                    return tok.letter.repeat(Math.max(cTop - 1, 0)) + aStr + tok.letter +
+                           formatR0Arg(Math.floor(base), precision4)
+                }
+
+                // (2) the inner (second) level carries the single α and β
+                let lowTok = letterTokenOf(hLow)
+                let innerStr
+                if (cLow >= collapseAt) {
+                    innerStr = collapseStr(hLow, cLow)
+                } else {
+                    let aStr = regularFormat(r0Alpha, precision4)
+                    innerStr = lowTok.letter.repeat(Math.max(cLow - 1, 0)) + aStr + lowTok.letter +
+                               formatR0Arg(Math.floor(base), precision4)
+                }
+
+                // (3) the top level leads: collapse when it repeats enough, else
+                //     one token per application (or the symbol-carried !αAaβ)
+                if (cTop >= collapseAt) return collapseStr(hTop, cTop)
+                let topTok = letterTokenOf(hTop)
+                if (topTok.sym) {
+                    // multiLetterLimit carry: !αAaβ, β = the ω-exponent; the
+                    // inner level only survives when it collapses on its own
+                    if (cLow >= collapseAt) {
+                        return topTok.sym + regularFormat(topTok.mant, precision4) +
+                               topTok.letter + collapseStr(hLow, cLow)
+                    }
+                    return topTok.sym + regularFormat(topTok.mant, precision4) +
+                           topTok.letter + formatR0Arg(topTok.arg, precision4)
+                }
+                return topTok.letter.repeat(Math.min(cTop, effTh)) + innerStr
             }
         }
     }
