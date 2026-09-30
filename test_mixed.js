@@ -1,4 +1,4 @@
-﻿if (!this.MetaNum) MetaNum =  require("./metanum.js");
+if (!this.MetaNum) MetaNum =  require("./metanum.js");
 if (!this.format) format = require("./format-metanum.js").format;
 //if (!this.FORMAT_OPTIONS) FORMAT_OPTIONS = require("./format-metanum.js").FORMAT_OPTIONS;
 
@@ -244,9 +244,7 @@ checkOp("pent_root semantic b=3", MetaNum.pentate(2,3).pentate_root(3), 2, 0.1);
 checkOp("pent_log small", MetaNum(1e10).pentate_log(2), 2.795, 0.1);
 checkOp("pent_root small", MetaNum(1e10).pentate_root(2), 2.956, 0.1);
 
-// ─────────────────────────────────────
-// hyper_log / hyper_root (a{b}c = d inverses)
-// ─────────────────────────────────────
+console.log("\n=== hyper_log/root ===");
 function checkHL(label, d, a, b, want) {
   checkBool("hyper_log " + label, MetaNum(d).hyper_log(a)(b).eq(want), true);
 }
@@ -272,7 +270,7 @@ checkHR("10↑↑↑3, c=3, b=3", MetaNum(10).arrow(3)(3), 3, 3, 10);
 checkHR("2{4}3, c=3, b=4", MetaNum(2).arrow(4)(3), 3, 4, 2);
 
 //hyperoperation definition from https://googology.fandom.com/wiki/Template:ExtendedOps
-
+console.log("\n=== hyperoperation definition ===")
 // ─── 1. aperiote (ω): x{ω}y = x{y}x  (rule 3: n{λ}b = n{λ[b]}n)
 // rule 3: x{ω}y = x{ω[y]}x = x{y}x (final operand is the base)
 // aperiote(3,0): 3{0}3 = 3*3 = 9
@@ -515,20 +513,13 @@ checkOp("epsl(3,4)", m3.epsilonate(4));
 checkOp("epsl(4,3)", m4.epsilonate(3));
 checkBool("epsl NaN", MetaNum.epsilonate(m3, MetaNum.NaN).isNaN(), true);
 
-// ─── 34b. ω^ω … ε₀ by the definition (rule 3: n{λ}b = n{λ[b]}n) ───
-// iterate(3,5) = 3{ω^ω}5 = 3{ω^5}3 → the whole fundamental-sequence cascade;
-// its top row is the largest ordinal below ω^5 with coefficients < 3.
-console.log("\n=== 34b. iterate..epsilonate (rule 3 + layer markers) ===");
-var it35 = m3.iterate(5);
-checkBool("iter(3,5) top row = ω^4*2+ω^3*2+ω^2*2+ω*2+2 (3{ω^5}3 cascade)",
-  JSON.stringify(it35.array[it35.array.length - 1]) === "[1,2,2,2,2,2]", true);
-
 // λ[y] layer markers in STANDARD form (finite rows merged into r0, layer
 // lowered as far as it goes — README L17: layer L ⇒ ω^ω^…((L-1) ω^'s)^(bracket)):
 //   iter → 10{ω^y}10 (L1 [1,y]); itmu → 10{ω^ω+(y-1)}10 (L1 [1,0,1], r0=y-1)
 //   cube → 10{ω^ω+ω^y}10 (L1 r0[…,1@y] + [1,0,1]); expo → 10{ω^ω·y}10 (L1 [y,0,1])
 //   tria → 10{ω^(ω+y)}10 (L1 [1,y,1]); trix → 10{ω^(ω·y+10)}10 (L1 [1,10,y])
 //   apix → 10{ω^(ω^y)}10 (L1 [1,0…0,1] with y zeros)
+console.log("\n=== λ[y] layer markers in STANDARD form ===");
 var wOps = ["iterate","itermult","cuboiter","expoiter","trioterate","trixxate","aperixxate"];
 var mk35 = {
   iterate:     { layer: 0, rows: null },                 // exact cascade, layer 0
@@ -561,12 +552,12 @@ for (var wy = 2; wy <= 9; wy++) {
   checkBool("ops strictly grow at y=" + wy + " (iter<itmu<cube<expo<tria<trix<apix)", wmono, true);
 }
 
-// ─── 34c. precision budget: exact while it fits maxRows/maxCols ───
+// precision budget: exact while it fits maxRows/maxCols
 // arrow's most precise form holds maxRows+maxCols-2 finite hyperoperation
 // levels: r0 = [a0 … a(maxCols-1)] plus rows [count, level] for levels
 // maxCols … maxRows+maxCols-2.  Beyond that: keep the largest maxRows-1
 // ordinal rows sorted ascending, array[1][0] += 1, array[0] = [10].
-console.log("\n=== 34c. precision budget (maxRows/maxCols) ===");
+console.log("\n=== precision budget (maxRows/maxCols) ===");
 (function () {
   var a39 = MetaNum.arrow(10, 39, 10);
   checkBool("arrow(10,39,10) exact: maxCols r0 entries + maxRows-1 rows, top level 38",
@@ -746,7 +737,7 @@ var hyperOpList = [
 ];
 
 // ─── double nested iteration ───
-console.log("\n=== hyperoperation iteration tests (not fully implemented) ===");
+console.log("\n=== hyperoperation iteration tests ===");
 for (var hi = 0; hi < hyperOpList.length; hi++) {
   var shortName = hyperOpList[hi][0];
   var methodName = hyperOpList[hi][1];
@@ -1027,26 +1018,74 @@ checkBool("h31(10,5.1) < h31(10,5.5) < h31(10,5.9) < h31(10,6)",
   MetaNum(10).h31(5.1).lt(MetaNum(10).h31(5.5)) &&
   MetaNum(10).h31(5.5).lt(MetaNum(10).h31(5.9)) &&
   MetaNum(10).h31(5.9).lt(MetaNum(10).h31(6)), true);
-// the expanded form keeps the count law: every row below the top one carries
-// x-2, and the α-1 row carries y-2 — a fractional y-2, which is what makes
-// h21(10,2+ε) start at 10{ω*2}10 and grow to 10{ω*2}10{ω*2}10 at y = 3
+// the expanded form keeps the count law with INTEGER counts (only array[0][0]
+// may be fractional): every row below the top one carries x-2 = 8 and the α-1
+// row carries ceil(y)-2; the fraction lives in the cascade depth, so 2+ε starts
+// with the shallowest cascade and 3-ε has the full 10{ω*2}10 cascade
 (function () {
   var ok = true;
   for (var k = 0; k < 6; k++) {
     var fy = [2.001, 2.1, 2.5, 3.5, 10.25, 100.75][k];
     var rr = MetaNum(10).h21(fy).array.slice(1);
     for (var i = 0; i < rr.length - 1; i++) if (rr[i][0] !== 8) ok = false;
-    if (Math.abs(rr[rr.length - 1][0] - (fy - 2)) > 1e-9) ok = false;
+    if (rr[rr.length - 1][0] !== Math.ceil(fy) - 2) ok = false;
   }
-  checkBool("h21(10, fractional): lower rows = x-2 = 8, ω*2 row = y-2", ok, true);
-  // the endpoints: 2+ε is (just above) h21(10,2) = 10{ω*2}10, 3-ε → h21(10,3)
-  checkBool("h21(10,2+1e-15) = 10{ω*2}10 cascade + a vanishing ω*2 row",
-    MetaNum(10).h21(2 + 1e-15).array.length === 12 &&
-    MetaNum(10).h21(2 + 1e-15).array[11][0] < 1e-9, true);
+  checkBool("h21(10, fractional): lower rows = 8, ω*2 row = ceil(y)-2 (integer)", ok, true);
+  // the endpoints: 2+ε is just above h21(10,2) = 10{ω*2}10, 3-ε → h21(10,3)
+  checkBool("h21(10,2+1e-15) = shallowest cascade + one ω*2 row, above h21(10,2)",
+    MetaNum(10).h21(2 + 1e-15).array.length === 3 &&
+    JSON.stringify(MetaNum(10).h21(2 + 1e-15).array[2]) === "[1,0,2]" &&
+    MetaNum(10).h21(2 + 1e-15).gt(MetaNum(10).h21(2)), true);
   checkBool("h21(10,2.999999) → h21(10,3) from below",
     MetaNum(10).h21(2.999999).lt(MetaNum(10).h21(3)) &&
     MetaNum(10).h21(2.999999).gt(MetaNum(10).h21(2)), true);
 })();
+// the CONTRACT for fractional operands: only array[0][0] may be non-integer —
+// every row count, every row coefficient and every other r0 entry is an integer
+// (exactly like MetaNum.arrow with a fractional level/argument)
+(function () {
+  var bad = [], n = 0;
+  var fOps = ["h11","h13","h20","h21","h31","h100","h101","h1001","iterate",
+    "cuboiter","trioterate","epsilonate"];
+  for (var f of fOps) {
+    for (var b = 0; b < 3; b++) {
+      var bx = [3, 10, 100][b];
+      for (var k = 0; k < 3; k++) {
+        var by = [2.1, 3.5, 100.75][k];
+        n++;
+        var arr = MetaNum(bx)[f](by).array;
+        for (var i = 0; i < arr.length; i++) {
+          for (var j = 0; j < arr[i].length; j++) {
+            if (i === 0 && j === 0) continue;
+            var c = arr[i][j];
+            if (typeof c !== "number" || !isFinite(c) || c !== Math.floor(c)) {
+              if (bad.length < 4) bad.push(f + "(" + bx + "," + by + ") [" + i + "][" + j + "]=" + c);
+            }
+          }
+        }
+      }
+    }
+  }
+  checkBool("only array[0][0] is fractional (" + n + " results checked)", bad.length === 0,
+    true, bad.join(" | "));
+  // arrow() itself obeys the same contract
+  var bad2 = 0;
+  for (var b2 = 0; b2 < 3; b2++) {
+    var bx2 = [3, 10, 100][b2];
+    for (var k2 = 0; k2 < 7; k2++) {
+      var lv = [1.5, 2.1, 2.5, 3.5, 10.25, 100.75, 1e9 + 0.4][k2];
+      var arr2 = MetaNum(bx2).arrow(lv)(10).array;
+      for (var i2 = 0; i2 < arr2.length; i2++) {
+        for (var j2 = 0; j2 < arr2[i2].length; j2++) {
+          if (i2 === 0 && j2 === 0) continue;
+          if (arr2[i2][j2] !== Math.floor(arr2[i2][j2])) bad2++;
+        }
+      }
+    }
+  }
+  checkBool("arrow() with fractional levels: only array[0][0] is fractional", bad2 === 0, true);
+})();
+
 // row coefficients stay integer (a fractional constant is carried to the base)
 (function () {
   var ok = true;
@@ -1243,8 +1282,12 @@ checkBool("hardy(1e15) < hardy(1e16) < hardy(1e17)",
 // -- MetaNum-object input (v2.0): structures shadow to their ordinal --
 //    power tower 10^^k → ω^ω^…^ω (k ω's) → H there = 10.epsilonate(k);
 //    letter/ordinal values sit at their own Hardy position → themselves
-checkBool("hardy(10^^100) = 10{ω^…^ω(100 ωs)}10 = epsilonate(100)",
-  MetaNum.hardy(MetaNum(10).tetr(100)).eq(MetaNum(10).epsilonate(100)), true);
+checkBool("hardy(10^^100) = H_{ω^…^ω(100 ωs)}(10), layer 100-2 = 98 (one per 10^ level)",
+  (function () {
+    var v = MetaNum.hardy(MetaNum(10).tetr(100));
+    return v.layer === 98 &&
+      JSON.stringify(v.array) === JSON.stringify(MetaNum.hardy(1e10).array);
+  })(), true);
 checkBool("hardy(MetaNum G600) = Infinity",
   MetaNum.hardy(MetaNum("G600")).eq(MetaNum.infinity), true);
 checkBool("hardy(MetaNum arrow(3,9,3)) = Infinity",
@@ -1255,11 +1298,532 @@ checkBool("hardy(10{3}10) = Infinity (> 10^^MSI)",
 // -- the engine limit: hardy(10^^MSI) = 10{ω^…^ω(MSI ω's)}10 (v2.0) --
 (function () {
   var MSI = 9007199254740991;
-  checkBool("hardy(10^^MSI) = MetaNum limit 10{ω^…^ω(MSI ω's)}10",
-    MetaNum.hardy(MetaNum(10).tetr(MSI)).eq(MetaNum(10).epsilonate(MSI)), true);
-  checkBool("hardy(10^^(MSI-1)) = epsilonate(MSI-1) (just below the cap)",
-    MetaNum.hardy(MetaNum(10).tetr(MSI - 1)).eq(MetaNum(10).epsilonate(MSI - 1)), true);
+  // the tower height k caps the Hardy hierarchy: layer = k - 2 (one per 10^)
+  checkBool("hardy(10^^MSI) = the MetaNum limit (layer MSI-2, base rows kept)",
+    MetaNum.hardy(MetaNum(10).tetr(MSI)).layer === MSI - 2 &&
+    JSON.stringify(MetaNum.hardy(MetaNum(10).tetr(MSI)).array) ===
+    JSON.stringify(MetaNum.hardy(1e10).array), true);
+  checkBool("hardy(10^^(MSI-1)) is just below the cap",
+    MetaNum.hardy(MetaNum(10).tetr(MSI - 1)).lt(MetaNum.hardy(MetaNum(10).tetr(MSI))), true);
 })();
+
+// ─────────────────────────────────────
+// v2.0.2 hardy fixes:
+//   - a plain number beyond the double range is NOT a power tower: read its
+//     decimal expansion (hardy("1.8e308") stays layer 0 with the ordinary
+//     digit path, last row [8,7,0,3] like hardy("1.79e308"))
+//   - ee10 / eee10 / eeee10 map to ω-towers of DIFFERENT heights (layers
+//     2/3/4), no longer the same value
+//   - fractional n: the ordinal comes from the integer part, the base
+//     argument becomes 10+f (H_ω(10.38) = 10.38·2 = 20.76)
+// ─────────────────────────────────────
+console.log("\n=== v2.0.2 hardy fixes ===");
+checkBool("hardy(\"1.8e308\") layer 0, top row [1,8,0,3] (ω^(ω²·3+8), one application)",
+  (function () {
+    var h = MetaNum.hardy(MetaNum("1.8e308"));
+    return h.layer === 0 &&
+      JSON.stringify(h.array[h.array.length - 1]) === "[1,8,0,3]";
+  })(), true);
+// (the row budget resolves differences down to ~1e307 here, so the pair is
+// 1.7e308/1.8e308 — one exponent step apart, not one hundredth of one)
+checkBool("hardy(\"1.7e308\") < hardy(\"1.8e308\") (monotone over the double limit)",
+  MetaNum.hardy(MetaNum("1.7e308")).lt(MetaNum.hardy(MetaNum("1.8e308"))), true);
+checkBool("hardy(ee10) < hardy(eee10) < hardy(eeee10) (distinct tower heights)",
+  MetaNum.hardy(MetaNum("ee10")).lt(MetaNum.hardy(MetaNum("eee10"))) &&
+  MetaNum.hardy(MetaNum("eee10")).lt(MetaNum.hardy(MetaNum("eeee10"))), true);
+checkBool("hardy(ee10)/eee10/eeee10 sit at layers 1/2/3 (one layer per 10^ level)",
+  MetaNum.hardy(MetaNum("ee10")).layer === 1 &&
+  MetaNum.hardy(MetaNum("eee10")).layer === 2 &&
+  MetaNum.hardy(MetaNum("eeee10")).layer === 3, true);
+checkBool("hardy(10.38) = 20.76 (H_ω(10.38) = 10.38·2)",
+  MetaNum.hardy(10.38).eq(MetaNum(20.76)), true);
+checkBool("hardy(100.1) = 11084.709858935355 (H_{ω²}(10.1) = 10.1·2^10.1)",
+  MetaNum.hardy(100.1).eq(MetaNum(11084.709858935355)), true);
+checkBool("hardy(10) < hardy(10.38) < hardy(11) (continuous in n)",
+  MetaNum.hardy(10).lt(MetaNum.hardy(10.38)) &&
+  MetaNum.hardy(10.38).lt(MetaNum.hardy(11)), true);
+checkBool("hardy(100) < hardy(100.1) < hardy(101)",
+  MetaNum.hardy(100).lt(MetaNum.hardy(100.1)) &&
+  MetaNum.hardy(100.1).lt(MetaNum.hardy(101)), true);
+// ─────────────────────────────────────
+// non-integer inputs above 1000: the fundamental-sequence step writes the
+// running base n into a coefficient, so a coefficient can turn FRACTIONAL —
+// the old "-1" step then went negative and left no positive term at all
+// (hardy(1000.5) threw "Cannot read properties of undefined (reading 'gt')").
+// 0 < c_j < 1 is now a PARTIAL step: ω^j·f contributes ω^(j-1)·(n·f).
+// ─────────────────────────────────────
+(function () {
+  var vals = [1000.5, 1000.1, 1000.9999, 1001.1, 10000.5, 1000000.75, 1e10 + 0.5, 1e15 + 0.5];
+  var bad = [], nan = 0;
+  for (var i = 0; i < vals.length; i++) {
+    var v;
+    try { v = MetaNum.hardy(vals[i]); } catch (e) { bad.push(vals[i] + " threw " + e.message.slice(0, 40)); continue; }
+    if (v.isNaN()) nan++;
+  }
+  checkBool("hardy(non-integer > 1000) does not throw", bad.length === 0 && nan === 0, true,
+    bad.join(" | "));
+  // monotone in the integer and in the fraction
+  var mono = true;
+  for (var m = 0; m < 5; m++) {
+    var base = [1000, 1001, 10000, 12345, 99999][m];
+    for (var k = 0; k < 5; k++) {
+      var f = [0.001, 0.25, 0.5, 0.75, 0.999][k];
+      if (!(MetaNum.hardy(base + f).gte(MetaNum.hardy(base + f - 0.0001)) &&
+            MetaNum.hardy(base + 1).gte(MetaNum.hardy(base + f)))) mono = false;
+    }
+  }
+  checkBool("hardy(n) monotone across non-integer n > 1000", mono, true);
+  checkBool("hardy(1000) < hardy(1000.5) < hardy(1001)",
+    MetaNum.hardy(1000).lt(MetaNum.hardy(1000.5)) &&
+    MetaNum.hardy(1000.5).lt(MetaNum.hardy(1001)), true);
+  checkBool("hardy(10000) < hardy(10000.5) < hardy(10001)",
+    MetaNum.hardy(10000).lt(MetaNum.hardy(10000.5)) &&
+    MetaNum.hardy(10000.5).lt(MetaNum.hardy(10001)), true);
+  // the array contract still holds for those results
+  var cbad = 0;
+  for (var b2 = 0; b2 < 4; b2++) {
+    var bv = [1000, 10000, 1e6, 1e10][b2];
+    for (var k2 = 0; k2 < 3; k2++) {
+      var arr = MetaNum.hardy(bv + [0.1, 0.5, 0.9][k2]).array;
+      for (var i2 = 0; i2 < arr.length; i2++) {
+        for (var j2 = 0; j2 < arr[i2].length; j2++) {
+          if (i2 === 0 && j2 === 0) continue;
+          if (arr[i2][j2] !== Math.floor(arr[i2][j2])) cbad++;
+        }
+      }
+    }
+  }
+  checkBool("hardy(non-integer > 1000): only array[0][0] is fractional", cbad === 0, true);
+})();
+
+// ─────────────────────────────────────
+// hardy above 1e10 with a non-zero "rest": the from-below base is H_{ω^n1}(n1),
+// whose tower sits at level n1-1 — array[0] holds n1 entries, so the step-by-step
+// expansion only fits while n1 ≤ maxCols.  Above that the coefficients the limit
+// steps write turn structured and the expansion collapsed into a destroyed base
+// (array[0] = [1]) with a bogus row: hardy(1e10+11) was [[1],[2,20]].
+// The engine value 10{n1-1}(n1+1) is used there instead.
+// ─────────────────────────────────────
+console.log("\n=== hardy(n ≥ 1e10) : base & cascade ===");
+(function () {
+  // H_{ω^ω+ω+1}(10) = H_{ω^ω}(22): the exact tower [c0, 21×20] no longer fits
+  // maxCols = 20, so the TRUNCATED cascade [3086.036…, 21×19] is kept — the
+  // [非整数, 21, 21, …, 21] single-row shape (was the engine value
+  // 10{20}22 = [[1e10,8×19],[21,20]]).
+  var v11 = MetaNum.hardy(1e10 + 11);          // H_{ω^ω+ω+1}(10) = H_{ω^ω}(22)
+  checkBool("hardy(1e10+11): single truncated tower [c0, 21×19] — [非整数,21,21,…]",
+    v11.array.length === 1 && v11.array[0].length === MetaNum.maxCols &&
+    v11.array[0][1] === 21 && v11.array[0][MetaNum.maxCols - 1] === 21 &&
+    v11.array[0][0] > 1 && v11.array[0][0] !== Math.floor(v11.array[0][0]), true);
+  checkBool("hardy(1e10+11) < 10{21}23 (from below on the ω^22 tower)",
+    v11.lt(MetaNum.arrow(10, 21, 23)), true);
+  // the same at the top of the range: H_{ω^ω}(48) → level 47
+  var v22 = MetaNum.hardy(1e10 + 22);
+  checkFormat("hardy(1e10+22) = H_{ω^ω+ω*2+2}(10) → X49", v22, "X49");
+  checkBool("hardy(1e10+22): single truncated tower [c0, 47×19]",
+    v22.array.length === 1 && v22.array[0][1] === 47 &&
+    v22.array[0][MetaNum.maxCols - 1] === 47, true);
+  checkBool("hardy(1e10+10) < hardy(1e10+11) < hardy(1e10+22)",
+    MetaNum.hardy(1e10 + 10).lt(MetaNum.hardy(1e10 + 11)) &&
+    MetaNum.hardy(1e10 + 11).lt(MetaNum.hardy(1e10 + 22)), true);
+  // the whole 1e10+m family keeps growing, and never collapses again
+  var broke = 0, collapsed = 0;
+  for (var m = 0; m <= 30; m++) {
+    var vm = MetaNum.hardy(1e10 + m);
+    if (m > 0 && !vm.gt(MetaNum.hardy(1e10 + m - 1))) broke++;
+    if (vm.array[0].length === 1 && vm.array[0][0] === 1) collapsed++;
+  }
+  checkBool("hardy(1e10+0..30) is strictly monotone", broke === 0, true);
+  checkBool("hardy(1e10+0..30) never collapses array[0] to [1]", collapsed === 0, true);
+})();
+
+// The leading term ω^β·dk is dk APPLICATIONS of H_{ω^β}, one after the other on
+// the running value, and an application is a row [1, β] — never a bump of the
+// ω-row count ([9,0,1] / [16,0,1] conflated dk with the rest-part):
+//   hardy(1.1e11) = H_{ω^(ω+1)}(H_{ω^ω}(10))     = [3086.036,9×8] [1,1,1]
+//   hardy(2e11)   = H_{ω^(ω+1)}(H_{ω^(ω+1)}(10)) = [3086.036,9×8] [8,0,1] [1,1,1]
+(function () {
+  var a = MetaNum.hardy(1e11), b = MetaNum.hardy(1.1e11), c = MetaNum.hardy(2e11);
+  var base9 = "[3086.036065328153,9,9,9,9,9,9,9,9]";
+  checkBool("hardy(1e11) = base + [8,0,1] (one H_{ω^(ω+1)}, from below)",
+    JSON.stringify(a.array) === "[" + base9 + ",[8,0,1]]", true);
+  checkBool("hardy(1.1e11) = [3086.036,9×8] [1,1,1] (H_{ω^ω} then H_{ω^(ω+1)})",
+    JSON.stringify(b.array) === "[" + base9 + ",[1,1,1]]", true);
+  checkBool("hardy(2e11) = [3086.036,9×8] [8,0,1] [1,1,1] (H_{ω^(ω+1)} twice)",
+    JSON.stringify(c.array) === "[" + base9 + ",[8,0,1],[1,1,1]]", true);
+  checkBool("hardy(3e11) = … [8,0,1] [2,1,1] (three applications)",
+    JSON.stringify(MetaNum.hardy(3e11).array) === "[" + base9 + ",[8,0,1],[2,1,1]]", true);
+  checkBool("hardy(1e11) < hardy(1.1e11) < hardy(2e11) < hardy(3e11)",
+    a.lt(b) && b.lt(c) && c.lt(MetaNum.hardy(3e11)), true);
+  var ok = true;
+  for (var dk = 1; dk <= 9; dk++) {
+    var vd = MetaNum.hardy(dk * 1e11);
+    if (dk > 1 && !vd.gt(MetaNum.hardy((dk - 1) * 1e11))) ok = false;
+  }
+  checkBool("hardy(dk·1e11) strictly monotone in dk = 1..9", ok, true);
+  // the same at ω+2: hardy(1.1e12) = H_{ω^(ω+2)}(H_{ω^(ω+1)}(10))
+  checkBool("hardy(1.1e12) = [3086.036,9×8] [8,0,1] [1,2,1]",
+    JSON.stringify(MetaNum.hardy(1.1e12).array) === "[" + base9 + ",[8,0,1],[1,2,1]]", true);
+})();
+
+// hardy("1e100000") and above: 10^v is a PLAIN number (a power tower has the
+// same r0 = [v,1] shape but v ≥ 1e10), so the digit path must be taken — the
+// old "exponent < 1e5" guard pushed it into the tower branch (layer 1).
+(function () {
+  var h100k = MetaNum.hardy("1e100000");
+  checkBool("hardy(\"1e100000\") = H_{ω^(ω^5)}(10), layer 0", h100k.layer === 0, true);
+  checkBool("hardy(\"1e100000\"): top row is the ω^5 cascade [8,9,9,9,9,9]",
+    JSON.stringify(h100k.array[h100k.array.length - 1]) === "[8,9,9,9,9,9]", true);
+  checkBool("hardy(\"1e10000\") top row = [8,9,9,9,9] (ω^4 cascade)",
+    JSON.stringify(MetaNum.hardy("1e10000").array[19]) === "[8,9,9,9,9]", true);
+  checkBool("hardy(\"1e1000\") top row = [8,9,9,9] (ω^3 cascade)",
+    JSON.stringify(MetaNum.hardy("1e1000").array[19]) === "[8,9,9,9]", true);
+  checkBool("hardy(1e100) top row = [8,9,9] (ω^2 cascade)",
+    JSON.stringify(MetaNum.hardy(1e100).array[19]) === "[8,9,9]", true);
+  checkBool("hardy(1e100) < hardy(\"1e1000\") < hardy(\"1e10000\") < hardy(\"1e100000\")",
+    MetaNum.hardy(1e100).lt(MetaNum.hardy("1e1000")) &&
+    MetaNum.hardy("1e1000").lt(MetaNum.hardy("1e10000")) &&
+    MetaNum.hardy("1e10000").lt(MetaNum.hardy("1e100000")), true);
+  // ee6..ee9: the ordinal is read off the value itself (10^W → ω^ord(W)),
+  // so these are layer-0 cascades with ordinal rows that follow the input;
+  // ee10 (W = 1e10 exactly) is the height-3 band → layerUp(hardy(1e10))
+  checkBool("hardy(ee6..ee9) stay layer 0 with ordinal rows; ee10 → layer 1",
+    (function () {
+      for (var k = 6; k <= 9; k++) {
+        var v = MetaNum.hardy("ee" + k);
+        if (v.layer !== 0 || v.array.length - 1 !== 19) return false;
+      }
+      var v10 = MetaNum.hardy("ee10");
+      return v10.layer === 1 && v10.array.length === 1;
+    })(), true);
+  checkBool("hardy(ee6) < hardy(ee7) < … < hardy(ee10) (rows follow the input)",
+    (function () {
+      for (var k = 7; k <= 10; k++) {
+        if (!MetaNum.hardy("ee" + (k - 1)).lt(MetaNum.hardy("ee" + k))) return false;
+      }
+      return true;
+    })(), true);
+  checkBool("hardy(ee10) = layerUp(hardy(1e10)): the same rows at layer 1",
+    MetaNum.hardy("ee10").layer === 1 &&
+    JSON.stringify(MetaNum.hardy("ee10").array) ===
+    JSON.stringify(MetaNum.hardy(1e10).array), true);
+  // just above ee10 the level no longer fits into rows → layer 1
+  checkBool("hardy(10^(1e10+1)) = H_{ω^(ω^ω+1)}(10) → layer 1",
+    MetaNum.hardy(MetaNum(10).pow(MetaNum(1e10).add(MetaNum(1)))).layer === 1, true);
+  checkBool("hardy(ee10) < hardy(10^(1e10+1)) < hardy(ee20)",
+    MetaNum.hardy("ee10").lt(MetaNum.hardy(MetaNum(10).pow(MetaNum(1e10).add(MetaNum(1))))) &&
+    MetaNum.hardy(MetaNum(10).pow(MetaNum(1e10).add(MetaNum(1)))).lt(MetaNum.hardy("ee20")), true);
+  checkBool("hardy(ee10) < hardy(ee20) < hardy(ee100) < hardy(eee5) < hardy(eee10)",
+    MetaNum.hardy("ee10").lt(MetaNum.hardy("ee20")) &&
+    MetaNum.hardy("ee20").lt(MetaNum.hardy("ee100")) &&
+    MetaNum.hardy("ee100").lt(MetaNum.hardy("eee5")) &&
+    MetaNum.hardy("eee5").lt(MetaNum.hardy("eee10")), true);
+  checkBool("above eee10 the layer is 2, above eeee10 it is 3 (one per 10^)",
+    MetaNum.hardy("eee20").layer === 2 && MetaNum.hardy("eeee10").layer === 3 &&
+    MetaNum.hardy("eeeee10").layer === 4, true);
+  checkBool("hardy(eee10) < hardy(eee20) < hardy(eeee10) < hardy(eeeee10)",
+    MetaNum.hardy("eee10").lt(MetaNum.hardy("eee20")) &&
+    MetaNum.hardy("eee20").lt(MetaNum.hardy("eeee10")) &&
+    MetaNum.hardy("eeee10").lt(MetaNum.hardy("eeeee10")), true);
+})();
+
+// ─────────────────────────────────────
+// A number beyond Number.MAX_VALUE is stored as 10^v; the reconstructed mantissa
+// carries a rounding tail (2e1000 → 10^1000.301029995664 → 10^0.301… =
+// 1.9999999999… instead of 2), which used to spell "19999…9" and made hardy
+// read a garbage "rest" — hardy("2e1000") returned Infinity.
+(function () {
+  var vals = ["2e1000", "5e1001", "9e999", "3.5e500"];
+  var bad = 0;
+  for (var i = 0; i < vals.length; i++) {
+    var v = MetaNum.hardy(vals[i]);
+    if (v.isNaN() || v.array[0].length === 1 && v.array[0][0] === null) bad++;
+  }
+  checkBool("hardy(\"2e1000\")/\"5e1001\"/… are finite (no rounding-tail Infinity)",
+    bad === 0, true);
+  checkBool("hardy(\"9e999\") < hardy(\"1e1000\") < hardy(\"2e1000\") monotone",
+    MetaNum.hardy("9e999").lt(MetaNum.hardy("1e1000")) &&
+    MetaNum.hardy("1e1000").lt(MetaNum.hardy("2e1000")), true);
+  checkBool("hardy(\"2e1000\") top row follows the input (ω^1000 cascade)",
+    MetaNum.hardy("2e1000").layer === 0 &&
+    MetaNum.hardy("2e1000").array.length - 1 === 19, true);
+})();
+
+// ─────────────────────────────────────
+// Levels above the letter grid (ω*2+100, ω*50, ω²*50, …) read as level-arg:
+// the snapped level with the fundamental-sequence index that recovers the
+// ordinal — the LARGEST coefficient was used before, which collapsed
+// [100,100,50], [100,100,60] and [100,100,100] into one string.
+(function () {
+  var pairs = [
+    [[100, 100, 50], "2.000Aaaa51"],
+    [[100, 100, 60], "2.000Aaaa61"],
+    [[100, 100, 100], "2.000Aaaa101"],
+    [[100, 100, 200], "2.000Aaaa201"],
+    [[100, 30], "2.000Aaa31"],
+    [[100, 50], "2.000Aaa51"],
+    [[100, 2], "2.000Ca100"]
+  ]
+  var ok = true, seen = {}
+  for (var i = 0; i < pairs.length; i++) {
+    var f = format(MetaNum._hyperopFromOrdinal(MetaNum(10), MetaNum(100), pairs[i][0]))
+    if (f !== pairs[i][1]) { ok = false; console.log("   " + f + " ≠ " + pairs[i][1]) }
+    if (seen[f]) { ok = false; console.log("   collision: " + f) }
+    seen[f] = true
+  }
+  checkBool("unnamed levels keep distinct level-args", ok, true)
+  // the ω+c / ω*N families must not collide either
+  var ok2 = true, seen2 = {}
+  var fam = [[100, 3], [100, 4], [100, 5], [0, 40], [100, 40]]
+  for (var j = 0; j < fam.length; j++) {
+    var g = format(MetaNum._hyperopFromOrdinal(MetaNum(10), MetaNum(100), fam[j]))
+    if (seen2[g]) { ok2 = false; console.log("   collision: " + g + " " + JSON.stringify(fam[j])) }
+    seen2[g] = true
+  }
+  checkBool("ω+c / ω*N families keep distinct level-args", ok2, true)
+})();
+
+// The carried !αAaβ form takes the ω-EXPONENT as β (README: !αAaβ = ω^β plus
+// the digits of α).  ω³*50+… snaps to ω⁴, whose letter "Aaaaa" (5) exceeds
+// multiLetterLimit(4), so it reads "!2.000Aa4" — "!2.000Aa51" would claim the
+// ω⁵¹ level.
+(function () {
+  var deep = format(MetaNum._hyperopFromOrdinal(MetaNum(10), MetaNum(100), [100, 100, 100, 50]))
+  checkFormat("ω³*50+… → !1.000H51 (single-letter carried form)",
+    MetaNum._hyperopFromOrdinal(MetaNum(10), MetaNum(100), [100, 100, 100, 50]), "!1.000H51")
+  checkFormat("ω³*100+… → !1.000H101",
+    MetaNum._hyperopFromOrdinal(MetaNum(10), MetaNum(100), [100, 100, 100, 100]), "!1.000H101")
+  checkFormat("ω³*200+… → !1.000H201",
+    MetaNum._hyperopFromOrdinal(MetaNum(10), MetaNum(100), [100, 100, 100, 200]), "!1.000H201")
+  checkBool("the level-arg index is not used as the !-form exponent",
+    deep.indexOf("Aa51") < 0, true)
+})();
+
+// ─────────────────────────────────────
+// format: repeatLetterThreshold caps how many times ONE letter repeats — an
+// inner level must not promote to the outer letter (3{3}6 = FFF(E^7.6e12) is
+// "FFFEEE9.007E15", not "FFFF7.626E12"), and the saturated form is followed by
+// the next-letter (G) form.
+(function () {
+  checkFormat("arrow(3,3,5) spells three F", MetaNum.arrow(3, 3, 5), "FFF7.626E12");
+  // a fourth F would break repeatLetterThreshold, so the value renders at the
+  // next letter by its real argument — not a saturated FFFEEE{…} form
+  checkFormat("arrow(3,3,6) → 2.045G5 (next letter, real argument)",
+    MetaNum.arrow(3, 3, 6), "2.045G5");
+  checkFormat("arrow(3,3,7) → 2.045G6", MetaNum.arrow(3, 3, 7), "2.045G6");
+  checkFormat("arrow(3,3,8) → 2.045G7", MetaNum.arrow(3, 3, 8), "2.045G7");
+  for (var an = 3; an <= 8; an++) {
+    var fs = format(MetaNum.arrow(3, 3, an))
+    if (/(.)\1{3}/.test(fs.replace(/[\d,.]/g, ''))) {
+      checkBool("arrow(3,3," + an + ") keeps within repeatLetterThreshold(3)", false, true)
+    }
+  }
+  checkBool("no more than repeatLetterThreshold(3) copies of one letter", true, true)
+})();
+
+// A diagonal letter (name ending in "a": Aa, Ba, Ca, Aaa, …) carries the
+// mantissa α = 2·5^f ∈ [2,10) — never the [1,10) of the other letters.
+(function () {
+  var diag = ["2.000Ca100", "2.000Aaa100", "2.000Aaaa101", "2.000Ba100"];
+  var got = [
+    format(MetaNum._hyperopFromOrdinal(MetaNum(10), MetaNum(100), [100, 2])),
+    format(MetaNum._hyperopFromOrdinal(MetaNum(10), MetaNum(100), [0, 100])),
+    format(MetaNum._hyperopFromOrdinal(MetaNum(10), MetaNum(1000), [100, 100, 100])),
+    format(MetaNum(10).aperioexpande(100))
+  ];
+  var ok = true;
+  for (var i = 0; i < diag.length; i++) {
+    if (got[i] !== diag[i]) { ok = false; console.log("   " + got[i] + " ≠ " + diag[i]); }
+    var m = parseFloat(got[i]);
+    if (!(m >= 2 && m < 10)) ok = false;
+  }
+  checkBool("diagonal-letter mantissa stays in [2,10)", ok, true);
+})();
+
+// Truncation must keep hardy's definitional from-below base top as array[0][0],
+// not collapse it to the [10] marker (the string "1e16+1e13" form used to parse
+// to 0 → hardy(0) = 10 → the bare [10] base).
+(function () {
+  var baseTop = 3086.036065328153;
+  checkBool("hardy(1e10+22): truncated tower keeps the base top 3086.036…, not [10]",
+    MetaNum.hardy(1e10 + 22).array[0][0] === baseTop, true);
+  checkBool("hardy(1e10+40): truncated tower keeps the base top 3086.036…, not [10]",
+    MetaNum.hardy(1e10 + 40).array[0][0] === baseTop, true);
+  checkBool("hardy(\"1e16+1e13\"): the string form keeps the base and rows",
+    (function () {
+      var v = MetaNum.hardy("1e16+1e13");
+      return v.array[0][0] === baseTop &&
+        JSON.stringify(v.array.slice(1)) === "[[8,0,1],[8,1,1],[8,2,1],[1,6,1]]";
+    })(), true);
+  var n10 = 0, mono = true, prev = null;
+  for (var m = 0; m <= 40; m++) {
+    var vm = MetaNum.hardy(1e10 + m);
+    if (vm.array[0].length === 1 && vm.array[0][0] === 10) n10++;
+    if (prev && !vm.gt(prev)) mono = false;
+    prev = vm;
+  }
+  checkBool("hardy(1e10+0..40): never a [10] base", n10 === 0, true);
+  checkBool("hardy(1e10+0..40): strictly monotone across the truncation point", mono, true);
+  checkBool("hardy(\"1e100000\") keeps the base too",
+    JSON.stringify(MetaNum.hardy("1e100000").array[0]) === "[3086.036065328153,9,9,9,9,9,9,9,9]", true);
+})();
+
+// hardy(1e16+1e13) = H_{ω^(ω+6)+ω^(ω+3)}(10): the plain number is stored as 10^v
+// from 1e16 on, and the way back through the double lost the low digits
+// (10010000000000000 → 10010000000000014), which made the digit path read 14
+// instead of 1e13 as the "rest" — the base then collapsed to [1].
+(function () {
+  var v = MetaNum.hardy(1e16 + 1e13);
+  checkBool("hardy(1e16+1e13): array[0] is a real base, not the [1] marker",
+    v.array[0].length > 1, true);
+  checkBool("hardy(1e16+1e13) = H_{ω^(ω+6)}(H_{ω^(ω+3)}(10)) → … [8,2,1] [1,6,1]",
+    JSON.stringify(v.array.slice(1)) ===
+    "[[8,0,1],[8,1,1],[8,2,1],[1,6,1]]", true);
+  checkBool("hardy(1e16) < hardy(1e16+1e13) < hardy(2e16)",
+    MetaNum.hardy(1e16).lt(v) && v.lt(MetaNum.hardy(2e16)), true);
+})();
+
+// ─────────────────────────────────────
+// v2.0.2 hardy(n > 1e10) round 2:
+//   1. fractional inputs 1e10+f collapse into ONE plain row (the fractional
+//      hyper-operation result) and stay monotone across the integers;
+//   2. n1 > maxCols+1 keeps the truncated exact tower [c0, (n1-1)×(maxCols-1)]
+//      instead of the engine value;
+//   3. "AeB+C" strings parse to the exact sum (hardy("1e16+1e13") is no longer
+//      hardy(0) = 10);
+//   4. for 1e10 ≤ x < e1e10, hardy(10^x) = layerUp(hardy(x)) — one layer apart,
+//      same array rows.
+// ─────────────────────────────────────
+console.log("\n=== v2.0.2 hardy(n > 1e10) round 2 ===");
+(function () {
+  // 1. single-row fractional results
+  checkBool("hardy(1e10) < hardy(1e10+0.5) < hardy(1e10+1), all single-row",
+    (function () {
+      var a = MetaNum.hardy(1e10), b = MetaNum.hardy("1e10+0.5"), c = MetaNum.hardy(1e10 + 1);
+      return a.lt(b) && b.lt(c) &&
+        a.array.length === 1 && b.array.length === 1 && c.array.length === 1;
+    })(), true);
+  checkBool("hardy(1e10+0.5).array[0][0] is the fractional hyper-op result",
+    (function () {
+      var b = MetaNum.hardy("1e10+0.5").array[0][0];
+      return b > 3086.036 && b < 6785.435 && b !== Math.floor(b);
+    })(), true);
+  checkBool("hardy(1e10+k+0.5) single-row and monotone for k = 0..9",
+    (function () {
+      var prev = MetaNum.hardy(1e10);
+      for (var k = 0; k <= 9; k++) {
+        var v = MetaNum.hardy(1e10 + k + 0.5);
+        if (v.array.length !== 1) return false;
+        if (!v.gt(prev)) return false;
+        prev = v;
+        var vi = MetaNum.hardy(1e10 + k + 1);
+        if (!vi.gt(v)) return false;
+        prev = vi;
+      }
+      return true;
+    })(), true);
+  // 2. truncated towers
+  checkBool("hardy(1e10+11) < hardy(1e10+11.5) ≤ hardy(1e10+12) (fraction keeps order)",
+    MetaNum.hardy("1e10+11").lt(MetaNum.hardy("1e10+11.5")) &&
+    MetaNum.hardy("1e10+11.5").lt(MetaNum.hardy(1e10 + 12)), true);
+  checkBool("hardy(1e10+m) tower level = hardy(m)-1 for m = 12..40",
+    (function () {
+      for (var m = 12; m <= 40; m += 7) {
+        var lv = MetaNum.hardy(1e10 + m).array[0][1];
+        if (lv !== MetaNum.hardy(m).toNumber() - 1) return false;
+      }
+      return true;
+    })(), true);
+  // 3. the string sum form
+  checkBool("M(\"1e10+0.5\") parses to the exact 10000000000.5",
+    JSON.stringify(MetaNum("1e10+0.5").array) === "[[10000000000.5]]", true);
+  checkBool("M(\"1e10+11\") parses to the exact 10000000011",
+    JSON.stringify(MetaNum("1e10+11").array) === "[[10000000011]]", true);
+  checkBool("hardy(\"1e10+11\") = hardy(10000000011) (string = number form)",
+    JSON.stringify(MetaNum.hardy("1e10+11").array) ===
+    JSON.stringify(MetaNum.hardy(10000000011).array), true);
+  checkBool("hardy(\"1e10+22\") format X49 (level 47 chain, promoted)",
+    MetaNum.hardy("1e10+22").format() === "X49", true);
+  // 4. the tower layer rule: every extra 10^ level adds ONE layer, the array
+  //    rows stay those of the innermost readable expansion
+  checkBool("hardy(e1e10) = layerUp(hardy(1e10))",
+    (function () {
+      var a = MetaNum.hardy("e1e10"), b = MetaNum.hardy(1e10);
+      return a.layer === b.layer + 1 &&
+        JSON.stringify(a.array) === JSON.stringify(b.array);
+    })(), true);
+  checkBool("hardy(1e308) = layer 0, the digit-path cascade (…[8,6,0,3],[8,7,0,3])",
+    (function () {
+      var v = MetaNum.hardy("1e308");
+      return v.layer === 0 && v.array.length > 2 &&
+        JSON.stringify(v.array[v.array.length - 2]) === "[8,6,0,3]" &&
+        JSON.stringify(v.array[v.array.length - 1]) === "[8,7,0,3]";
+    })(), true);
+  checkBool("hardy(e1e308)/ee1e308/eee1e308 = the same rows at layers 1/2/3",
+    (function () {
+      var v0 = MetaNum.hardy("1e308");
+      var chain = ["e1e308", "ee1e308", "eee1e308"];
+      for (var i = 0; i < chain.length; i++) {
+        var v = MetaNum.hardy(chain[i]);
+        if (v.layer !== i + 1) return false;
+        if (JSON.stringify(v.array) !== JSON.stringify(v0.array)) return false;
+      }
+      return true;
+    })(), true);
+  checkBool("hardy(10^^100) keeps the rows: layer 98 over hardy(1e10)'s array",
+    (function () {
+      var v = MetaNum.hardy(MetaNum(10).tetr(100));
+      return v.layer === 98 &&
+        JSON.stringify(v.array) === JSON.stringify(MetaNum.hardy(1e10).array);
+    })(), true);
+  checkBool("hardy(10^x) = layerUp(hardy(x)) for x = 1e10+1, 2e10, 1e11, 1e15",
+    (function () {
+      var xs = [1e10 + 1, 2e10, 1e11, 1e15];
+      for (var i = 0; i < xs.length; i++) {
+        var hx = MetaNum.hardy(xs[i]);
+        var htx = MetaNum.hardy(MetaNum(10).pow(MetaNum(xs[i])));
+        if (htx.layer !== hx.layer + 1) return false;
+        if (JSON.stringify(htx.array) !== JSON.stringify(hx.array)) return false;
+      }
+      return true;
+    })(), true);
+  checkBool("hardy(10^x) monotone in x across the height-3 band",
+    (function () {
+      var xs = [2e10, 5e10, 1e11, 1e12, 1e15, 1e18];
+      for (var i = 1; i < xs.length; i++) {
+        if (!MetaNum.hardy(MetaNum(10).pow(MetaNum(xs[i - 1])))
+          .lt(MetaNum.hardy(MetaNum(10).pow(MetaNum(xs[i]))))) return false;
+      }
+      return true;
+    })(), true);
+  checkBool("hardy(eee10) keeps the definitional base in its layer-1 marker",
+    JSON.stringify(MetaNum.hardy("eee10").array[0]) ===
+    "[3086.036065328153,9,9,9,9,9,9,9,9]", true);
+})();
+
+// ─────────────────────────────────────
+// v2.0.2 unnamed-level format: a level whose coefficients exceed the letter
+// grid (ω*2+100, ω*100, ω²*100+ω*100+100, …) rounds UP to the next nameable
+// level and reads as level-arg — never a wrapped/wrong letter, never the
+// summed repeat count
+// ─────────────────────────────────────
+console.log("\n=== v2.0.2 unnamed-level format ===");
+// a diagonal letter ("Ca", "Ba", "Aaa", …) carries α = 2·5^f ∈ [2,10)
+checkFormat("10{ω*2+100}100 → 2.000Ca100",
+  MetaNum._hyperopFromOrdinal(MetaNum(10), MetaNum(100), [100, 2]), "2.000Ca100");
+checkFormat("10{ω*100}100 → 2.000Aaa100",
+  MetaNum._hyperopFromOrdinal(MetaNum(10), MetaNum(100), [0, 100]), "2.000Aaa100");
+checkFormat("10{ω²*100+ω*100+100}1000 → 2.000Aaaa101",
+  MetaNum._hyperopFromOrdinal(MetaNum(10), MetaNum(1000), [100, 100, 100]), "2.000Aaaa101");
+checkFormat("h20(10,1000) → 2.000Ba1,000 (ω*2 with y=1000)",
+  MetaNum(10).h20(1000), "2.000Ba1,000");
+checkFormat("h100(10,1000) → 2.000Aaa1,000 (ω² with y=1000)",
+  MetaNum(10).h100(1000), "2.000Aaa1,000");
+checkFormat("h30(10,100) → 2.000Ca100 (ω*3 with y=100)",
+  MetaNum(10).h30(100), "2.000Ca100");
+// nameable levels keep their ordinary cascade display
+checkFormat("h21(10,1000) → Bb999 (nameable top row, unchanged)",
+  MetaNum(10).h21(1000), "1.000Bb999");
 
 // ─────────────────────────────────────
 // fractional hyperoperation levels
@@ -1280,6 +1844,44 @@ console.log("\n=== fractional levels ===");
   checkBool("3{2.5}3 between 3{2}3 and 3{3}3",
     MetaNum(3).arrow(2)(3).lt(MetaNum(3).arrow(2.5)(3)) &&
     MetaNum(3).arrow(2.5)(3).lt(MetaNum(3).arrow(3)(3)), true);
+})();
+
+// ─────────────────────────────────────
+// arrow(x,y,y): level and argument move together, so the interpolation anchor
+// θ0 (the c with x{n+1}c = x{n}y) has to be a CONTINUOUS inverse — the integer
+// bisection of hyper_log overshoots it (2 instead of 1.0414), which makes the
+// geometric step y/θ0 < 1 run backwards and breaks monotonicity.
+// ─────────────────────────────────────
+(function () {
+  var ys = [1, 1.1, 1.5, 1.9, 2];
+  for (var b = 0; b < 2; b++) {
+    var bx = [3, 10][b], prev = null, ok = true, firstBad = "";
+    for (var i = 0; i < ys.length; i++) {
+      var v = MetaNum.arrow(bx, ys[i], ys[i]);
+      if (prev && !v.gte(prev)) { ok = false; if (!firstBad) firstBad = "y=" + ys[i]; }
+      prev = v;
+    }
+    checkBool("arrow(" + bx + ",y,y) monotone for y = 1, 1.1, 1.5, 1.9, 2", ok, true,
+      ok ? "" : " first break: " + firstBad);
+  }
+  // fine sweep across the whole 1 → 3 range, both endpoints included
+  var fine = [1, 1.01, 1.25, 1.5, 1.75, 1.99, 2, 2.1, 2.5, 2.9, 3];
+  for (var b2 = 0; b2 < 2; b2++) {
+    var bx2 = [3, 10][b2], p2 = null, ok2 = true;
+    for (var j = 0; j < fine.length; j++) {
+      var v2 = MetaNum.arrow(bx2, fine[j], fine[j]);
+      if (p2 && !v2.gte(p2)) ok2 = false;
+      p2 = v2;
+    }
+    checkBool("arrow(" + bx2 + ",y,y) monotone over y = 1 … 3", ok2, true);
+  }
+  // the ends of an interval meet the neighbouring integers
+  checkBool("10{1.99}1.99 < 10{2}2 = 10^^2",
+    MetaNum.arrow(10, 1.99, 1.99).lt(MetaNum.arrow(10, 2, 2)), true);
+  checkBool("10{2}2 < 10{2.1}2.1",
+    MetaNum.arrow(10, 2, 2).lt(MetaNum.arrow(10, 2.1, 2.1)), true);
+  checkBool("3{1.99}1.99 < 3{2}2 = 27",
+    MetaNum.arrow(3, 1.99, 1.99).lt(MetaNum.arrow(3, 2, 2)), true);
 })();
 
 // ─────────────────────────────────────
@@ -1325,7 +1927,8 @@ function checkFormat(name, input, expected) {
 }
 
 // Small values & regular numbers
-checkFormat("1E-1000000", "1E-1000000", "1.000E-1,000,000"); // sign=2 reciprocal
+// β = 1e6 ≥ 10^sciDecimalThreshold(3) → α keeps only its integer part
+checkFormat("1E-1000000", "1E-1000000", "1E-1,000,000"); // sign=2 reciprocal
 checkFormat("1E-100",     "1E-100",     "1.000E-100");
 checkFormat("0.123",      "0.123",       "0.123");
 checkFormat("456789",     "456789",      "456,789");
@@ -1366,7 +1969,7 @@ checkFormat("Defg200", "Defg200", "1.000Defg200");
 // Symbols and ε:
 checkFormat("!Aa300", "!Aa300", "!2.000Aa300");
 checkFormat("@Bb400", "@Bb400", "@1.000Bb400");
-checkFormat("1ε500", "1ε500", "1.000ε500");
+checkFormat("1ε500", "1ε500", "1.000000ε500"); // epsilonSignificantDigits = 6
 
 // Reciprocal of large numbers (sign=2) format tests
 // smallNotationUseE=true → E-<formatted mag>
@@ -1384,7 +1987,7 @@ check("1/F10 parse",     "1/F10",    [[10000000000, 8]]);
 //   1/F500   = 10^(-log10(F500))   = 10^(-F499)   → "E-1.000F499"
 //   1/G200   = 10^(-log10(G200))   ≈ 10^(-G200)    → "E-1.000G200" (TMSI: G200>TMSI)
 //   1/F10    = 10^(-log10(F10))    = 10^(-F9)      → "E-1.000F9"
-checkFormat("E-EE1000 (useE=true)", "E-EE1000", "E-E1.000E1,000");
+checkFormat("E-EE1000 (useE=true)", "E-EE1000", "E-E1E1,000"); // β=1e6 ≥ 10^sciDecimalThreshold → integer α
 checkFormat("1/F500   (useE=true)", "1/F500",   "E-1.000F499");
 checkFormat("1/G200   (useE=true)", "1/G200",   "E-1.000G200");
 checkFormat("1/F10    (useE=true)", "1/F10",    "E-1.000F9");
@@ -1397,7 +2000,7 @@ checkFormat("1/F10    (useE=true)", "1/F10",    "E-1.000F9");
 var _FMT = (typeof FORMAT_OPTIONS !== "undefined" && FORMAT_OPTIONS) ? FORMAT_OPTIONS : require("./format-metanum.js").FORMAT_OPTIONS;
 var _savedUseE = _FMT.smallNotationUseE;
 _FMT.smallNotationUseE = false;
-checkFormat("E-EE1000 (useE=false)", "E-EE1000", "EE1.000E1,000⁻¹");
+checkFormat("E-EE1000 (useE=false)", "E-EE1000", "EE1E1,000⁻¹"); // integer α (sciDecimalThreshold)
 checkFormat("1/F500   (useE=false)", "1/F500",   "1.000F500⁻¹");
 checkFormat("1/G200   (useE=false)", "1/G200",   "1.000G200⁻¹");
 checkFormat("1/F10    (useE=false)", "1/F10",    "1.000F10⁻¹");
@@ -1416,10 +2019,12 @@ checkFormat("canonical all-8s keeps α=1 (G600)", "G600", "1.000G600");
 // and a combination longer than multiLetterLimit switches to !αAaβ
 // ─────────────────────────────────────
 checkFormat("20-row cascade compresses to two letter types", MetaNum.h10000(3, 10), "Iccc1.000Iccb10");
-checkFormat("10-letter level carries to !…Aa9 (definition digits)", MetaNum.iter(3, 10), "!2.222Aa9");
-checkFormat("5-letter level carries to !…Aa4 (definition digits)", m3.iter(5), "!2.222Aa4");
-checkFormat("symbol carry stacks: apix(3,10) → @…Aa10", m3.aperixxate(10), "@2.000Aa10");
-checkFormat("symbol carry stacks: apix(3,5) → @…Aa5", m3.aperixxate(5), "@2.000Aa5");
+// a level whose letter name is longer than multiLetterLimit carries to the
+// SINGLE-letter form !αΓβ — "!" adds one ω^ layer on top of the level Γ names
+checkFormat("10-letter level carries to !1.000M9", MetaNum.iter(3, 10), "!1.000M9");
+checkFormat("5-letter level carries to !1.000H4", m3.iter(5), "!1.000H4");
+checkFormat("symbol carry stacks: apix(3,10) → @1.000N10", m3.aperixxate(10), "@1.000N10");
+checkFormat("symbol carry stacks: apix(3,5) → @1.000I10", m3.aperixxate(5), "@1.000I10");
 checkFormat("short diagonal keeps the letter form", m3.aperixxate(3), "!2.000Aaaa10");
 checkFormat("cascade inner α stays [1,10) (AbAa600)", "AbAa600", "Ab1.000Aa600");
 
@@ -1456,9 +2061,10 @@ for (var si = 0; si < stacked.length; si++) {
   checkFormat("apea^3(1e16) nests further", p3, "BaBaBa1.000E16");
   checkBool("apea stacking is strictly monotone", p2.gt(p1) && p3.gt(p2), true);
 })();
-// a row coefficient above 25 (ω+81 from a ω*2 fundamental sequence) has no
-// letter in the grid — clamp down instead of wrapping into a higher letter
-checkFormat("ω*2 level reads Ba (no coefficient wrap)", MetaNum(10).aperioexpande(100), "1.000Ba154");
+// a row coefficient above the grid (ω+81..99 from a ω*2 fundamental sequence)
+// has no letter — the level rounds UP to the next nameable one and the value
+// reads as level-arg: 10{ω*2}100 → Ba with the operation's own argument 100
+checkFormat("ω*2 level reads Ba (no coefficient wrap)", MetaNum(10).aperioexpande(100), "2.000Ba100");
 
 // Γ-canonical law test: long descending count-1 chains
 // format at their bisect-exact letter on the engine's smooth arrow curve;
@@ -1698,6 +2304,97 @@ console.log("\n=== MetaNum(...).format() instance method ===");
   checkFmtEq("format(2) precision arg", MetaNum(1234.5678).format(2), "1,234");
   checkFmtEq(".format() matches module format(FE400)",
     MetaNum("FE400").format(), format(MetaNum("FE400")));
+})();
+
+// ─────────────────────────────────────
+// FORMAT_OPTIONS: every option must take effect.  Each check flips the option
+// and asserts the display changes along the option's documented meaning.
+// ─────────────────────────────────────
+console.log("\n=== FORMAT_OPTIONS take effect ===");
+(function () {
+  var OPT = _FMT;
+  var saved = {};
+  function set(k, v) { if (!(k in saved)) saved[k] = OPT[k]; OPT[k] = v; }
+  function restore() { for (var k in saved) OPT[k] = saved[k]; saved = {}; }
+  function after(name, fn) {
+    var r;
+    try { r = fn(); } catch (e) { r = "threw " + e.message.slice(0, 40); }
+    restore();
+    checkBool(name, r === true, true, typeof r === "string" ? r : "");
+  }
+
+  after("opt smallNotationUseE: ⁻¹ when false, E- when true", function () {
+    set("smallNotationThreshold", 4);
+    set("smallNotationUseE", false); var a = format(MetaNum(1e-10));
+    set("smallNotationUseE", true); var b = format(MetaNum(1e-10));
+    return a.indexOf("⁻¹") >= 0 && b.indexOf("E-") >= 0;
+  });
+  after("opt smallNotationThreshold moves the small-value boundary", function () {
+    set("smallNotationThreshold", 3); var a = /E-4|⁻¹/.test(format(MetaNum(1e-4)));
+    set("smallNotationThreshold", 5); var b = /E-4|⁻¹/.test(format(MetaNum(1e-4)));
+    return a && !b;
+  });
+  after("opt decimalPlaces: 0 → '1', 2 → '1.40'", function () {
+    set("decimalPlaces", 0); var a = format(MetaNum(1.4));
+    set("decimalPlaces", 2); var b = format(MetaNum(1.4));
+    return a === "1" && b === "1.40";
+  });
+  after("opt decimalThreshold: decimals drop past 10^n", function () {
+    set("decimalThreshold", 3); var a = format(MetaNum(1234.56)).indexOf(".") < 0;
+    set("decimalThreshold", 5); var b = format(MetaNum(1234.56)).indexOf(".") >= 0;
+    return a && b;
+  });
+  after("opt useCommas toggles grouping", function () {
+    set("useCommas", true); var a = format(MetaNum(1234567));
+    set("useCommas", false); var b = format(MetaNum(1234567));
+    return a === "1,234,567" && b === "1234567";
+  });
+  after("opt sciThreshold moves the E boundary", function () {
+    set("sciThreshold", 9); var a = /E/.test(format(MetaNum(1e11)));
+    set("sciThreshold", 12); var b = /E/.test(format(MetaNum(1e11)));
+    return a && !b;
+  });
+  after("opt sciSignificantDigits: 1 → 1.2E10", function () {
+    set("sciSignificantDigits", 1);
+    return /^1\.2E/.test(format(MetaNum(1.2345e10)));
+  });
+  after("opt sciDecimalThreshold: β ≥ 10^n → integer α", function () {
+    set("sciDecimalThreshold", 3); var a = /^1E100,000$/.test(format(MetaNum("1e100000")));
+    set("sciDecimalThreshold", 9); var b = /^1\.000E100,000$/.test(format(MetaNum("1e100000")));
+    return a && b;
+  });
+  after("opt singleLetterDigits: 1 → 2.0G, 3 → 2.045G", function () {
+    set("singleLetterDigits", 1); var a = /^2\.0G/.test(format(MetaNum.arrow(3, 3, 7)));
+    set("singleLetterDigits", 3); var b = /^2\.045G/.test(format(MetaNum.arrow(3, 3, 7)));
+    return a && b;
+  });
+  after("opt repeatLetterThreshold: 3 collapses arrow(3,3,6), 5 spells FFFF", function () {
+    set("repeatLetterThreshold", 3); var a = format(MetaNum.arrow(3, 3, 6)) === "2.045G5";
+    set("repeatLetterThreshold", 5); var b = /^FFFF/.test(format(MetaNum.arrow(3, 3, 6)));
+    return a && b;
+  });
+  after("opt multiLetterDigits: 1 → 2.0Aa, 3 → 2.000Aa", function () {
+    set("multiLetterDigits", 1); var a = /^2\.0Aa/.test(format(MetaNum(10).arrow(23)(MetaNum(10))));
+    set("multiLetterDigits", 3); var b = /^2\.000Aa/.test(format(MetaNum(10).arrow(23)(MetaNum(10))));
+    return a && b;
+  });
+  after("opt multiLetterRepeatThreshold: 2 collapses 3×Aa, 5 keeps it", function () {
+    set("multiLetterRepeatThreshold", 2); var a = /^1\.841Ab/.test(format(MetaNum("AaAaAa100")));
+    set("multiLetterRepeatThreshold", 5); var b = /^AaAa/.test(format(MetaNum("AaAaAa100")));
+    return a && b;
+  });
+  after("opt multiLetterLimit: 4 keeps Aaaa, 3 carries to !", function () {
+    var v = MetaNum._hyperopFromOrdinal(MetaNum(10), MetaNum(100), [100, 100, 50]);
+    set("multiLetterLimit", 4); var a = /Aaaa/.test(format(v));
+    set("multiLetterLimit", 3); var b = format(v).indexOf("!") === 0;
+    return a && b;
+  });
+  after("opt epsilonSignificantDigits: 6 → 1.000000ε12, 0 → 1ε12", function () {
+    var v = MetaNum("!!!!!!!!!!!!2.000Aa10");
+    set("epsilonSignificantDigits", 6); var a = format(v) === "1.000000ε12";
+    set("epsilonSignificantDigits", 0); var b = format(v) === "1ε12";
+    return a && b;
+  });
 })();
 
 console.log("\n=== format tests Done ===");

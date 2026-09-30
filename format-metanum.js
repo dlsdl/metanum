@@ -7,20 +7,20 @@ let FORMAT_DEBUG = 0
 
 // ─── Configuration Options ────────────────────────────────────────
 const FORMAT_OPTIONS = {
-  smallNotationUseE: true,   // 1. 小数值是否用E-表示（true=αE-β，false=⁻¹）
-  smallNotationThreshold: 4, // 2. 小数值表示阈值（=n则小于10^-n的数采用小数值处理）
-  decimalPlaces: 3,          // 3. 常规数字小数位数（=0为1，=1为1.0，=2为1.00等）
-  decimalThreshold: 3,       // 4. 常规数字小数阈值（=n则数值>=10^n时不显示小数部分）
-  useCommas: true,           // 5. 常规数字是否显示逗号（true/false）
-  sciThreshold: 9,           // 6. 科学计数法阈值（=n则数值>=10^n开始用科学计数法，同样对αEβ中β的数值生效）
-  sciSignificantDigits: 3,   // 7. 科学计数法有效位数（=n则αEβ的α的小数部分保留n位）
-  sciDecimalThreshold: 3,    // 8. 科学计数法小数阈值（=n则αEβ的β>=10^n时不显示小数部分）
-  singleLetterDigits: 3,     // 9. 单字母计数法有效位数（αFβ,αGβ...αZβ中α的小数位数）
-  repeatLetterThreshold: 3,  // 10. 单字母重复阈值（=n则出现n+1个重复的单字母时用下一个字母计数法，n<2时以2计算）
-  multiLetterDigits: 3,      // 11. 多字母计数法有效位数（及以上的α的小数位数）
-  multiLetterRepeatThreshold: 3, // 12. 多字母组合重复阈值（=n则出现n+1个重复的多字母组合时用下一个字母计数法，n<2时以2计算）
-  multiLetterLimit: 4,        // 13. 多字母组合最大位数（=n则多字母组合的长度不超过n，超过则切换下一种计数法，n<2时以2计算）
-  epsilonSignificantDigits: 6  // 14. epsilon有效位数（=n则αεβ中α的小数位数为n）
+  smallNotationUseE: true,      //true/false
+  smallNotationThreshold: 4,    //0~9
+  decimalPlaces: 3,             //0~9
+  decimalThreshold: 3,          //0~15
+  useCommas: true,              //true/false
+  sciThreshold: 9,              //0~15
+  sciSignificantDigits: 3,      //0~9
+  sciDecimalThreshold: 3,       //0~15
+  singleLetterDigits: 3,        //0~9
+  repeatLetterThreshold: 3,     //2~9
+  multiLetterDigits: 3,         //0~9
+  multiLetterRepeatThreshold: 3,//2~9
+  multiLetterLimit: 4,          //2~9
+  epsilonSignificantDigits: 6   //0~9
 }
 
 // ─── Utility Functions ───────────────────────────────────────────
@@ -300,13 +300,25 @@ function letterTokenOf(height) {
     let plain = letterName(height)
     let limit = Math.max(2, FORMAT_OPTIONS.multiLetterLimit | 0)
     if (plain.length <= limit) return { sym: "", letter: plain, arg: 0, mant: null }
+    // The carried form is "!" + the SINGLE-letter form αΓβ: "!" adds one ω^
+    // layer on top of the level Γ names, so a diagonal Aaa…a (= ω^k, too long
+    // for multiLetterLimit) becomes !αHβ with H = the finite level k —
+    //   !2.000Aa4 = !1H10 = 10{ω^4}10,   2.000Aa4 = 1H10 = 10{4}10
+    // and β is the argument, which keeps ω³*50 / ω³*100 / ω³*200 apart
+    // (!1H51 / !1H101 / !1H201).  Only once the single-letter chain itself is
+    // exhausted (!ZZZYYY{maxSafeInteger}) does the notation fall back to the
+    // coarser !αAaβ form.
+    let expo = plain.length - 1
+    if (expo >= 1 && expo <= 22) {
+        return { sym: "!", letter: letterName(expo), arg: expo, mant: 1, useBeta: true }
+    }
     let mant = plain.charCodeAt(0) - 64              // coefficient of ω^(k-1)
     for (let i = 1; i < plain.length; i++) {
         mant += (plain.charCodeAt(i) - 97) * Math.pow(10, -i)
     }
     if (mant < 2) mant = 2                           // diagonal [2,10) anchor
     if (mant >= 10) mant = 9 + (mant - 10) / 170     // keep α ∈ [2,10)
-    return { sym: "!", letter: "Aa", arg: plain.length - 1, mant: mant }
+    return { sym: "!", letter: "Aa", arg: expo, mant: mant }
 }
 
 // Emit α·letter·β for a token: the plain form is αΓβ, the carried form is the
@@ -315,6 +327,9 @@ function emitLetterToken(tok, alphaStr, betaStr, precision) {
     if (!tok.sym) return alphaStr + tok.letter + betaStr
     let a = (tok.mant === null || tok.mant === undefined) ? alphaStr
         : regularFormat(tok.mant, precision)
+    // the single-letter carried form keeps the caller's argument (!1H51), the
+    // Aa form carries the ω-exponent instead
+    if (tok.useBeta) return tok.sym + a + tok.letter + betaStr
     return tok.sym + a + tok.letter + formatR0Arg(tok.arg, precision)
 }
 
@@ -337,6 +352,36 @@ function symbolName(layer) {
 //     count = repetition count at ω-level
 //     value = ordinal level number (e.g., 901 means ω*901)
 //     Letter is always "Aa" (base ω-level)
+
+// Snap CNF coefficients (little-endian [a1, a2, …, ak], ordinal
+// ω^(k-1)·ak + … + ω·a2 + a1) to the ones the letter grid can name:
+// every ai must satisfy 0 ≤ ai ≤ 25 and the top ak ≤ 26.  Larger
+// coefficients carry UP — ω*2+96 → ω*3 (Ca), ω*99 → ω² (Aaa),
+// ω²*100 → ω³ (Aaaa) — so an unnamed ordinal displays as the next
+// nameable one above it, never as a lower/wrong letter.
+function snapCoeffsToGrid(coeffs) {
+    let r = (coeffs || []).slice()
+    // little-endian ORDINAL carry: index 0 is the constant term.  A term above
+    // its grid bound absorbs everything below it (ω^i·c + lower < ω^(i+1)) and
+    // bumps the next power — ω*2+99 → ω*3 (Ca), ω*99+9 → ω² (Aaa),
+    // ω²*100 → ω³ (Aaaa) — so the snapped ordinal is the TIGHTEST nameable
+    // ordinal above the original one.
+    for (let i = 0; i < r.length; i++) {
+        let c = r[i]
+        if (typeof c !== 'number' || !isFinite(c) || c < 0) { r[i] = 0; continue }
+        c = Math.round(c)                      // integer coefficients only
+        let bound = (i === r.length - 1) ? 26 : 25   // top may reach 26 (A-Z)
+        if (c <= bound) { r[i] = c; continue }
+        for (let j = 0; j <= i; j++) r[j] = 0  // the carry absorbs the tail
+        if (i === r.length - 1) r.push(1)      // ω^k·(bound+1) → ω^(k+1)
+        else r[i + 1] = (r[i + 1] || 0) + 1    // … → ω^(i+1)·(+1)
+        // keep scanning: the bumped slot may carry in turn
+    }
+    while (r.length > 1 && r[r.length - 1] === 0) r.pop()
+    if (r.length === 0) r = [1]
+    return r
+}
+
 function getOrdinalLetter(ordRows) {
     if (!ordRows || ordRows.length === 0) return null
 
@@ -620,7 +665,7 @@ function format(num, precision=3, small=false) {
                         var expPart = Math.floor(magNum)
                         if (mant < 1) { mant *= 10; expPart -= 1 }
                         if (mant >= 9.999999999999999) { mant = 1; expPart += 1 }
-                        return prefix + regularFormat(mant, sciPrecision) + "E-" + commaFormat(expPart)
+                        return prefix + regularFormat(mant, sciMantissaPrecision(expPart)) + "E-" + commaFormat(expPart)
                     }
                 }
                 // Tier 2: mag is large → "E-" + letter-law form of mag =
@@ -670,7 +715,7 @@ function format(num, precision=3, small=false) {
                 // Normalize: ensure m in [1, 10)
                 if (m < 1) { m *= 10; e -= 1 }
                 if (m >= 9.999999999999999) { m = 1; e += 1 }
-                return regularFormat(m, sciPrecision) + "E-" + commaFormat(e)
+                return regularFormat(m, sciMantissaPrecision(e)) + "E-" + commaFormat(e)
             }
             // Fallback for non-simple values: use ⁻¹ notation
             if (num.layer === 0 && num.array.length === 1 && num.array[0].length === 1) {
@@ -811,13 +856,14 @@ function formatLayer(num, precision, precision2, precision3, precision4) {
     // This check must come before the compact !Aa form, otherwise ε layers
     // get mis-rendered as "Aa..." (e.g. 1ε500 → "1.000Aa10")
     if (num.layer > SYMBOLS.length) {
+        let epsPrecision = FORMAT_OPTIONS.epsilonSignificantDigits | 0
         if (canCompact && compactBase >= 2 && Math.floor(compactBase) === compactBase) {
             // Compact Aa form at ε layers folds into one more ε level:
             // layer n + Aa-form ≡ ε(n+1) with mantissa 10^frac(compactBase)
             let bottom = Math.pow(10, compactBase - Math.floor(compactBase))
-            return regularFormat(bottom, precision4) + "ε" + commaFormat(num.layer + 1)
+            return regularFormat(bottom, epsPrecision) + "ε" + commaFormat(num.layer + 1)
         }
-        let innerStr = format(inner, precision, false)
+        let innerStr = format(inner, epsPrecision, false)
         return innerStr + "ε" + commaFormat(num.layer)
     }
 
@@ -838,8 +884,13 @@ function formatLayer(num, precision, precision2, precision3, precision4) {
         let mant = 2 * Math.pow(5, frac)
         let limit = Math.max(2, FORMAT_OPTIONS.multiLetterLimit | 0)
         if (mInt + 1 > limit) {
+            // Carry to the SINGLE-letter form sym αΓβ — same rule as "!":
+            // Γ is the finite level the diagonal names (10{ω^m}10 → letter of
+            // m) and β is the diagonal's argument, so the symbols stack
+            // identically: 10{ω^10}10 → !1.000N10, 10{ω^(ω^10)}10 → @1.000N10
             let total = num.layer + 1
-            let body = regularFormat(mant, precision4) + "Aa" + formatR0Arg(mInt, precision4)
+            let body = regularFormat(1, precision4) + letterName(mInt) +
+                       formatR0Arg(10, precision4)
             if (total <= SYMBOLS.length) return SYMBOLS[total - 1] + body
             return body + "ε" + commaFormat(total)
         }
@@ -863,6 +914,23 @@ function formatLayer(num, precision, precision2, precision3, precision4) {
     return sym + innerStr
 }
 
+// ─── Option-driven mantissa precisions ───────────────────────────
+// Decimal places of the mantissa α in an αEβ form: sciSignificantDigits, but
+// once the exponent β reaches 10^sciDecimalThreshold only the integer part of
+// α is shown (the low digits carry no information at that height).
+function sciMantissaPrecision(exponent) {
+    let t = FORMAT_OPTIONS.sciDecimalThreshold | 0
+    if (t > 0 && isFinite(exponent) && exponent >= Math.pow(10, t)) return 0
+    return FORMAT_OPTIONS.sciSignificantDigits | 0
+}
+// Decimal places of the mantissa α in αΓβ: E → sciSignificantDigits,
+// F..Z → singleLetterDigits, Aa and beyond → multiLetterDigits.
+function letterMantissaPrecision(level) {
+    if (level <= 1) return FORMAT_OPTIONS.sciSignificantDigits | 0
+    if (level <= 22) return FORMAT_OPTIONS.singleLetterDigits | 0
+    return FORMAT_OPTIONS.multiLetterDigits | 0
+}
+
 // ─── Format r0 Argument (plain number) ───────────────────────────
 // Formats a plain numeric argument as either a plain number or αEβ notation.
 // The mantissa α is always shown (even when 1.000).
@@ -879,7 +947,7 @@ function formatR0Arg(value, precision) {
     if (m < 1) { m *= 10; e -= 1 }
     if (m >= 9.999999999999999) { m = 1; e += 1 }
     // Always show mantissa (αEβ format, e.g. 1.000E700)
-    return regularFormat(m, precision) + "E" + commaFormat(e)
+    return regularFormat(m, sciMantissaPrecision(e)) + "E" + commaFormat(e)
 }
 
 // ─── Gamma-Arg Recovery ─────────────────────────────────────────
@@ -928,7 +996,7 @@ function formatGammaBinary(x, level, precision) {
         return letterName(level) + formatR0Arg(beta, precision)
     }
     let alpha = Math.pow(10, frac)
-    return regularFormat(alpha, precision) + letterName(level) + formatR0Arg(beta, precision)
+    return regularFormat(alpha, letterMantissaPrecision(level)) + letterName(level) + formatR0Arg(beta, precision)
 }
 
 // Distinct letter types in a display string: single-uppercase letters and
@@ -950,8 +1018,27 @@ function distinctLetterTypes(str) {
 // Format pattern: outerLetters + α + lastLetter + β
 //   where α = 10^(base - floor(base)), β = floor(base) formatted as number or αEβ
 //   e.g. EE200 → "E1.000E200", F300 → "1.000F300", FE400 → "F1.000E400"
-function formatR0AsChain(r0, precision) {
+// Mantissa of a binary form αΓβ.  A letter whose name ends in "a" is a
+// diagonal letter (Aa = ω, Ba = ω·2, Aaa = ω², …) and its binary form has
+// α = 2·5^f ∈ [2,10) — the diagonal 10{23}10 reads "2.000Aa23", never
+// "1.000Aa23".  Every other letter keeps the ordinary [1,10) mantissa.
+function diagonalMantissa(letter, mantissa) {
+    if (letter && letter.charAt(letter.length - 1) === 'a') {
+        let f = mantissa - Math.floor(mantissa)
+        if (!(f >= 0 && f < 1)) f = 0
+        return 2 * Math.pow(5, f)
+    }
+    let mantVal = Math.pow(10, mantissa - Math.floor(mantissa))
+    if (mantVal < 1) mantVal *= 10
+    return mantVal
+}
+
+// `used` = how many copies of the letter the caller already emitted: an inner
+// level may only promote to the next letter while the total stays within
+// repeatLetterThreshold, otherwise it saturates (see the noPromote block below).
+function formatR0AsChain(r0, precision, used) {
     if (r0.length === 0) r0 = [0]
+    let usedCount = used || 0
 
     // Find maxLevel (highest non-zero index in r0[1..])
     let maxLevel = 0
@@ -1026,23 +1113,43 @@ function formatR0AsChain(r0, precision) {
         if (innerR0[maxLevel] === 0) {
             innerR0 = innerR0.slice(0, maxLevel)
         }
-        let innerStr = formatR0AsChain(innerR0, precision)
+        let innerStr = formatR0AsChain(innerR0, precision, usedCount + 1)
 
-        // Check if innerStr already has letters (meaning deeper operations exist)
-        let hasLetter = /[A-Z]/.test(innerStr)
+        // null = the inner level would need one more copy of the outer letter
+        // than repeatLetterThreshold allows (3{3}6 = FFF(E^7.6e12) would spell a
+        // fourth F).  An inner level propagates it; the OUTERMOST call instead
+        // falls through to the Γ-canonical collapse below, which renders the
+        // whole value at the next letter by its real argument: "2.045G5".
+        if (innerStr !== null) {
+            // Check if innerStr already has letters (meaning deeper operations exist)
+            let hasLetter = /[A-Z]/.test(innerStr)
 
-        if (!hasLetter) {
-            // innerStr is a plain number: this is the innermost operation
-            // Format: α + letterName(maxLevel) + innerStr
-            let base = r0[0]
-            let alpha = Math.pow(10, base - Math.floor(base))
-            if (alpha < 1) alpha *= 10
-            let alphaStr = regularFormat(alpha, precision)
-            return alphaStr + letterName(maxLevel) + innerStr
-        } else {
-            // innerStr already has α and letters: just prepend the outer letter
-            return letterName(maxLevel) + innerStr
+            if (!hasLetter) {
+                // innerStr is a plain number: this is the innermost operation
+                // Format: α + letterName(maxLevel) + innerStr
+                let base = r0[0]
+                let alpha = Math.pow(10, base - Math.floor(base))
+                if (alpha < 1) alpha *= 10
+                // an E letter's αEβ obeys sciDecimalThreshold: β ≥ 10^n → α
+                // keeps only its integer part
+                let mantPrec = (maxLevel === 1)
+                    ? sciMantissaPrecision(Number(String(innerStr).replace(/,/g, '')))
+                    : letterMantissaPrecision(maxLevel)
+                let alphaStr = regularFormat(alpha, mantPrec)
+                return alphaStr + letterName(maxLevel) + innerStr
+            } else {
+                // innerStr already has α and letters: just prepend the outer letter
+                return letterName(maxLevel) + innerStr
+            }
         }
+        if (usedCount > 0) return null
+    }
+
+    // count > effThreshold and the promotion would exceed repeatLetterThreshold
+    // copies of the letter in front of it: signal the caller (the structural
+    // spelling is impossible) instead of spelling an extra copy.
+    if (usedCount + 1 > effThreshold) {
+        return null
     }
 
     // count >= effThreshold: promote to next level (maxLevel + 1)
@@ -1076,7 +1183,7 @@ function formatR0AsChain(r0, precision) {
         // Format: α + letter + β (always show α)
         let alpha = Math.pow(10, arg - Math.floor(arg))
         if (alpha < 1) alpha *= 10
-        let alphaStr = regularFormat(alpha, precision)
+        let alphaStr = regularFormat(alpha, letterMantissaPrecision(level))
         let betaStr = formatR0Arg(Math.floor(arg), precision)
         return alphaStr + letter + betaStr
     }
@@ -1105,13 +1212,13 @@ function formatR0AsChain(r0, precision) {
         if (innerR0[maxLevel] === 0) {
             innerR0 = innerR0.slice(0, maxLevel)
         }
-        let innerStr = formatR0AsChain(innerR0, precision)
+        let innerStr = formatR0AsChain(innerR0, precision, true)
         let hasLetter = /[A-Z]/.test(innerStr)
         if (!hasLetter) {
             let base = r0[0]
             let alpha = Math.pow(10, base - Math.floor(base))
             if (alpha < 1) alpha *= 10
-            return regularFormat(alpha, precision) + letterName(maxLevel) + innerStr
+            return regularFormat(alpha, letterMantissaPrecision(maxLevel)) + letterName(maxLevel) + innerStr
         }
         // inner carries letters: bare outer letter (2-letter rule) — the
         // inner top must be LOWER (descending chain); ascending or same-level
@@ -1531,18 +1638,89 @@ function formatOrdinal(num, precision, precision4) {
                 let diagMant = 2 * Math.pow(5, base - Math.floor(base))
                 let diagBeta = (base === aaZeroCount) ? 10 : top
                 // multiLetterLimit symbol carry: A + aaZeroCount a's is
-                // aaZeroCount+1 letters — past the limit the diagonal reads
-                // as one more symbol with the Aa argument taking the exponent
-                // (10{ω^10}10 → !2.000Aa10)
+                // aaZeroCount+1 letters — past the limit the diagonal reads as
+                // one more symbol with the SINGLE letter of the finite level
+                // aaZeroCount (10{ω^10}10 → !1.000N10)
                 if (aaZeroCount + 1 > Math.max(2, FORMAT_OPTIONS.multiLetterLimit | 0)) {
-                    return "!" + regularFormat(diagMant, precision4) +
-                           "Aa" + formatR0Arg(aaZeroCount, precision4)
+                    return "!" + regularFormat(1, precision4) +
+                           letterName(aaZeroCount) + formatR0Arg(10, precision4)
                 }
                 return regularFormat(diagMant, precision4) + letter + commaFormat(diagBeta)
             }
         }
     }
-    
+
+    // ── Unnamed-level display (v2.0.2) ──
+    // The letter grid only names ordinals with coefficients ≤ 25 (top ≤ 26).
+    // When the TOP row's ordinal is above that (ω*2+96, ω*99, ω²*100, …), every
+    // row of the cascade snaps up to the SAME next nameable level, and summing
+    // their counts would collapse the letter further (243 Ca's → Cb(244)) —
+    // overstating the level and hiding the argument.  Instead the value reads
+    // as level-arg: the snapped level with the operation's own argument —
+    //   10{ω*2+100}100 → "1.000Ca100",  10{ω*100}100 → "1.000Aaa100",
+    //   10{ω²*100+ω*100+100}1000 → "1.000Aaaa1,000".
+    let gapStr = null
+    {
+        let topRow = ordRows[ordRows.length - 1]
+        if (topRow && topRow.length >= 3) {
+            let oc = topRow.slice(1)
+            let carried = false
+            for (let gi = 0; gi < oc.length; gi++) {
+                let gc = oc[gi]
+                let gbound = (gi === oc.length - 1) ? 26 : 25
+                if (typeof gc !== 'number' || !isFinite(gc) || gc < 0 ||
+                    Math.round(gc) > gbound) { carried = true; break }
+            }
+            if (carried) {
+                let g = snapCoeffsToGrid(oc)
+                let gdiag = g[g.length - 1]
+                let gvals = g.slice(0, g.length - 1)
+                let gh = 23 + (gdiag - 1) * 26 + (gvals.length ? gvals[0] : 0)
+                if (gvals.length >= 2) {
+                    let goffset = 0
+                    for (let gk = 2; gk <= gvals.length; gk++) goffset += Math.pow(26, gk)
+                    let gn = (gdiag - 1) * Math.pow(26, gvals.length)
+                    for (let gj = 0; gj < gvals.length; gj++) gn += gvals[gj] * Math.pow(26, gj)
+                    gh = 23 + goffset + gn
+                }
+                // β = the fundamental-sequence index that recovers the ordinal
+                // from the snapped level.  When the carry is in the TOP
+                // coefficient (ω^p·c → ω^(p+1)) that index is c+1:
+                //   10{ω²·50+ω·100+100}100  → "2.000Aaaa51"
+                //   10{ω²·100+ω·100+100}100 → "2.000Aaaa101"
+                //   10{ω²·200+…}100         → "2.000Aaaa201"
+                // (taking the largest coefficient instead collapsed all three
+                //  of 50/60/100 into one string).  When the carry is BELOW the
+                // top (ω·2+100 → ω·3) the index is the operation's argument.
+                let gbeta = (topRow[0] || 1) + 2
+                for (let g2 = oc.length - 1; g2 >= 0; g2--) {
+                    let gc2 = Math.round(oc[g2])
+                    let gbound = (g2 === oc.length - 1) ? 26 : 25
+                    if (isFinite(gc2) && gc2 > gbound) { gbeta = gc2 + 1; break }
+                }
+                let gtok = letterTokenOf(gh)
+                let gbase = r0[0]
+                let galpha = Math.pow(10, gbase - Math.floor(gbase))
+                if (galpha < 1) galpha *= 10
+                if (gtok.sym) {
+                    // the carried !αAaβ form: β is the ω-EXPONENT of the
+                    // snapped level (ω³·50+… → ω⁴ → "!2.000Aa4"), not the
+                    // fundamental-sequence index — !2.000Aa51 would read as
+                    // the ω⁵¹ level (README: !αAaβ = ω^β + digits of α)
+                    gapStr = emitLetterToken(gtok, regularFormat(gtok.mant, precision4),
+                                             formatR0Arg(gbeta, precision4), precision4)
+                } else {
+                    // a diagonal letter ("Ca", "Aaa", …) carries α = 2·5^f ∈
+                    // [2,10) — never the [1,10) mantissa of the other letters
+                    gapStr = regularFormat(
+                        diagonalMantissa(gtok.letter, Math.log10(galpha)), precision4) +
+                        gtok.letter + formatR0Arg(gbeta, precision4)
+                }
+            }
+        }
+    }
+    if (gapStr !== null) return gapStr
+
     // ── Check for repeated non-ω letters → advance to next letter ──
     // AbAb→Ac, AcAc→Ad, ..., AzAz→Ba, BaBa→Bb, etc.
     // Only applies when repeat count >= multiLetterRepeatThreshold
@@ -1553,19 +1731,20 @@ function formatOrdinal(num, precision, precision4) {
     for (let i = 0; i < ordRows.length; i++) {
         let row = ordRows[i]
         if (row.length < 3) { allSameLetter = false; break }
-        let diag = row[row.length - 1]
-        let vals = row.slice(1, row.length - 1)
+        // The letter grid only names ordinals whose coefficients are ≤ 25 (the
+        // top one ≤ 26); anything larger (ω*2+96, ω*99, ω²*100, …) is rounded UP
+        // to the next nameable ordinal — ω*2+96 → ω*3 (Ca), ω*99 → ω² (Aaa),
+        // ω²*100 → ω³ (Aaaa) — never clamped down, never wrapped.
+        let g = snapCoeffsToGrid(row.slice(1))
+        let diag = g[g.length - 1]
+        let vals = g.slice(0, g.length - 1)
         let nVals = vals.length
         
         // Calculate height for this letter
         let height = 0
         if (nVals === 1) {
-            // 2-letter: Aa=23, Ab=24, ..., Az=48, Ba=49, ...  A coefficient
-            // above 25 (ω+81, ω+99, … from a ω*2 fundamental sequence) has no
-            // letter in the grid — clamp down to the largest letter below it
-            // rather than wrapping into a higher, wrong letter.
-            let v0 = vals[0] > 25 ? 25 : vals[0]
-            height = 23 + (diag - 1) * 26 + v0
+            // 2-letter: Aa=23, Ab=24, ..., Az=48, Ba=49, ...
+            height = 23 + (diag - 1) * 26 + vals[0]
         } else {
             // 3+ letters: need to calculate offset
             // vals are stored in reverse letter order (e.g. "bc" -> [2,1]),
@@ -1612,18 +1791,18 @@ function formatOrdinal(num, precision, precision4) {
             let letter = letterName(baseLetterHeight)
             let tokAdv = letterTokenOf(baseLetterHeight + 1)
             if (totalRepeat >= collapseAt && tokAdv.sym) {
-                // Collapse to next letter — carried when it exceeds the limit;
-                // the r0 chain stays as the β of the carried form
-                return tokAdv.sym + regularFormat(tokAdv.mant, precision4) +
-                       tokAdv.letter + r0Str
+                // Collapse to next letter — carried when it exceeds the limit.
+                // !αAaβ takes the ω-EXPONENT as β (README: !αAaβ = ω^β + the
+                // digits of α), not the r0 chain.
+                return emitLetterToken(tokAdv, regularFormat(tokAdv.mant, precision4),
+                                       r0Str, precision4)
             }
             if (totalRepeat >= collapseAt) {
                 // Collapse to next letter — the repeat count shifts the
                 // argument, so the mantissa keeps the [1,10) convention
                 let mantissa = Math.log10(Math.max(alpha, 0.001)) + totalRepeat
-                let mantVal = Math.pow(10, mantissa - Math.floor(mantissa))
-                if (mantVal < 1) mantVal *= 10
                 let newLetter = letterName(baseLetterHeight + 1)
+                let mantVal = diagonalMantissa(newLetter, mantissa)
                 return regularFormat(mantVal, precision4) + newLetter + r0Str
             } else if (totalRepeat > 1) {
                 // Repeated letters + chain: one token per application, the
@@ -1646,16 +1825,9 @@ function formatOrdinal(num, precision, precision4) {
                 return emitLetterToken(tokAdv, regularFormat(tokAdv.mant, precision4), betaStr, precision4)
             }
             let mantissa = Math.log10(Math.max(alpha, 0.001)) + totalRepeat
-            // the repeat count shifts the argument, so the mantissa keeps the
-            // [1,10) convention (the ω-level form recovers the base mantissa
-            // the way the single-row Aa cascade does: 2.398Ab99)
-            let mantVal = (baseLetterHeight === 23)
-                ? Math.log10(Math.max(alpha, 0.001)) +
-                  Math.log10(Math.max(totalRepeat + 1, 1)) * 0.4 + 1.6
-                : Math.pow(10, mantissa - Math.floor(mantissa))
-            if (mantVal < 1) mantVal *= 10
             let newHeight = baseLetterHeight + 1
             let letter = letterName(newHeight)
+            let mantVal = diagonalMantissa(letter, mantissa)
             return regularFormat(mantVal, precision4) + letter +
                    formatR0Arg(totalRepeat + 1, precision4)
         } else if (totalRepeat > 1) {
@@ -1709,17 +1881,15 @@ function formatOrdinal(num, precision, precision4) {
             if (row.length === 2) {
                 height = 23 // ω-level (Aa)
             } else {
-                let diag = row[row.length - 1]
-                let vals = row.slice(1, row.length - 1)
+                // round the ordinal UP to the next one the letter grid can name
+                // (ω*2+96 → ω*3 = Ca, ω*99 → ω² = Aaa, ω²*100 → ω³ = Aaaa)
+                let g2 = snapCoeffsToGrid(row.slice(1))
+                let diag = g2[g2.length - 1]
+                let vals = g2.slice(0, g2.length - 1)
                 let nVals = vals.length
                 if (nVals === 1) {
-                    // the letter grid holds ω·d+v with 0 ≤ v ≤ 25; a larger
-                    // coefficient (a ω*2 fundamental sequence produces ω+81,
-                    // ω+99, …) has no letter, so clamp it down to the largest
-                    // letter below the ordinal instead of wrapping into a
-                    // higher, wrong letter (ω+81 must not display as ω*4+3)
-                    let v0 = vals[0] > 25 ? 25 : vals[0]
-                    height = 23 + (diag - 1) * 26 + v0
+                    // 2-letter: Aa=23, Ab=24, ..., Az=48, Ba=49, ...
+                    height = 23 + (diag - 1) * 26 + vals[0]
                 } else {
                     // vals are the CNF coefficients a1, a2, …, a(x-1) of
                     // ord = ω^(x-1)·ax + … + ω·a2 + a1 — little-endian, the same
