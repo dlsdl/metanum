@@ -8,7 +8,7 @@ let FORMAT_DEBUG = 0
 // ─── Configuration Options ────────────────────────────────────────
 const FORMAT_OPTIONS = {
   smallNotationUseE: true,      //true/false
-  smallNotationThreshold: 4,    //0~9
+  smallNotationThreshold: 3,    //0~9
   decimalPlaces: 3,             //0~9
   decimalThreshold: 3,          //0~15
   useCommas: true,              //true/false
@@ -644,6 +644,26 @@ function format(num, precision=3, small=false) {
     if (num.sign !== 2 && num.sign !== -2 && num.abs().lt(1e-308)) return (0).toFixed(precision)
     if (num.sign < 0) return "-" + format(num.neg(), precision, small)
     if (num.isInfinite()) return "Infinity"
+
+    // Sub-unit values (sign 2 / -2, the whole 0 < |v| < 1 range): a plain
+    // finite r0 stores the RECIPROCAL, so the real value is 1/r0 — format that
+    // number and let the normal machinery below render it (decimal places at or
+    // above 10^-smallNotationThreshold, αE-β below it).  Reading the raw r0 as
+    // the value printed the reciprocal instead: MetaNum(1).div(2000)
+    // (r0 = [2000], value 5e-4) came out as "2.000E-3" instead of "5.000E-4".
+    // Structured sign-2 forms (layer > 0, ordinal rows, power-tower r0) keep the
+    // letter-law path further down.
+    if ((num.sign === 2 || num.sign === -2) && num.layer === 0 &&
+        num.array.length === 1 && num.array[0].length === 1 &&
+        isFinite(num.array[0][0]) && num.array[0][0] !== 0) {
+        let realVal = 1 / num.array[0][0]
+        if (isFinite(realVal) && realVal > 0) {
+            let asNormal = num.clone()
+            asNormal.sign = 1
+            asNormal.array = [[realVal]]
+            num = asNormal
+        }
+    }
 
     // Small value handling (e.g., 0.0000000001 → 1.000E-10 or 1.000E10⁻¹)
     let smallThreshold = Math.pow(10, -FORMAT_OPTIONS.smallNotationThreshold)

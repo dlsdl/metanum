@@ -228,6 +228,38 @@
     return Math.log10(Number(str.substring(0, LONG_STRING_MIN_LENGTH))) + (str.length - LONG_STRING_MIN_LENGTH);
   };
 
+  // Canonical form of a value with 0 < |v| < 1: the library stores it as the
+  // RECIPROCAL with sign 2 (0<v<1) / -2 (-1<v<0) — the same encoding the
+  // underflow path below already produced, now applied to the WHOLE sub-unit
+  // range so that `MetaNum(0.5).sign === 2` and every operation result in that
+  // range carries it too (README: sign 2 / -2 == 0~1 / -1~0).
+  //
+  // _skipCanon lets rec() produce the reciprocal of a sub-unit value (2 for 0.5)
+  // without this rule turning it straight back into a small value.
+  var _skipCanon = 0;
+  function canonicalizeSubUnit(x) {
+    if (_skipCanon) return x;
+    if (x.layer !== 0 || x.array.length !== 1) return x;
+    var r = x.array[0];
+    if (x.sign !== 1 && x.sign !== -1) return x;   // already reciprocal-encoded
+    if (r.length === 1) {
+      var v = r[0];
+      if (!(typeof v === 'number') || !isFinite(v) || v <= 0 || v >= 1) return x;
+      r[0] = 1 / v;
+      x.sign = x.sign === -1 ? -2 : 2;
+      return x;
+    }
+    if (r.length === 2 && r[1] === 1) {
+      // 10^e with a negative exponent is sub-unit: store 10^(-e) as reciprocal
+      var e = r[0];
+      if (!(typeof e === 'number') || !isFinite(e) || e >= 0) return x;
+      r[0] = -e;
+      x.sign = x.sign === -1 ? -2 : 2;
+      return x;
+    }
+    return x;
+  }
+
   P.normalize = function () {
     var b;
     var x = this;
@@ -469,6 +501,40 @@
     return x;
   };
 
+  // Apply the sub-unit canonical form to a public result (constructor input or
+  // the result of a basic arithmetic op).  Deliberately NOT part of normalize():
+  // normalize runs on every internal intermediate, and the engine's own
+  // transcendentals (log10 → 0.301, slog, gamma, hyper-op levels) plus hardy's
+  // coefficient arrays read r0 structurally, so canonicalizing there broke
+  // them.  See canonicalizeSubUnit above.
+  function canonicalizeResult(x) {
+    if (x instanceof MetaNum) canonicalizeSubUnit(x);
+    return x;
+  }
+
+  // Constructor that never applies the sub-unit canonical form.  Engine
+  // internals build values that are consumed STRUCTURALLY (r0 read as a
+  // magnitude, sign tested for -1): the transcendentals' own results
+  // (log10(2) = 0.301, slog, gamma, pent_log) and hardy's fractional
+  // coefficients.  Canonicalizing those changed r0[0] from 0.301 to 3.32 and
+  // silently corrupted every consumer.
+  function rawMetaNum(v) {
+    _skipCanon++;
+    try { return new MetaNum(v); } finally { _skipCanon--; }
+  }
+
+  // Run fn with the sub-unit canonical form suppressed.  Applied to the engine
+  // functions that CONSUME sub-unit magnitudes structurally (gamma's series,
+  // slog's log10 chain, the layeradd/pentate inverse paths): they read r0 as a
+  // plain magnitude, so a canonicalized intermediate (log10(2) → r0 [3.32]
+  // instead of [0.301]) silently produced garbage.  The PRODUCERS (log10, ln,
+  // exp, root, the constructor, add/sub/mul/div) stay canonicalized, so the
+  // public contract the user asked for still holds.
+  function rawBody(fn, self, args) {
+    _skipCanon++;
+    try { return fn.apply(self, args || []); } finally { _skipCanon--; }
+  }
+
   var standardizeMessageSent = false;
   P.standardize = function () {
     if (!standardizeMessageSent) console.warn(metaNumError + "'standardize' method is being deprecated in favor of 'normalize' and will be removed in the future!"), standardizeMessageSent = true;
@@ -500,6 +566,19 @@
 
     if (this.array[0] && isNaN(this.array[0][0])) return NaN;
     if (other.array[0] && isNaN(other.array[0][0])) return NaN;
+
+    // Plain finite numerics (any sign, including the sub-unit encoding 2/-2)
+    // compare as real numbers.  The structural path below reads r0 as the
+    // magnitude and only inverts at the very end, so a sign-2 value like 0.2
+    // (stored as r0 = [5]) used to compare as 5 — every `lt`/`gt`/`eq` against a
+    // sub-unit value was wrong.
+    var tNum = plainNumericValue(this);
+    var oNum = plainNumericValue(other);
+    if (tNum !== null && oNum !== null) {
+      if (tNum < oNum) return -1;
+      if (tNum > oNum) return 1;
+      return 0;
+    }
 
     var tInf = this.array[0] && this.array[0][0] === Infinity;
     var oInf = other.array[0] && other.array[0][0] === Infinity;
@@ -796,6 +875,30 @@
     return x.sign === 2 || x.sign === -2;
   }
 
+  // The plain r0 magnitude as the engine's own numeric routines expect it:
+  // for a sub-unit value (sign 2/-2) r0 holds the RECIPROCAL, so unwrap it.
+  // Use this wherever a function does `isSimple(x) ? x.array[0][0] : …` to feed
+  // a float routine — otherwise 0.5 (r0 [2]) is read as 2.
+  function magnitudeOf(x) {
+    if (!isSmall(x)) return x.array[0][0];
+    return 1 / x.array[0][0];
+  }
+
+  // Real value of a plain finite numeric MetaNum, or null when the value is
+  // structured (layer > 0, ordinal rows, E/power-tower r0) and must go through
+  // the structural comparison.  sign 2/-2 is the sub-unit encoding: r0 holds
+  // the reciprocal, so the value is 1/r0 (negated for -2).
+  function plainNumericValue(x) {
+    if (x.layer !== 0 || x.array.length !== 1) return null;
+    var r0 = x.array[0];
+    if (r0.length !== 1) return null;
+    var v = r0[0];
+    if (typeof v !== 'number' || !isFinite(v) || v === 0) return null;
+    if (x.sign === 2) return 1 / v;
+    if (x.sign === -2) return -1 / v;
+    return x.sign === -1 ? -v : v;
+  }
+
   function isNumeric(x) {
     return x.layer === 0 && x.array.length === 1 &&
            x.array[0].length === 1 && isFinite(x.array[0][0]);
@@ -1011,9 +1114,11 @@
     var domMul = layerDominant(x, other);
     if (domMul !== null) return domMul.clone().normalize();
 
-    if (isSimple(x) && isSimple(other) && !isSmall(x) && !isSmall(other)) {
-      var nx = x.array[0][0];
-      var ny = other.array[0][0];
+    if (isSimple(x) && isSimple(other)) {
+      // magnitudeOf: sub-unit operands (sign 2/-2) store the reciprocal, so
+      // read the real values — otherwise 0.5·0.5 multiplied 2·2 = 4.
+      var nx = magnitudeOf(x);
+      var ny = magnitudeOf(other);
       var n = nx * ny;
       if (isFinite(n) && n !== 0 && Math.abs(n) <= MAX_SAFE_INTEGER) {
         if (Math.abs(n) < 1) return new MetaNum(1 / Math.abs(n)).rec();
@@ -1066,9 +1171,11 @@
     }
 
     if (x.eq(MetaNum.ZERO)) return MetaNum.ZERO.clone();
-    if (isSimple(x) && isSimple(other) && !isSmall(x) && !isSmall(other)) {
-      var nx = x.array[0][0];
-      var ny = other.array[0][0];
+    if (isSimple(x) && isSimple(other)) {
+      // magnitudeOf: sub-unit operands store the reciprocal — 0.5 / 0.25 must
+      // read 0.5 and 0.25, not 2 and 4.
+      var nx = magnitudeOf(x);
+      var ny = magnitudeOf(other);
       var n = nx / ny;
       if (isFinite(n) && n !== 0 && Math.abs(n) <= MAX_SAFE_INTEGER) {
         if (Math.abs(n) < 1) return new MetaNum(1 / Math.abs(n)).rec();
@@ -1111,7 +1218,10 @@
     var x = this.clone();
     // Toggle between large and small: 1↔2, -1↔-2
     x.sign = x.sign === 1 ? 2 : x.sign === 2 ? 1 : x.sign === -1 ? -2 : -1;
-    return x.normalize();
+    // _skipCanon: the reciprocal of a sub-unit value is a NORMAL value (rec(0.5)
+    // = 2) — canonicalizeSubUnit would otherwise flip it straight back.
+    _skipCanon++;
+    try { return x.normalize(); } finally { _skipCanon--; }
   };
   Q.reciprocate = Q.rec = function (x) {
     return new MetaNum(x).rec();
@@ -1202,7 +1312,11 @@
       if (other.mod(2).eq(MetaNum.ONE)) return x.abs().root(other).neg();
       return MetaNum.NaN.clone();
     }
-    if (isNumeric(x) && isNumeric(other)) return new MetaNum(Math.pow(x.array[0][0], 1 / other.array[0][0]));
+    if (isNumeric(x) && isNumeric(other)) {
+      // magnitudeOf: a sub-unit x (sign 2) stores the reciprocal in r0, so
+      // sqrt(0.25) must read 0.25, not the stored 4 (which gave 2).
+      return new MetaNum(Math.pow(magnitudeOf(x), 1 / magnitudeOf(other)));
+    }
     // Handle E^m format (iterated exponentiation levels)
     if (x.layer === 0 && x.array.length === 1 && x.array[0].length > 1 && isNumeric(other)) {
       var r0 = x.array[0];
@@ -1260,19 +1374,11 @@
   P.generalLogarithm = P.log10 = function () {
     if (this.isNaN() || this.sign === -1 || this.sign === -2) return MetaNum.NaN.clone();
     if (this.isInfinite()) return this;
-    if (isSmall(this)) {
-      // Small value: log10 is negative of what it would be for the normal value
-      var n = this.clone();
-      n.sign = 1; // Convert to normal positive for computation
-      var result = n.log10();
-      // Result should be negative (because log10 of a small number is negative)
-      // Need to handle this carefully - after conversion, the result is the magnitude
-      // which we need to negate
-      return result.neg();
-    }
     if (this.eq(MetaNum.ZERO)) return MetaNum.NEGATIVE_INFINITY.clone();
     if (isNumeric(this)) {
-      var lv = Math.log10(this.array[0][0]);
+      // magnitudeOf: a sub-unit operand stores the reciprocal in r0, so
+      // log10(0.5) must read 0.5, not the stored 2.
+      var lv = Math.log10(magnitudeOf(this));
       if (Number.isFinite(lv)) return new MetaNum(lv);
     }
     if (this.layer === 0 && this.array.length === 1 && this.array[0].length > 1) {
@@ -1298,7 +1404,7 @@
     if (x.eq(MetaNum.ZERO)) return MetaNum.NEGATIVE_INFINITY.clone();
     if (x.eq(MetaNum.ONE)) return MetaNum.ZERO.clone();
     if (isNumeric(x) && isNumeric(base)) {
-      var lv = Math.log(x.array[0][0]) / Math.log(base.array[0][0]);
+      var lv = Math.log(magnitudeOf(x)) / Math.log(magnitudeOf(base));
       if (Number.isFinite(lv)) return new MetaNum(lv);
     }
     return x.log10().div(base.log10());
@@ -1308,11 +1414,14 @@
   };
 
   P.naturalLogarithm = P.ln = function () {
-    if (this.isNaN() || this.sign === -1 || this.sign === -2) return MetaNum.NaN.clone();
+    if (this.sign === -1 || this.sign === -2) return MetaNum.NaN.clone();
+    if (this.isNaN()) return MetaNum.NaN.clone();
     if (this.eq(MetaNum.ZERO)) return MetaNum.NEGATIVE_INFINITY.clone();
     if (this.isInfinite()) return this;
     if (isNumeric(this)) {
-      var lv = Math.log(this.array[0][0]);
+      // magnitudeOf: a sub-unit operand stores the reciprocal in r0, so
+      // ln(0.5) must read 0.5, not the stored 2.
+      var lv = Math.log(magnitudeOf(this));
       if (Number.isFinite(lv)) return new MetaNum(lv);
     }
     return this.log10().div(new MetaNum(Math.LOG10E));
@@ -1354,7 +1463,7 @@
     if (this.sign === -1 || this.sign === -2) return MetaNum.NaN.clone();
     if (this.isNaN() || this.isInfinite()) return this.clone();
     if (isSimple(this)) {
-      var n = this.array[0][0];
+      var n = magnitudeOf(this);   // sub-unit r0 holds the reciprocal
       if (Number.isInteger(n) && n >= 0 && n <= 100) {
         var f = 1;
         for (var i = 2; i < n; i++) f *= i;
@@ -1377,7 +1486,7 @@
     if (this.isNaN() || this.isInfinite()) return this;
     if (this.sign === -1 || this.sign === -2) return this.abs().fact().neg();
     if (isSimple(this)) {
-      var n = this.array[0][0];
+      var n = magnitudeOf(this);   // sub-unit r0 holds the reciprocal
       if (Number.isInteger(n) && n >= 0 && n <= 20) {
         var f = 1;
         for (var i = 2; i <= n; i++) f *= i;
@@ -1415,7 +1524,7 @@
       if (this.gt(MetaNum.E_MAX_SAFE_INTEGER)) return d_lambertw(this, tol, principal);
       if (isNumeric(this)) {
         try {
-          return new MetaNum(f_lambertw(this.array[0][0], tol, principal));
+          return new MetaNum(f_lambertw(magnitudeOf(this), tol, principal));
         } catch (e) {
           return MetaNum.NaN.clone();
         }
@@ -1428,7 +1537,8 @@
       if (this.abs().gt(MetaNum.E_MAX_SAFE_INTEGER)) return d_lambertw(this, tol, principal);
       if (isNumeric(this)) {
         try {
-          return new MetaNum(f_lambertw(this.sign * this.array[0][0], tol, principal));
+          return new MetaNum(f_lambertw(
+            (this.sign === -2 ? -1 : this.sign) * magnitudeOf(this.abs()), tol, principal));
         } catch (e) {
           return MetaNum.NaN.clone();
         }
@@ -1594,7 +1704,7 @@
     if (this.eq(MetaNum.ZERO)) return MetaNum.ZERO.clone();
     if (this.eq(MetaNum.ONE)) return MetaNum.ONE.clone();
     if (isSimple(this)) {
-      var v = this.array[0][0];
+      var v = magnitudeOf(this);
       if (v > 0 && v < 1) return new MetaNum(v);
       try {
         var w = f_lambertw(Math.log(v));
@@ -4763,7 +4873,7 @@
     if (this.isNaN()) return "NaN";
     if (this.isInfinite()) return "Infinity";
     if (isSimple(this)) {
-      var v = decimalPlaces(this.array[0][0], places);
+      var v = decimalPlaces(magnitudeOf(this), places);   // sub-unit r0 = reciprocal
       if (Number.isFinite(v)) return v.toString();
     }
     return this.toString();
@@ -4779,7 +4889,14 @@
     if (typeof require == 'function') {
       try { formatter = require('./format-metanum.js').format; } catch (e) { formatter = null; }
     }
-    return format(this, precision, small);
+    if (!formatter && typeof format === 'function') formatter = format;   // browser bundle
+    if (!formatter) {
+      // No formatter available (bare browser include): fall back to the plain
+      // decimal expansion rather than throwing ReferenceError.
+      var plain = this.toNumber();
+      return isFinite(plain) ? String(plain) : this.toString();
+    }
+    return formatter(this, precision, small);
   };
 
   P.toExponential = function (places) {
@@ -4811,7 +4928,7 @@
     if (this.isNaN()) return "NaN";
     if (this.isInfinite()) return "Infinity";
     if (isSimple(this)) {
-      var v = this.array[0][0];
+      var v = magnitudeOf(this);   // sub-unit r0 holds the reciprocal
       if (v < 10) return String(v);
       return "E" + Math.log10(v).toFixed(6);
     }
@@ -5891,6 +6008,12 @@
   // deep for inputs like hardy(1e10+20) where n1≈40 makes every ω^j segment
   // take the exact branch: Maximum call stack size exceeded).
   Q._hardyH = function (coeffs, nArg) {
+    // Coefficients are read/written STRUCTURALLY below (c[j] -= 1, c[j-1] = n,
+    // c_j compared against HARDY_EXACT_BOUND) and a fractional coefficient is
+    // the normal case once the running base is 10+f — the sub-unit canonical
+    // form must not rewrite them into reciprocals.
+    _skipCanon++;
+    try {
     function MN(v) { return (v instanceof MetaNum) ? v.clone() : new MetaNum(v || 0); }
     var c = [];
     for (var i0 = 0; i0 < coeffs.length; i0++) c.push(MN(coeffs[i0]));
@@ -5954,6 +6077,7 @@
     }
     // budget exhausted: keep whatever was accumulated (monotone)
     return n;
+    } finally { _skipCanon--; }
   };
 
   // H_{ω^k}(n) for the from-below base of hardy (n ≥ 1e10).
@@ -6470,7 +6594,12 @@
       }
 
       var temp;
+      // Public primitive input: a numeric literal / decimal string in (0,1) or
+      // (-1,0) is stored as the reciprocal with sign 2 / -2.  Array/object input
+      // (engine internals, JSON, parsers) is left exactly as given.
+      var publicInput = false;
       if (typeof input === "number" && input2 === undefined) {
+        publicInput = true;
         temp = objectCreate();
         temp.array = [[Math.abs(input)]];
         temp.sign = input < 0 ? -1 : 1;
@@ -6480,6 +6609,7 @@
       } else if (parsedObject) {
         temp = Q.fromObject(parsedObject);
       } else if (typeof input === "string") {
+        publicInput = true;
         temp = Q.fromString(input);
       } else if (Array.isArray(input)) {
         temp = Q.fromArray(input, input2, input3);
@@ -6488,6 +6618,7 @@
       } else if (typeof input === "object" && input !== null) {
         temp = Q.fromObject(input);
       } else {
+        publicInput = true;
         temp = objectCreate();
         var num = Number(input);
         if (!isNaN(num) && isFinite(num)) {
@@ -6503,6 +6634,7 @@
           temp.sign = num < 0 ? -1 : 1;
         }
       }
+      if (publicInput) canonicalizeSubUnit(temp);
 
       x.array = deepCloneArray(temp.array);
       x.sign = temp.sign;
@@ -6682,6 +6814,63 @@
 
   MetaNum = clone(MetaNum);
   MetaNum = defineConstants(MetaNum);
+
+  // Sub-unit canonical form: run the engine's structural CONSUMERS with it off.
+  // These functions read r0 as a plain magnitude and chain through log10/exp
+  // (whose results are now canonicalized when a user calls them directly), so
+  // without this they saw reciprocals where they expected values — gamma(0.5)
+  // read r0 [2] as 2, slog computed from a 3.32 instead of 0.301, and
+  // layeradd/pentate_log returned garbage.  The PRODUCERS (constructor with a
+  // primitive, add/sub/mul/div, log10, ln, exp, root, neg) stay canonicalized,
+  // so MetaNum(0.5).sign === 2 and arithmetic results in (0,1) carry sign 2.
+  (function () {
+    var rawConsumers = [
+      'gamma', 'lambertw', 'slog', 'layeradd', 'layeradd10',
+      'pentate', 'pentate_log', 'pentate_root', 'ssrt', 'linear_sroot',
+      'hyper_log', 'hyper_root', 'tetrate', 'expande', 'explode',
+      'expandainate', 'expoiter', 'slayer', 'fastest_hypergrow',
+      'logBase', 'mod', 'arrow'
+    ];
+    for (var ri = 0; ri < rawConsumers.length; ri++) {
+      var name = rawConsumers[ri];
+      var fn = P[name];
+      if (typeof fn !== 'function') continue;
+      P[name] = (function (orig) {
+        return function () {
+          _skipCanon++;
+          var out;
+          try { out = orig.apply(this, arguments); }
+          finally { _skipCanon--; }
+          // The hyper-op builders (arrow, tetrate, expande, …) return a
+          // CLOSURE that carries out the real computation — the guard is gone
+          // by then, so the chain ran canonicalized and drifted by an ULP
+          // (4{25}4 → 153.906997547968 instead of …802).  Re-arm around it.
+          if (typeof out === 'function') {
+            return function () {
+              _skipCanon++;
+              try { return out.apply(this, arguments); }
+              finally { _skipCanon--; }
+            };
+          }
+          return out;
+        };
+      })(fn);
+    }
+    // Q-level entry points that drive the same structural machinery
+    var rawStatics = ['BEAF', '_beafRecursive', 'arrow', 'beaf'];
+    for (var si = 0; si < rawStatics.length; si++) {
+      var sfn = Q[rawStatics[si]];
+      if (typeof sfn !== 'function') continue;
+      Q[rawStatics[si]] = (function (orig) {
+        return function () {
+          _skipCanon++;
+          try { return orig.apply(this, arguments); }
+          finally { _skipCanon--; }
+        };
+      })(sfn);
+    }
+  })();
+
   MetaNum['default'] = MetaNum.MetaNum = MetaNum;
 
   if (typeof define == 'function' && define.amd) {
