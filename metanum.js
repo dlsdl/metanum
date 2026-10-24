@@ -1,6 +1,6 @@
-// Author: dlsdl v2.1.2
-// v2.1.2 Fix(format): `format` now caps every display at TWO letter combinations with an αΓβ binary tail
-// Code snippets and templates from OmegaNum.js
+//Author: dlsdl v2.1.2
+//v2.1.2 Fix: round-trip @Aa1/#Aa1 and alpha-Gamma sub-unit forms; fix(format): exact token form for non-integer multi-a layers and past multiLetterLimit
+//Code snippets and templates from OmegaNum.js
 
 ;(function (globalScope) {
   "use strict";
@@ -4895,14 +4895,35 @@
     if (isSimple(this)) {
       var v = magnitudeOf(this);   // sub-unit r0 holds the reciprocal
       if (v < 10) return String(v);
-      return "E" + Math.log10(v).toFixed(6);
+      // Ea means 10^a; drop the toFixed tail so E15 is not "E15.000000".
+      return "E" + String(Number(Math.log10(v).toFixed(6)));
     }
-    if (this.layer > 0) return "E" + this.layer + "#" + this.toString();
+    // Hyper-E has no faithful compact form for ordinal rows / ε layers; keep
+    // the exact MetaNum spelling instead of emitting a bogus E…#… chain.
+    if (this.layer > 0) return this.toString();
     if (this.array.length === 1 && this.array[0].length >= 2) {
-      var s = "E";
-      for (var i = 1; i < this.array[0].length; i++) s += "#";
-      s += String(this.array[0][0]);
-      return s;
+      var row = this.array[0];
+      var a = row[0];
+      var k = row[1];
+      // A pure 10^ tower [a, k] (all higher entries are zero) is Ea#k.
+      // Canonicalise integer-height tetration to E1#n (10^^n), which is
+      // both shorter and round-trippable: 10^^16 = E1#16.
+      if (row.length === 2 && isFinite(k) && k === Math.floor(k) && k >= 1) {
+        var sl = this.slog();
+        if (sl.layer === 0 && sl.array.length === 1 &&
+            sl.array[0].length === 1) {
+          var n = sl.toNumber();
+          if (isFinite(n) && n === Math.floor(n) && n >= 1) {
+            return "E1#" + String(n);
+          }
+        }
+        // short towers stay in the ordinary E-prefix form (E16, EE16, …);
+        // longer ones use the compact argument form Ea#k.
+        if (k <= 4) return "E".repeat(k) + String(a);
+        return "E" + String(a) + "#" + String(k);
+      }
+      // rows with 10^^ / higher levels: no compact faithful form yet
+      return this.toString();
     }
     return this.toString();
   };
@@ -5058,6 +5079,10 @@
       x.sign = negateIt ? -1 : 1;
       return x;
     }
+    // Ea#b / E1#n (Hyper-E argument form) goes through the fromString path.
+    if (s.indexOf('#') >= 0) {
+      return MetaNum.fromString((negateIt ? "-" : "") + s);
+    }
     var count = 0;
     while (s[0] === "E") {
       count++;
@@ -5121,6 +5146,15 @@
       x.array = [[Infinity]];
       x.sign = negateIt ? -1 : 1;
       return x;
+    }
+
+    // Hyper-E argument form: Ea#b = b applications of 10^ to a
+    // (E16 = 10^16, E100#2 = 10^10^100, E1#16 = 10^^16).
+    var hMatch = s.match(/^E([0-9]+(?:\.[0-9]+)?)#([0-9]+)$/);
+    if (hMatch) {
+      x.array = [[Number(hMatch[1]), Number(hMatch[2])]];
+      x.sign = negateIt ? -1 : 1;
+      return x.normalize();
     }
 
     // v2.0.2: "1e10+0.5" / "1e10+11" / "1e16+1e13" — the digit paths (hardy)
@@ -6538,9 +6572,15 @@
         return new MetaNum(Infinity);
         }
       }
-      // ordinal-row / ε-layer / letter-chain values sit at their own Hardy
-      // position (H_{ω^β}(10) = 10{β}10): map to themselves
-      if (hStr === null) return n.clone().normalize();
+      // Issue #32: a layer-0 value with ordinal rows (Aa21, Aa100, Aaa16,
+      // !Aa16, …) is past the clean power-tower ceiling.  Reading its decimal
+      // digits as the ordinal gives an α at or beyond ε₀, so the Hardy value
+      // is unrepresentable → Infinity.  (ε-layer values keep the structural
+      // self-map: H_{ω^β}(10) = 10{β}10.)
+      if (hStr === null) {
+        if (n.layer === 0 && n.array.length > 1) return new MetaNum(Infinity);
+        return n.clone().normalize();
+      }
     }
     var s = (hStr !== null) ? hStr : String(num);
     // > 1e20 arrives in scientific notation ('1e+21') — expand to the exact
