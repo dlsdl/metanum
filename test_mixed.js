@@ -230,6 +230,104 @@ function checkRT(name, input) {
 //     G6.1  v2.0.2 unnamed-level format
 //     G6.2  format α correctness
 //     G6.3  two-letter rule
+//     G6.4  single-letter canonical forms (formatSingleLetterType)
+//     G6.5  hardy hierarchy display forms
+//     G6.6  diagonal letter convention
+//     G6.7  cross-config stability
+//     G6.8  MetaNum(...).format() instance method
+// ──────────────────────────────────────────────────────────────────
+// G1  STRING PROCESSING & PARSING
+//     G1.1  letter chains (1-4 letters, symbols, ε) round-trip
+//     G1.2  mixed tokens & spaced \"^count\" chains
+//     G1.3  symbol layer semantics
+//     G1.4  D05 !Aa(real alpha)
+//     G1.5  D06 !alpha Aa beta
+// G2  ORDINARY ARITHMETIC
+//     G2.1  basic arithmetic (< MSI vs > MSI)
+//     G2.2  power operations (< MSI vs > MSI)
+//     G2.3  roots (< MSI vs > MSI)
+//     G2.4  logarithms (< MSI vs > MSI)
+//     G2.5  factorial, gamma and Lambert W (< MSI vs > MSI)
+//     G2.6  rounding and modulus (< MSI vs > MSI)
+//     G2.7  other unary operations (< MSI vs > MSI)
+//     G2.8  D01 pow(10, negative alpha) sign
+// G3  HYPEROPERATIONS
+//     G3.1  hyperoperation base (< MSI vs > MSI)
+//     G3.2  pentate_log/root
+//     G3.3  hyper_log/root
+//     G3.4  aperiote (ω)
+//     G3.5  expande (ω+1)
+//     G3.6  multiexpande (ω+2)
+//     G3.7  powerexpande (ω+3)
+//     G3.8  aperioexpande (ω*2)
+//     G3.9  explode (ω*2+1)
+//     G3.10  multiexplode (ω*2+2)
+//     G3.11  aperioexplode (ω*3)
+//     G3.12  detonate (ω*3+1)
+//     G3.13  aperiodetonate (ω*4)
+//     G3.14  aperionate (ω^2)
+//     G3.15  megote (ω^2+1)
+//     G3.16  multimegote (ω^2+2)
+//     G3.17  aperimegote (ω^2+ω)
+//     G3.18  megoexpande (ω^2+ω+1)
+//     G3.19  aperimegoexpande (ω^2+ω*2)
+//     G3.20  megoaperionate (ω^2*2)
+//     G3.21  gigote (ω^2*2+1)
+//     G3.22  aperigigote (ω^2*2+ω)
+//     G3.23  gigoaperionate (ω^2*3)
+//     G3.24  aperiatote (ω^3)
+//     G3.25  powiainate (ω^3+1)
+//     G3.26  expandainate (ω^3+ω)
+//     G3.27  megodainate (ω^3+ω^2)
+//     G3.28  powiairate (ω^3*2)
+//     G3.29  aperioguate (ω^4)
+//     G3.30  iter (ω^ω)
+//     G3.31  itermult (ω^ω+1)
+//     G3.32  cuboiter (ω^ω*2)
+//     G3.33  expoiter (ω^(ω+1))
+//     G3.34  trioterate (ω^(ω*2))
+//     G3.35  trixxate (ω^(ω^2))
+//     G3.36  aperixxate (ω^(ω^ω))
+//     G3.37  epsilonate (ε₀)
+//     G3.38  λ[y] layer markers in STANDARD form
+//     G3.39  precision budget (maxRows/maxCols)
+//     G3.40  all hyperoperations x=1, y=3 test
+//     G3.41  all hyperoperations x=3, y=1 test
+//     G3.42  hyperoperation (x > MSI)
+//     G3.43  hyperoperation (y > MSI)
+//     G3.44  inverse operation (> MSI) roundtrip
+//     G3.45  inverse round-trip (small y and y > MSI)
+//     G3.46  hyperoperation iteration tests
+//     G3.47  triple nested hyperoperation tests
+//     G3.48  big ordinal annex small ordinal tests x=QqQe308
+//     G3.49  big ordinal annex small ordinal tests y=QqQe308
+//     G3.50  hyperoperation large-cardinal (x > 10^16)
+//     G3.51  h11/h12/h13 count law
+//     G3.52  h20+ : expanded form & count law
+//     G3.53  h20+ with fractional y
+//     G3.54  engine arrays
+//     G3.55  fractional levels
+//     G3.56  ordinal-level fractional arguments
+//     G3.57  D07 2{lambda}2
+// G4  BEAF · HARDY · FGH
+//     G4.1  BEAF ordinal nesting
+//     G4.2  hardy hierarchy (all cases)
+//     G4.3  v2.0.2 hardy fixes
+//     G4.4  hardy(n ≥ 1e10) : base & cascade
+//     G4.5  v2.0.2 hardy(n > 1e10) round 2
+//     G4.6  D02 toBeaf base preservation
+//     G4.7  D03 toBeaf unrepresentable behavior
+//     G4.8  hardy base extension
+// G5  PLAIN FORMAT()
+//     G5.1  format() verification
+//     G5.2  reciprocal format tests
+//     G5.3  maxCols/maxRows = 20 (Z10)
+//     G5.4  FORMAT_OPTIONS take effect
+//     G5.5  D04 format repeated-letter chains
+// G6  FORMAT() COMBINED WITH OTHER OPERATIONS
+//     G6.1  v2.0.2 unnamed-level format
+//     G6.2  format α correctness
+//     G6.3  two-letter rule
 //     G6.4  hardy hierarchy display forms
 //     G6.5  diagonal letter convention
 //     G6.6  cross-config stability
@@ -1977,7 +2075,7 @@ console.log("\n=== G4.4 hardy(n ≥ 1e10) : base & cascade ===");
   // [非整数, 21, 21, …, 21] single-row shape (was the engine value
   // 10{20}22 = [[1e10,8×19],[21,20]]).
   var v11 = MetaNum.hardy(1e10 + 11);          // H_{ω^ω+ω+1}(10) = H_{ω^ω}(22)
-  checkBool("hardy(1e10+11): single truncated tower [c0, 21×19] — [非整数,21,21,…]",
+  checkBool("hardy(1e10+11): single truncated tower [c0, 21×19] — [nonInteger,21,21,…]",
     v11.array.length === 1 && v11.array[0].length === MetaNum.maxCols &&
     v11.array[0][1] === 21 && v11.array[0][MetaNum.maxCols - 1] === 21 &&
     v11.array[0][0] > 1 && v11.array[0][0] !== Math.floor(v11.array[0][0]), true);
@@ -2113,97 +2211,6 @@ console.log("\n=== G4.4 hardy(n ≥ 1e10) : base & cascade ===");
   checkBool("hardy(\"2e1000\") top row follows the input (ω^1000 cascade)",
     MetaNum.hardy("2e1000").layer === 0 &&
     MetaNum.hardy("2e1000").array.length - 1 === 19, true);
-})();
-
-// ─────────────────────────────────────
-// Levels above the letter grid (ω*2+100, ω*50, ω²*50, …) read as level-arg:
-// the snapped level with the fundamental-sequence index that recovers the
-// ordinal — the LARGEST coefficient was used before, which collapsed
-// [100,100,50], [100,100,60] and [100,100,100] into one string.
-(function () {
-  var pairs = [
-    [[100, 100, 50], "2.000Aaaa51"],
-    [[100, 100, 60], "2.000Aaaa61"],
-    [[100, 100, 100], "2.000Aaaa101"],
-    [[100, 100, 200], "2.000Aaaa201"],
-    [[100, 30], "2.000Aaa31"],
-    [[100, 50], "2.000Aaa51"],
-    [[100, 2], "2.000Ca100"]
-  ]
-  var ok = true, seen = {}
-  for (var i = 0; i < pairs.length; i++) {
-    var f = format(MetaNum._hyperopFromOrdinal(MetaNum(10), MetaNum(100), pairs[i][0]))
-    if (f !== pairs[i][1]) { ok = false; console.log("   " + f + " ≠ " + pairs[i][1]) }
-    if (seen[f]) { ok = false; console.log("   collision: " + f) }
-    seen[f] = true
-  }
-  checkBool("unnamed levels keep distinct level-args", ok, true)
-  // the ω+c / ω*N families must not collide either
-  var ok2 = true, seen2 = {}
-  var fam = [[100, 3], [100, 4], [100, 5], [0, 40], [100, 40]]
-  for (var j = 0; j < fam.length; j++) {
-    var g = format(MetaNum._hyperopFromOrdinal(MetaNum(10), MetaNum(100), fam[j]))
-    if (seen2[g]) { ok2 = false; console.log("   collision: " + g + " " + JSON.stringify(fam[j])) }
-    seen2[g] = true
-  }
-  checkBool("ω+c / ω*N families keep distinct level-args", ok2, true)
-})();
-
-// The carried !αAaβ form takes the ω-EXPONENT as β (README: !αAaβ = ω^β plus
-// the digits of α).  ω³*50+… snaps to ω⁴, whose letter "Aaaaa" (5) exceeds
-// multiLetterLimit(4), so it reads "!2.000Aa4" — "!2.000Aa51" would claim the
-// ω⁵¹ level.
-(function () {
-  var deep = format(MetaNum._hyperopFromOrdinal(MetaNum(10), MetaNum(100), [100, 100, 100, 50]))
-  checkFormat("ω³*50+… → !1.000H51 (single-letter carried form)",
-    MetaNum._hyperopFromOrdinal(MetaNum(10), MetaNum(100), [100, 100, 100, 50]), "!1.000H51")
-  checkFormat("ω³*100+… → !1.000H101",
-    MetaNum._hyperopFromOrdinal(MetaNum(10), MetaNum(100), [100, 100, 100, 100]), "!1.000H101")
-  checkFormat("ω³*200+… → !1.000H201",
-    MetaNum._hyperopFromOrdinal(MetaNum(10), MetaNum(100), [100, 100, 100, 200]), "!1.000H201")
-  checkBool("the level-arg index is not used as the !-form exponent",
-    deep.indexOf("Aa51") < 0, true)
-})();
-
-// ─────────────────────────────────────
-// format: repeatLetterThreshold caps how many times ONE letter repeats — an
-// inner level must not promote to the outer letter (3{3}6 = FFF(E^7.6e12) is
-// "FFFEEE9.007E15", not "FFFF7.626E12"), and the saturated form is followed by
-// the next-letter (G) form.
-(function () {
-  checkFormat("arrow(3,3,5) spells three F", MetaNum.arrow(3, 3, 5), "FFF7.626E12");
-  // a fourth F would break repeatLetterThreshold, so the value renders at the
-  // next letter by its real argument — not a saturated FFFEEE{…} form
-  checkFormat("arrow(3,3,6) → 2.045G5 (next letter, real argument)",
-    MetaNum.arrow(3, 3, 6), "2.045G5");
-  checkFormat("arrow(3,3,7) → 2.045G6", MetaNum.arrow(3, 3, 7), "2.045G6");
-  checkFormat("arrow(3,3,8) → 2.045G7", MetaNum.arrow(3, 3, 8), "2.045G7");
-  for (var an = 3; an <= 8; an++) {
-    var fs = format(MetaNum.arrow(3, 3, an))
-    if (/(.)\1{3}/.test(fs.replace(/[\d,.]/g, ''))) {
-      checkBool("arrow(3,3," + an + ") keeps within repeatLetterThreshold(3)", false, true)
-    }
-  }
-  checkBool("no more than repeatLetterThreshold(3) copies of one letter", true, true)
-})();
-
-// A diagonal letter (name ending in "a": Aa, Ba, Ca, Aaa, …) carries the
-// mantissa α = 2·5^f ∈ [2,10) — never the [1,10) of the other letters.
-(function () {
-  var diag = ["2.000Ca100", "2.000Aaa100", "2.000Aaaa101", "2.000Ba100"];
-  var got = [
-    format(MetaNum._hyperopFromOrdinal(MetaNum(10), MetaNum(100), [100, 2])),
-    format(MetaNum._hyperopFromOrdinal(MetaNum(10), MetaNum(100), [0, 100])),
-    format(MetaNum._hyperopFromOrdinal(MetaNum(10), MetaNum(1000), [100, 100, 100])),
-    format(MetaNum(10).aperioexpande(100))
-  ];
-  var ok = true;
-  for (var i = 0; i < diag.length; i++) {
-    if (got[i] !== diag[i]) { ok = false; console.log("   " + got[i] + " ≠ " + diag[i]); }
-    var m = parseFloat(got[i]);
-    if (!(m >= 2 && m < 10)) ok = false;
-  }
-  checkBool("diagonal-letter mantissa stays in [2,10)", ok, true);
 })();
 
 // Truncation must keep hardy's definitional from-below base top as array[0][0],
@@ -2724,7 +2731,8 @@ console.log("\n=== G6.2 format α correctness ===");
 // format α correctness
 checkFormat("hardy(1120) single α", MetaNum.hardy(1120), "F4.398E13");
 checkFormat("hardy(4150) real α", MetaNum.hardy(4150), "2.300G5");
-checkFormat("nested arrow single α", MetaNum.arrow(3, MetaNum.arrow(3, 4, 3), 3), "AaGF7.626E12");
+checkFormat("nested arrow: Aa + single-letter chain (≤2 letter types)",
+  MetaNum.arrow(3, MetaNum.arrow(3, 4, 3), 3), "AaG2.045G2");
 checkFormat("canonical all-8s keeps α=1 (G600)", "G600", "1.000G600");
 
 // ─────────────────────────────────────
@@ -2807,24 +2815,36 @@ console.log("\n=== G6.3 two-letter rule ===");
   // ("7.626E12") is scientific notation, not a letter op — both are excluded
   // from the count. The reference formatter (format-powiainanum.js) produces
   // the same shapes: "J" + "GF7.626E12" for arrow(3,arrow(3,4,3),3).
+  // Every letter combination counts as ONE type — including the Aa-style
+  // multi-letter tokens (they are letter combinations, not free symbols).
+  function letterTypesOf(s) {
+    var stripped = String(s).replace(/(\d(?:\.\d+)?)E(\d[\d,]*)/g, "$1$2");
+    var tokens = stripped.match(/[A-Z][a-z]*/g) || [];
+    var types = {};
+    for (var t = 0; t < tokens.length; t++) types[tokens[t]] = true;
+    return Object.keys(types);
+  }
   var samples = ["V10", "VE10", "VF10", "W10", "G1.161G897", "AaGF7.626E12",
-    "2.397G5", "1.285H8", "2.376W2", "1.125Aa99", "F4.398E13", "GF7.626E12"];
+    "2.397G5", "1.285H8", "2.376W2", "1.125Aa99", "F4.398E13", "GF7.626E12",
+    // regressions fixed by formatSingleLetterType: these used to spell 3+ types
+    "AaGGFFE8.072E153", "HGF7.626E12", "GGFFE8.072E153", "GFFEE1.276E74",
+    "GGGFFFEE1E2,184"];
   var allOk = true;
   for (var i = 0; i < samples.length; i++) {
     var disp = format(MetaNum(samples[i]));
-    // strip scientific-notation E inside numbers ("7.626E12"), then count
-    // distinct single-uppercase letters (Aa-style ordinal tokens excluded)
-    var stripped = disp.replace(/(\d(?:\.\d+)?)E(\d[\d,]*)/g, "$1$2");
-    var tokens = stripped.match(/[A-Z](?![a-z])/g) || [];
-    var types = {};
-    for (var t = 0; t < tokens.length; t++) types[tokens[t]] = true;
-    var nTypes = Object.keys(types).length;
+    var nTypes = letterTypesOf(disp).length;
     if (nTypes > 2) {
       allOk = false;
-      console.log("  >2 finite letter types in", samples[i], "→", disp);
+      console.log("  >2 letter types in", samples[i], "→", disp);
     }
   }
-  checkBool("all displays use ≤ 2 finite letter types", allOk, true);
+  checkBool("all displays use ≤ 2 letter combinations", allOk, true);
+  // binary-letter canonical: the leading run + one binary tail letter
+  checkBool("arrow(4,4,4) keeps GG + one F chain (2 types)",
+    letterTypesOf(format(MetaNum.arrow(4, 4, 4))).length === 2 &&
+    format(MetaNum.arrow(4, 4, 4)).indexOf("GG") === 0, true);
+  checkBool("nested arrow keeps Aa + one chain type (AaG2.045G2)",
+    letterTypesOf(format(MetaNum.arrow(3, MetaNum.arrow(3, 4, 3), 3))).length === 2, true);
   checkBool("arrow(3,4.1,3) display has exactly G only (VαEβ→…→VαVβ law)",
     (format(MetaNum.arrow(3, 4.1, 3)).match(/[A-Z][a-z]?/g) || []).every(function (tk) { return tk === "G"; }), true);
   // round-trip of the Aa-prefixed sci-arg chain (parse bug fix in v2.0:
@@ -2832,8 +2852,106 @@ console.log("\n=== G6.3 two-letter rule ===");
   checkBool("AaGF7.626E12 parses with full sci arg",
     MetaNum("AaGF7.626E12").array[0][1] === 7625999999998
       && MetaNum("AaGF7.626E12").array.length === 2, true);
-  checkBool("AaGF7.626E12 round-trips through format",
-    format(MetaNum(format(MetaNum("AaGF7.626E12")))) === "AaGF7.626E12", true);
+  // the Aa-prefixed value now spells Aa + ONE chain type (the old
+  // "AaGF7.626E12" was three: Aa, G, F)
+  var afDisp = format(MetaNum("AaGF7.626E12"));
+  checkBool("AaGF7.626E12 reformats to ≤2 letter types", letterTypesOf(afDisp).length <= 2, true);
+  checkBool("AaGF7.626E12 keeps the Aa prefix", afDisp.indexOf("Aa") === 0, true);
+})();
+
+// ─────────────────────────────────────
+// single-letter canonical form helper (README "Canonical Forms")
+//   plain → αEβ → EαEβ → EEαEβ → αFβ → FαFβ → FFαFβ → αGβ → … → αAaβ → …
+//   the repeat budget is FORMAT_OPTIONS.repeatLetterThreshold (default 3)
+// ─────────────────────────────────────
+console.log("\n=== G6.4 binary-letter canonical forms (formatSingleLetterType) ===");
+(function () {
+  var fmtMod = require("./format-metanum.js");
+  var single = fmtMod.formatSingleLetterType;
+  var full = fmtMod.formatFull;
+  function typesOf(s) {
+    var stripped = String(s).replace(/(\d(?:\.\d+)?)E(\d[\d,]*)/g, "$1$2");
+    var tokens = stripped.match(/[A-Z][a-z]*/g) || [];
+    var seen = {};
+    for (var i = 0; i < tokens.length; i++) seen[tokens[i]] = true;
+    return Object.keys(seen);
+  }
+  // the helper always ends on αΓβ (a decimal mantissa + a letter + an integer)
+  function isBinary(s) {
+    return /\d\.\d+[A-Z][a-z]*[\d,]/.test(String(s));
+  }
+  checkBool("helper(123) keeps the plain form", single(MetaNum(123)) === "123", true);
+  checkBool("helper(10^8) = 100,000,000 (plain, below sciThreshold)",
+    single(MetaNum(100000000)) === "100,000,000", true);
+  // the E band: αEβ → EαEβ → EEαEβ (heights 1-3 at the default budget 3)
+  checkBool("helper(10^10) = 1.000E10 (αEβ)", single(MetaNum(1e10)) === "1.000E10", true);
+  checkBool("helper(10^308) = 1.000E308 (αEβ, β plain)",
+    single(MetaNum("1e308")) === "1.000E308", true);
+  checkBool("helper(10^10^308) = E1.000E308 (EαEβ)",
+    single(MetaNum("e1e308")) === "E1.000E308", true);
+  checkBool("helper(10^10^10^308) = EE1.000E308 (EEαEβ)",
+    single(MetaNum("ee1e308")) === "EE1.000E308", true);
+  // height 4 exceeds the E budget (3) → the chain advances to F
+  var f4 = single(MetaNum("eee1e308"));
+  checkBool("height 4 advances to the F band (" + f4 + ")", /^F\d/.test(f4), true);
+  checkBool("height 4 uses ONE letter type", typesOf(f4).length === 1, true);
+  // values already single-typed keep their structural spelling
+  checkBool("helper(G600) = 1.000G600", single(MetaNum("G600")) === "1.000G600", true);
+  checkBool("helper(Aa10) = 1.000N10 (first letter wins)", single(MetaNum("Aa10")) === "1.000N10", true);
+  // every sample is ONE letter type AND carries an αΓβ binary part
+  var samples = [MetaNum(1e10), MetaNum("1e308"), MetaNum("e1e308"), MetaNum("ee1e308"),
+    MetaNum("eee1e308"), MetaNum.arrow(3, 5, 3), MetaNum.arrow(4, 4, 4),
+    MetaNum.arrow(5, 4, 5), MetaNum.hardy(12345), MetaNum("G600"), MetaNum("Z10")];
+  var ok = true, firstBad = "";
+  for (var i = 0; i < samples.length; i++) {
+    var out = single(samples[i]);
+    if (typesOf(out).length > 1 || !isBinary(out)) { ok = false; if (!firstBad) firstBad = out; }
+  }
+  checkBool("formatSingleLetterType: one letter type + αΓβ binary tail", ok, true,
+    ok ? "" : " first violation: " + firstBad);
+
+  // ── format(): first combo + one-letter binary tail (2 types max) ──
+  checkBool("format(arrow(4,4,4)) = GGFF2.187F3 (GG + FF…F…)",
+    format(MetaNum.arrow(4, 4, 4)) === "GGFF2.187F3", true);
+  checkBool("format(nested arrow) = AaG2.045G2 (Aa + G…G…)",
+    format(MetaNum.arrow(3, MetaNum.arrow(3, 4, 3), 3)) === "AaG2.045G2", true);
+  var hCase = MetaNum([[3638334640023.7783, 7625597484984, 0, 1, 1]]);
+  checkBool("format(H-chain) = HG2.045G2 (H + G…G…)", format(hCase) === "HG2.045G2", true);
+  checkBool("format(Aa-prefixed GG chain) = AaGG3.340G3",
+    format(MetaNum("AaGGFFE8.072E153")) === "AaGG3.340G3", true);
+
+  // ── formatFull(): no limit on the number of letter combinations ──
+  checkBool("formatFull(arrow(4,4,4)) = GGFFE8.072E153 (3 types)",
+    full(MetaNum.arrow(4, 4, 4)) === "GGFFE8.072E153", true);
+  checkBool("formatFull(nested arrow) = AaGF7.626E12 (3 types)",
+    full(MetaNum.arrow(3, MetaNum.arrow(3, 4, 3), 3)) === "AaGF7.626E12", true);
+  checkBool("formatFull keeps 4+ types where format caps at 2",
+    typesOf(full(MetaNum("AaGGFFE8.072E153"))).length === 4 &&
+    typesOf(format(MetaNum("AaGGFFE8.072E153"))).length === 2, true);
+
+  // ── multi-letter combos Ab / Ba / Bb / Aaa ──
+  checkBool("Ab10 → 1.000Ab10", format(MetaNum("Ab10")) === "1.000Ab10", true);
+  checkBool("Ba10 → 2.000Ba10", format(MetaNum("Ba10")) === "2.000Ba10", true);
+  checkBool("Bb10 → 1.000Bb10", format(MetaNum("Bb10")) === "1.000Bb10", true);
+  checkBool("Aaa10 → 2.000Aaa10", format(MetaNum("Aaa10")) === "2.000Aaa10", true);
+  checkBool("AbGF7.626E12 → AbG2.045G2 (Ab + one chain)",
+    format(MetaNum("AbGF7.626E12")) === "AbG2.045G2", true);
+  checkBool("BaGF7.626E12 → BaG2.045G2",
+    format(MetaNum("BaGF7.626E12")) === "BaG2.045G2", true);
+  checkBool("BbGF7.626E12 → BbG2.045G2",
+    format(MetaNum("BbGF7.626E12")) === "BbG2.045G2", true);
+  checkBool("AaaGF7.626E12 → AaaG2.045G2",
+    format(MetaNum("AaaGF7.626E12")) === "AaaG2.045G2", true);
+  checkBool("AbGGFFE8.072E153 → AbGG3.340G3",
+    format(MetaNum("AbGGFFE8.072E153")) === "AbGG3.340G3", true);
+  // every multi-letter sample stays within 2 types under format()
+  var multiOk = true, multiBad = "";
+  ["AbGF7.626E12", "BaGF7.626E12", "BbGF7.626E12", "AaaGF7.626E12",
+   "AbGGFFE8.072E153", "AaGGFFE8.072E153"].forEach(function (s) {
+    var o = format(MetaNum(s));
+    if (typesOf(o).length > 2) { multiOk = false; if (!multiBad) multiBad = s + " → " + o; }
+  });
+  checkBool("Ab/Ba/Bb/Aaa displays stay within 2 letter combos", multiOk, true, multiBad);
 })();
 
 // ─────────────────────────────────────
@@ -2842,7 +2960,7 @@ console.log("\n=== G6.3 two-letter rule ===");
 //   structural two-letter form or the αAaβ polarize diagonal;
 //   repeatLetterThreshold+1 repeated single letters carry to the next
 // ─────────────────────────────────────
-console.log("\n=== G6.4 hardy hierarchy display forms ===");
+console.log("\n=== G6.5 hardy hierarchy display forms ===");
 checkFormat("arrow(3,9,3) → L…K…", MetaNum.arrow(3, 9, 3), "L2.376K2");
 checkFormat("arrow(3,10,3) → M(10^0.376)L2", MetaNum.arrow(3, 10, 3), "M2.376L2");
 checkFormat("arrow(4,9,4) → LLK…K…", MetaNum.arrow(4, 9, 4), "LLK3.550K3");
@@ -2882,7 +3000,7 @@ checkFormat("nested arrow(3,arrow(10,10000,10),3) → Aa1.000Aa10,000",
 // ─────────────────────────────────────────────────────────────────
 // v2.0: rule 3 unification + pure dlsdl diagonal [2,10) convention
 // ─────────────────────────────────────────────────────────────────
-console.log("\n=== G6.5 diagonal letter convention ===");
+console.log("\n=== G6.6 diagonal letter convention ===");
 // rule 3: n{λ}b = n{λ[b]}n
 checkBool("aper(3,5) = 3{5}3", MetaNum.aperiote(3,5).eq(MetaNum(3).arrow(5)(3)), true);
 // diagonal letters (ending in 'a'): integer arguments all anchor at 2.000
@@ -2928,7 +3046,7 @@ checkBool("parse 2.002Aa100", MetaNum("2.002Aa100").format() === "2.002Aa100", t
 // cross-config stability: identical formats at
 //   maxRows = maxCols = 10 / 20 / 50 / 100 (±1 in the last shown digit)
 // ─────────────────────────────────────
-console.log("\n=== G6.6 cross-config stability ===");
+console.log("\n=== G6.7 cross-config stability ===");
 (function () {
   var cases = [[3, 9, 3], [3, 10, 3], [4, 9, 4], [5, 9, 5], [6, 9, 6],
                [3, 22, 3], [3, 23, 3], [3, 24, 3], [3, 39, 3], [3, 100, 3],
@@ -2959,7 +3077,7 @@ console.log("\n=== G6.6 cross-config stability ===");
   MetaNum.maxRows = 20;
 })();
 
-console.log("\n=== G6.7 MetaNum(...).format() instance method ===");
+console.log("\n=== G6.8 MetaNum(...).format() instance method ===");
 (function () {
   function checkFmtEq(name, gotStr, expected) {
     var pass = gotStr === expected;

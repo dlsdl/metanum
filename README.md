@@ -2,7 +2,7 @@
 
 [![NPM](https://img.shields.io/npm/v/metanum.svg)](https://www.npmjs.com/package/metanum)
 
-- MetaNum v2.1.1 by dlsdl
+- MetaNum v2.1.2 by dlsdl
 
 A huge number library holding up to X↑↑X&9e15.
 
@@ -997,6 +997,66 @@ the letter notations follow **diagonal letters**: names ending in `a` (`Aa` = ω
   `format(hardy(4166))` → `2.397G5`.
 - **α appears at most once**, attached to the innermost value: `format(GE12)` → `G1.000E12`; hardy(1120) → `F4.398E13`. Once the innermost β reaches 10^sciThreshold the letter goes bare and β carries its own sci form.
 - **At most 2 finite letter types** may appear in a display's hyper-op chain (VαEβ → VEαEβ → VαFβ → … → VαVβ, never another like VFαEβ), (AaαEβ → AaαFβ → … → AaαZβ → AaαAaβ, never another like AaFαEβ). A cascade that would spell more than two letter types spells only its top two levels and compresses the rest into the second letter's binary form. "bottom Γ repeation": 3{9}3 → `L2.376K2`, 3{10}3 → `M2.376L2`, 4{9}4 → `LLK3.550K3`, 5{9}5 → `LLLKK4.669K4`; repeatLetterThreshold+1 top repeats carry to the next letter instead (6{9}6 → `5.760M5`), and levels 22→21, 23→22 stay two-letter (`Y2.376X2`, `Z2.376Y2`), level ≥ 23 cascades display as the αΓβ polarize diagonal.
+### Binary-Letter-Canonical Forms — `format`, `formatSingleLetterType`, `formatFull`
+
+`format(v, precision = 3)` returns the **binary-letter-canonical** display: at most
+**two** letter combinations, and the tail is always a binary form `αΓβ` (a decimal
+mantissa, the letter, an integer argument), optionally prefixed by repeats of the
+same letter (`ΓαΓβ`, `ΓΓαΓβ`, …). The leading run of the raw chain is preserved and
+the remainder is re-spelled with the next letter down:
+
+```javascript
+format(MetaNum.arrow(4, 4, 4));          // "GGFF2.187F3"   (GG + FF…F…; raw chain was GGFFE8.072E153)
+format(MetaNum.arrow(3, MetaNum.arrow(3, 4, 3), 3)); // "AaG2.045G2"  (Aa + G…G…)
+format(MetaNum([[3638334640023.7783, 7625597484984, 0, 1, 1]])); // "HG2.045G2" (H + G…G…)
+format(MetaNum("AaGGFFE8.072E153"));     // "AaGG3.340G3"
+format(MetaNum("AbGGFFE8.072E153"));     // "AbGG3.340G3"   (Ab / Ba / Bb / Aaa behave the same)
+format(MetaNum("AaaGF7.626E12"));        // "AaaG2.045G2"
+```
+
+`formatSingleLetterType(v, precision = 3)` spells the same value with **exactly one**
+letter combination, always ending on `αΓβ`. Plain values stay plain, and the
+repetition budget is `FORMAT_OPTIONS.repeatLetterThreshold` (default 3) for E..Z and
+`multiLetterRepeatThreshold` for the Aa band — a chain that would need more repeats
+advances to the next letter:
+
+```javascript
+formatSingleLetterType(MetaNum(1e8));    // "100,000,000"   (plain: below sciThreshold = 9)
+formatSingleLetterType(MetaNum(1e10));   // "1.000E10"      (αEβ)
+formatSingleLetterType(MetaNum("1e308")) // "1.000E308"     (β stayed plain)
+formatSingleLetterType(MetaNum("e1e308"))// "E1.000E308"    (EαEβ)
+formatSingleLetterType(MetaNum("ee1e308"))//"EE1.000E308"   (EEαEβ, the 3-repeat budget)
+formatSingleLetterType(MetaNum("eee1e308"))//"F1.000F308"   (height 4 → the F band)
+formatSingleLetterType(MetaNum("G600"))  // "1.000G600"
+formatSingleLetterType(MetaNum("Aa10")); // "1.000N10"      (the first letter wins)
+```
+
+`formatFull(v, precision = 3)` is the unrestricted spelling: **no limit** on the
+number of letter combinations (the historical canonical chain). Use it when the raw
+cascade matters:
+
+```javascript
+formatFull(MetaNum.arrow(4, 4, 4));                      // "GGFFE8.072E153" (3 types)
+formatFull(MetaNum.arrow(3, MetaNum.arrow(3, 4, 3), 3));  // "AaGF7.626E12"   (3 types)
+formatFull(MetaNum("AaGGFFE8.072E153"));                 // "AaGGFFE8.072E153" (4 types)
+format(MetaNum("AaGGFFE8.072E153"));                     // "AaGG3.340G3"      (2 types)
+```
+
+**Canonical chain** (README “Letter-Canonical Forms”): every number > 1 is `Γα` for
+a unique α at each letter Γ, so the universal spelling walks
+
+```
+普通数值 → αEβ → EαEβ → EEαEβ → αFβ → FαFβ → FFαFβ → αGβ → … → ZZαZβ → αAaβ → AaαAaβ → AaAaαAaβ → αAbβ → …
+```
+
+taking the FIRST letter combination in that order whose argument lands in the plain
+range. Because one letter application `Γ` is `E^level`, promoting a chain to a higher
+letter divides its E-count, which is how the repeat budget is honoured.
+
+The very largest structural forms (full 20-row cascades and layer markers, e.g.
+`h31(10,3)`, `cuboiter(10,3)`) have no recoverable polarize triple; the single-letter
+helper then falls back to the ordinary display (still within the two-combination
+limit enforced by `format`).
 
 ### Precision budget (maxRows / maxCols)
 
@@ -1025,9 +1085,10 @@ Every hyperoperation is stored EXACTLY while it fits the array budget and approx
 
 # Changelog
 
+- 2026-10-24 v2.1.2 Fix(format): `format` now caps every display at TWO letter combinations with an αΓβ binary tail
 - 2026-10-18 v2.1.1 Fix: round-trip @Aa1/#Aa1 and alpha-Gamma sub-unit forms; fix(format): exact token form for non-integer multi-a layers and past multiLetterLimit
 - 2026-10-16 v2.1.0 Add hardy(x, base) and FGH(x, base), fix issue #15, #17, #19, #20, #21, #22
-- 2026-9-30 v2.0.2 Fix a lot of bugs e.g. hardy(non integer > 1000) throwing, hardy beyond the 1.8e308 range fails, format of "ω^n\*large numbers" fails, some FORMAT_OPTIONS not take effect. 
+- 2026-9-30 v2.0.2 Fix a lot of bugs e.g. hardy(non integer > 1000) throwing, hardy beyond the 1.8e308 range fails, format of "ω^n\*large numbers" fails, some FORMAT_OPTIONS not take effect
 - 2026-9-25 v2.0.1 Fix arrow(x,y,y) not being monotone in y and array except array[0][0] may be non-integer
 - 2026-9-15 v2.0.0 Add hyper-root & hyper-log, hardy function, fractional hyperoperation inputs, fix BEAF operation level and format
 - 2026-8-18 v1.4.0 Support hyper operation >MSI and fix format-metanum bugs

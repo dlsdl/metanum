@@ -1,6 +1,6 @@
-//Author: dlsdl v2.1.1
-//v2.1.1 Fix: round-trip @Aa1/#Aa1 and alpha-Gamma sub-unit forms; fix(format): exact token form for non-integer multi-a layers and past multiLetterLimit
-//Code snippets and templates from OmegaNum.js
+// Author: dlsdl v2.1.2
+// v2.1.2 Fix(format): `format` now caps every display at TWO letter combinations with an αΓβ binary tail
+// Code snippets and templates from OmegaNum.js
 
 ;(function (globalScope) {
   "use strict";
