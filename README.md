@@ -2,7 +2,7 @@
 
 [![NPM](https://img.shields.io/npm/v/metanum.svg)](https://www.npmjs.com/package/metanum)
 
-- MetaNum v2.1.2 by dlsdl
+- MetaNum v2.2.0 by dlsdl
 
 A huge number library holding up to X↑↑X&9e15.
 
@@ -63,7 +63,7 @@ MetaNum.POSITIVE_INFINITY  // Infinity
 MetaNum.NEGATIVE_INFINITY  // -Infinity
 MetaNum.GRAHAMS_NUMBER     // Graham's number (approximation)
 MetaNum.TRITRI             // 3↑↑↑3 = 3^^^3
-MetaNum.QqQe308            // QqQe308 (for incremental games)
+MetaNum.QqQe308            // QqQe308 = 10{ω17+16}10{ω17+4}308 (for incremental games)
 ```
 
 ## Basic Usage
@@ -271,6 +271,9 @@ x.iterate(3);                // iter(3) = hww
 // Level ω^ω+1: iterate ω^ω level operations
 x.itermult(3);            // itmu(3) = hw01
 
+// Level ω^ω+ω: diagonalize ω^ω+y
+x.iteraperiate(3);         // itap(3) = hw0w
+
 // Level ω^ω*2: (ω^ω)*2 = ω^ω + ω^base
 x.cuboiter(3);            // cube(3) = hwx2
 
@@ -321,8 +324,9 @@ x.i_epan(z)     // i1010 = inverse of expandainate
 x.i_mgan(z)     // i1100 = inverse of megodainate
 x.i_pwar(z)     // i2000 = inverse of powiairate
 x.i_apgu(z)     // i10000 = inverse of aperioguate
-x.i_iter(z)      // iww = inverse of iter
+x.i_iter(z)     // iww = inverse of iter
 x.i_itmu(z)     // iw01 = inverse of itermult
+x.i_itap(z)     // iw0w = inverse of iteraperiate
 x.i_cube(z)     // iwx2 = inverse of cuboiter
 x.i_expo(z)     // iwa1 = inverse of expoiter
 x.i_tria(z)     // iwm2 = inverse of trioterate
@@ -331,26 +335,71 @@ x.i_apix(z)     // iwpw = inverse of aperixxate
 x.i_epsl(z)     // iepsl = inverse of epsilonate
 ```
 
-### The operations follow n{λ}b = n{λ[b]}n exactly
+### Root forms: c.{α}root(b) = a
 
-Every operation above is evaluated with the unified limit rule `n{λ}b = n{λ[b]}n` — the final operand is the **base** n, never b. Whenever the reduced level λ[y] still fits a Cantor-normal-form coefficient row the whole fundamental-sequence cascade is evaluated:
+Each expansion operation also has a **root-form inverse** recovering the **base** (the log form `x.i_<op>(a)` above recovers the height `b`; the root form takes the height and recovers the base): if `a{α}b = c` then `c.<op>_root(b) = a`, e.g. `(10{ω}15).aperiote_root(15) = 10` just like `(10{ω}15).i_aper(10) = 15`.
+
+The base map `a ↦ a{α}b` is monotone, so the base is recovered by integer bisection — the same convention `hyper_root` uses at the finite levels. Beyond the representation budget the stored value no longer encodes the base (huge-argument markers; base-independent layer markers at the ω^ω+ levels), and the root returns the **smallest base reproducing the stored value**.
 
 ```javascript
-MetaNum(3).iterate(5);     // 3{ω^ω}5 = 3{ω^5}3 = 3{ω^4*3}3 = …
-                           // … = 3{ω^4*2+ω^3*2+ω^2*2+ω*2+2}3 → layer=0, top row [1,2,2,2,2,2]
+x.aperiote_root(z)           // r10 = root form of aperiote
+x.expande_root(z)            // r11 = root form of expande
+x.multiexpande_root(z)       // r12 = root form of multiexpande
+x.powerexpande_root(z)       // r13 = root form of powerexpande
+x.aperioexpande_root(z)      // r20 = root form of aperioexpande
+x.explode_root(z)            // r21 = root form of explode
+x.multiexplode_root(z)       // r22 = root form of multiexplode
+x.aperioexplode_root(z)      // r30 = root form of aperioexplode
+x.detonate_root(z)           // r31 = root form of detonate
+x.aperiodetonate_root(z)     // r40 = root form of aperiodetonate
+x.aperionate_root(z)         // r100 = root form of aperionate
+x.megote_root(z)             // r101 = root form of megote
+x.multimegote_root(z)        // r102 = root form of multimegote
+x.aperimegote_root(z)        // r110 = root form of aperimegote
+x.megoexpande_root(z)        // r111 = root form of megoexpande
+x.aperimegoexpande_root(z)   // r120 = root form of aperimegoexpande
+x.megoaperionate_root(z)     // r200 = root form of megoaperionate
+x.gigote_root(z)             // r201 = root form of gigote
+x.aperigigote_root(z)        // r210 = root form of aperigigote
+x.gigoaperionate_root(z)     // r300 = root form of gigoaperionate
+x.aperiatote_root(z)         // r1000 = root form of aperiatote
+x.powiainate_root(z)         // r1001 = root form of powiainate
+x.expandainate_root(z)       // r1010 = root form of expandainate
+x.megodainate_root(z)        // r1100 = root form of megodainate
+x.powiairate_root(z)         // r2000 = root form of powiairate
+x.aperioguate_root(z)        // r10000 = root form of aperioguate
+x.iterate_root(z)            // rww = root form of iterate
+x.itermult_root(z)           // rw01 = root form of itermult
+x.iteraperiate_root(z)       // rw0w = root form of iteraperiate
+x.cuboiter_root(z)           // rwx2 = root form of cuboiter
+x.expoiter_root(z)           // rwa1 = root form of expoiter
+x.trioterate_root(z)         // rwm2 = root form of trioterate
+x.trixxate_root(z)           // rwp2 = root form of trixxate
+x.aperixxate_root(z)         // rwpw = root form of aperixxate
+x.epsilonate_root(z)         // repsl = root form of epsilonate
+```
+
+Every root form also exists under its short alias (`x.r_aper(z)`, `x.r_expa(z)`, …) and as a static (`MetaNum.aperiote_root(value, height)`).
+
+### The operations follow n{λ}b = n{λ[b]}b exactly
+
+To keep the continuity, every operation above is evaluated with the unified limit rule `n{λ}b = n{λ[b]}b` — the final operand is **b**. Only take the fundamental sequence and not change any number. Whenever the reduced level λ[y] still fits a Cantor-normal-form coefficient row the whole fundamental-sequence cascade is evaluated:
+
+```javascript
+MetaNum(3).iterate(5);     // 3{ω^ω}5 = 3{ω^5}5 = 3{ω^4*5}5 = … = 3{ω^4*4+ω^3*4+ω^2*4+ω*4+5}5 = (3{ω^4*4+ω^3*4+ω^2*4+ω*4+4})^3… → layer=0, top row [3,4,4,4,4,4]
 ```
 
 Levels ≥ ω^ω have no finite coefficient row, so the result is stored as the compact **layer marker** of λ[y] (see the representation rule above: layer L ⇒ `10{ω^ω^…(L ω^'s)…^(ω^'s polynomial)}10`):
 
-so the encoded ordinals grow with the operation (`iter < itmu < cube < expo < tria < trix < apix < epsl`) and with y, and `epsilonate(MSI)` is exactly the library's ε-tower cap.
+so the encoded ordinals grow with the operation (`iter < itmu < cube < expo < tria < trix < apix < epsl`) and with y, and `epsilonate(MSI)` is exactly the library's ε-tower cap. Results > epsilonate(MSI) will return Infinity.
 
 ### Fractional hyperoperation levels
 
-Levels interpolate geometrically; `x{n+f}y = x{n+1}(θf)` with `θf` continuous between `x{n}y` (f=0) and `x{n+1}y` (f=1). For the canonical diagonal this is exactly `10{n+f}10 = 10{n+1}(2·5^f)`:
+Levels interpolate geometrically; `x{n+f}y = x{n+1}(θf)` with `θf` continuous between `x{n}y` (f=0) and `x{n+1}y` (f=1). For the canonical diagonal this is exactly `10{n+f}10 = 10{n+1}(2·5^f)`, monotone between 10{3}10 and 10{4}10:
 
 ```javascript
 MetaNum(10).arrow(3.5)(10);   // 10{3.5}10 = 10{4}(2·5^0.5)
-MetaNum(10).arrow(3.2)(10);   // monotone between 10{3}10 and 10{4}10
+MetaNum(10).arrow(3.2)(10);   // 10{3.2}10 = 10{4}(2·5^0.2)
 ```
 
 ### Non-integer arguments at ordinal levels
@@ -363,32 +412,32 @@ MetaNum(10).expande(2);        // 10{ω}10 (continuous at the integers)
 MetaNum(10).multiexpande(2.1); // (10{ω+1})²(10^0.1)
 ```
 
-**Limit levels** take the fundamental sequence at the full (fractional) `y`. The sequence can then carry fractional coefficients, which resolve against the base x because on the diagonal ω reads as x:
+**Limit levels** take the fundamental sequence at the full (fractional) `y`. The sequence can then carry fractional coefficients, which resolve against the operand y — the same number that indexes the fundamental sequence:
 
-- ω^(k)·(c+f) = ω^(k)·c + ω^(k-1)·(x·f), applied top-down (ω^0.1 = x^0.1), so only the constant term can still be fractional;
-- a leftover fractional constant γ+f is one level of interpolation: x{γ+f}x = x{γ+1}(2·(x/2)^f) — continuous at f=0 because x{γ+1}2 = x{γ}x.
+- ω^(k)·(c+f) = ω^(k)·c + ω^(k-1)·(y·f), applied top-down (ω^0.1 = y^0.1), so only the constant term can still be fractional;
+- a leftover fractional constant γ+f is one level of interpolation: x{γ+f}y = x{γ+1}(2·(y/2)^f) — continuous at f=0 because x{γ+1}2 = x{γ}x, and monotone across the integer grid while y ≤ x (for y > x the value stays inside the interpolation band [x{γ+1}2, x{γ+1}y)).
 
 **Successor levels** keep `x{α}(m+f) = x{α-1}` applied m times to `x^f`, so the value grows with f inside the interval and converges to the next integer as f → 1:
 
 ```javascript
-MetaNum(10).h21(2.0001);  // Ba2.218Ab9     f → 0: cascade bottoming at ω
-MetaNum(10).h21(2.5);     // Ba1.772Ad9     the cascade deepens with f
-MetaNum(10).h21(2.99);    // Ba2.447Aj9  →  converges to h21(10,3) = Ba1.000Ak9
+MetaNum(10).h21(2.01);  // 10{ω2+1}2.01=10{ω2}10{ω2}10^0.01(=1.023293)=10{ω2}10{ω+1.023293}1.023293=10{ω2}10{ω+1}(2^0.023293)^0.976707*(10^0.023293)^0.023293
+MetaNum(10).h21(2.5);     // 10{ω2+1}2.5
+MetaNum(10).h21(2.99);    // 10{ω2+1}2.99
 ```
 
 For the ω+1 / ω+2 / ω+3 levels the applications after the first still have an operand inside MSI, so those are evaluated directly by the rule (that is the `10{ω}10{ω}(10^0.1)` composition above) — which is also the exact identity. An iteration count beyond direct evaluation diagonalizes through the engine's huge-argument convention (y plus one α-level marker row). Then we have:
 
-10{ω\*2}2.1=10{ω+2.1}10=10{ω+3}2\*5^0.1 (because 10{ω+2}10=10{ω+3}2)
+10{ω\*2}2.1=10{ω+2.1}2.1=10{ω+3}2\*(2.1/2)^0.1
 
-3{ω\*2}2.1=3{ω+2.1}3=3{ω+3}2\*1.5^0.1
+3{ω\*2}2.1=3{ω+2.1}2.1=3{ω+3}2\*(2.1/2)^0.1
 
-10{ω^2}2.1=10{ω\*2.1}10=10{ω\*2+10\*0.1}10=10{ω\*2+1}10
+10{ω^2}2.1=10{ω\*2.1}2.1=10{ω\*2+2.1\*0.1}2.1=10{ω\*2+0.21}2.1
 
-3{ω^2}2.1=3{ω\*2.1}3=3{ω\*2+3\*0.1}10=3{ω\*2+0.3}3=3{ω\*2+1}2\*1.5^0.3
+3{ω^2}2.1=3{ω\*2.1}2.1=3{ω\*2+2.1\*0.1}2.1=3{ω\*2+0.21}2.1
 
-10{ω^ω}2.1=10{ω^2.1}10=10{ω^2\*10^0.1}10=10{ω^2\*1.258925}10=10{ω^2\*1+ω\*2+5.8925}10=10{ω^2\*1+ω\*2+6}2*5^0.8925
+10{ω^ω}2.1=10{ω^2.1}2.1=10{ω^2\*2.1^0.1}2.1=10{ω^2\*1.077}2.1=10{ω^2+0.339638}2.1
 
-3{ω^ω}2.1=3{ω^2.1}3=3{ω^2\*3^0.1}3=3{ω^2\*1.116123}3=3{ω^2\*1+1.045107}3=3{ω^2\*1+2}2*1.5^0.045107
+3{ω^ω}2.1=3{ω^2.1}2.1=3{ω^2\*2.1^0.1}2.1=3{ω^2.1\*1.077}2.1=3{ω^2+0.339638}2.1
 
 ## BEAF Operations
 
@@ -1085,6 +1134,10 @@ Every hyperoperation is stored EXACTLY while it fits the array budget and approx
 
 # Changelog
 
+- 2026-11-20 v2.2.0 Change(hyperop): unify the fundamental-sequence rule as `n{λ}b = n{λ[b]}b` (the final operand is b, not the base) across every ordinal-level algorithm — aperiote, the ordinal engine (`_ordinalHyperop`/`_hyperopFromOrdinalRaw`), the cascade generator, iterate and the marker methods — so fractional y stays continuous (e.g. `10{ω·2}1.0…01` no longer jumps to the `10{ω}10` scale); B2-a narrows to the 2-diagonal (`2{λ}2 = 4`, while `2{λ}y` now grows with y, e.g. `2{ω}3 = 65536`), fractional coefficients resolve against the operand (`x{γ+f}y = x{γ+1}(2·(y/2)^f)`), and `*_root` of a marker value returns the smallest reproducing base (now 2)
+- 2026-11-19 v2.2.0 Add: iteraperiate (`itap`/`hw0w`) — the ω^ω+ω level hyperoperation between itermult (ω^ω+1) and cuboiter (ω^ω·2), with its log inverse `inv_iteraperiate` (`i_itap`/`iw0w`) and root form `iteraperiate_root` (`r_itap`/`rw0w`)
+- 2026-11-18 v2.2.0 Fix(format): values whose inner r0 chain exceeds the repeat-letter budget no longer print the literal string "null" (e.g. `h10("3.3G5",10).format()` → `N1.000G5`); Fix(hyperop): with a large base, ordinal-level hyperoperations (h20+, e.g. `4↑↑↑4.h20(y)`) froze for y > 100 — the sup-collapse now stores the fundamental-sequence level `λ[y]` (same convention as the y ≤ 100 cascade), so results keep growing with y and stay continuous across y = 100 → 101
+- 2026-11-17 v2.2.0 Add: ordinal-level hyper-root family — the root-form inverses `c.{α}root(b) = a` (`aperiote_root`/`r10` … `epsilonate_root`/`repsl`) of the ordinal-level hyperoperations, mirroring the `inv_*` log family
 - 2026-10-24 v2.1.2 Fix(format): `format` now caps every display at TWO letter combinations with an αΓβ binary tail
 - 2026-10-18 v2.1.1 Fix: round-trip @Aa1/#Aa1 and alpha-Gamma sub-unit forms; fix(format): exact token form for non-integer multi-a layers and past multiLetterLimit
 - 2026-10-16 v2.1.0 Add hardy(x, base) and FGH(x, base), fix issue #15, #17, #19, #20, #21, #22

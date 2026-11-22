@@ -1133,7 +1133,12 @@ function formatR0AsChainRaw(r0, precision, used) {
         if (innerR0[maxLevel] === 0) {
             innerR0 = innerR0.slice(0, maxLevel)
         }
-        let innerStr = formatR0AsChain(innerR0, precision, true)
+        let innerStr = formatR0AsChain(innerR0, precision, usedCount)
+        if (innerStr === null) {
+            // inner chain cannot spell within the repeat budget: fall through
+            // to the Γ-canonical collapse below (concatenating null would
+            // print "αΓnull")
+        } else {
         let hasLetter = /[A-Z]/.test(innerStr)
         if (!hasLetter) {
             let base = r0[0]
@@ -1178,6 +1183,7 @@ function formatR0AsChainRaw(r0, precision, used) {
                     return letterName(maxLevel) + aStr + "Aa" + commaFormat(pol2.arrows)
                 }
             }
+        }
         }
     }
 

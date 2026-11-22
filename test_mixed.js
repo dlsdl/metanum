@@ -99,6 +99,9 @@ function checkRT(name, input) {
 //     G4.12  h11/h12/h13 count law
 //     G4.13  h20+ : expanded form & count law
 //     G4.14  h20+ with fractional y
+//     G4.15  ordinal-level root forms (aperiote_root/r10 … epsilonate_root/repsl)
+//     G4.16  huge-y growth (y > COEFF_BOUND sup-collapse must encode λ[y])
+//     G7.12  format "null" regression (inner chain null → Γ-collapse)
 // G5  ENGINE ARRAYS & BEAF
 //     G5.1  engine arrays
 //     G5.2  BEAF ordinal nesting
@@ -185,6 +188,7 @@ function checkRT(name, input) {
 //     G3.29  aperioguate (ω^4)
 //     G3.30  iter (ω^ω)
 //     G3.31  itermult (ω^ω+1)
+//     G3.31b  iteraperiate (ω^ω+ω)
 //     G3.32  cuboiter (ω^ω*2)
 //     G3.33  expoiter (ω^(ω+1))
 //     G3.34  trioterate (ω^(ω*2))
@@ -283,6 +287,7 @@ function checkRT(name, input) {
 //     G3.29  aperioguate (ω^4)
 //     G3.30  iter (ω^ω)
 //     G3.31  itermult (ω^ω+1)
+//     G3.31b  iteraperiate (ω^ω+ω)
 //     G3.32  cuboiter (ω^ω*2)
 //     G3.33  expoiter (ω^(ω+1))
 //     G3.34  trioterate (ω^(ω*2))
@@ -796,11 +801,12 @@ checkHR("2{4}3, c=3, b=4", MetaNum(2).arrow(4)(3), 3, 4, 2);
 
 //hyperoperation definition from https://googology.fandom.com/wiki/Template:ExtendedOps
 console.log("\n=== G3.4 aperiote (ω) ===");
-checkOp("aper(3,0)", m3.aperiote(0), 9, 0);
-checkOp("aper(3,1)", m3.aperiote(1), 27, 0);
-checkOp("aper(3,2)", m3.aperiote(2), 7625597484987, 0);
-checkOp("aper(3,4)", m3.aperiote(4)); //3↑↑↑↑4
-checkOp("aper(4,3)", m4.aperiote(3)); //4↑↑↑3
+// rule 3: x{ω}y = x{ω[y]}y = x{y}y
+checkOp("aper(3,0)", m3.aperiote(0), 0, 0);
+checkOp("aper(3,1)", m3.aperiote(1), 3, 0);
+checkOp("aper(3,2)", m3.aperiote(2), 27, 0);
+checkOp("aper(3,4)", m3.aperiote(4)); //3{4}4 = 3↑↑↑↑4
+checkOp("aper(4,3)", m4.aperiote(3)); //4{3}3 = 4↑↑↑3
 checkBool("aper NaN", MetaNum.aperiote(m3, MetaNum.NaN).isNaN(), true);
 checkBool("aper inv NaN", MetaNum.inv_aperiote(m3, MetaNum.NaN).isNaN(), true);
 
@@ -996,6 +1002,95 @@ checkOp("itmu(4,3)", m4.itermult(3));
 checkBool("itmu y=0 NaN", m3.itermult(0).isNaN(), true);
 checkBool("itmu NaN", MetaNum.itermult(m3, MetaNum.NaN).isNaN(), true);
 
+// ─── 28b. iteraperiate (ω^ω+ω): (ω^ω+ω)[y] = ω^ω+y, so x{ω^ω+ω}y = x{ω^ω+y}x;
+// finite y ≥ 2 → layer-1 marker [[y],[1,0,1]] (the height IS the level's
+// constant term — itermult stores y-1 there), ordinal y → y + [1|ω] + [1|ω^ω] ───
+console.log("\n=== G3.31b iteraperiate (ω^ω+ω) ===");
+(function () {
+  checkOp("itap(3,4)", m3.iteraperiate(4));
+  checkOp("itap(4,3)", m4.iteraperiate(3));
+  checkBool("itap y=0 NaN", m3.iteraperiate(0).isNaN(), true);
+  checkBool("itap NaN", MetaNum.iteraperiate(m3, MetaNum.NaN).isNaN(), true);
+  // aliases + static form
+  checkBool("itap/hw0w alias", m3.itap(5).eq(m3.hw0w(5)), true);
+  checkBool("static MetaNum.iteraperiate", MetaNum.iteraperiate(3, 5).eq(m3.iteraperiate(5)), true);
+  // marker: [[y],[1,0,1]] = 10{ω^ω+y}10 for every finite y ≥ 2
+  checkBool("itap(10,5) marker [[5],[1,0,1]]",
+    JSON.stringify(MetaNum(10).iteraperiate(5).array) === "[[5],[1,0,1]]" &&
+    MetaNum(10).iteraperiate(5).layer === 1, true);
+  checkBool("itap(10,100) marker [[100],[1,0,1]]",
+    JSON.stringify(MetaNum(10).iteraperiate(100).array) === "[[100],[1,0,1]]", true);
+  // strictly grows with y, and sits strictly between itermult and cuboiter
+  var prev = null, mono = true;
+  for (var yi = 0; yi < [2,3,4,5,100,1e4,1e6].length; yi++) {
+    var yv = MetaNum(10).iteraperiate([2,3,4,5,100,1e4,1e6][yi]);
+    if (prev && !yv.gt(prev)) mono = false;
+    prev = yv;
+  }
+  checkBool("itap(10,y) strictly grows for y = 2..1e6", mono, true);
+  checkBool("itmu(10,5) < itap(10,5) < cube(10,5)",
+    MetaNum(10).itermult(5).lt(MetaNum(10).iteraperiate(5)) &&
+    MetaNum(10).iteraperiate(5).lt(MetaNum(10).cuboiter(5)), true);
+  checkBool("itap(10,1e6) < cube(10,2) (ω^ω+y < ω^ω+ω^2)",
+    MetaNum(10).iteraperiate(1e6).lt(MetaNum(10).cuboiter(2)), true);
+  // edge cases: y=1, x=1, B2-a, NaN
+  checkBool("itap(7,1) = 7 (a{α}1 = a)", MetaNum(7).iteraperiate(1).eq(MetaNum(7)), true);
+  checkBool("itap(1,5) = 1 (1{α}b = 1)", MetaNum(1).iteraperiate(5).eq(MetaNum(1)), true);
+  // B2-a only collapses the 2-diagonal; 2{λ}y grows with y for y ≥ 3
+  checkBool("itap(2,3) > 4 and grows with y (B2-a is the 2-diagonal only)",
+    MetaNum(2).iteraperiate(3).gt(MetaNum(4)) &&
+    MetaNum(2).iteraperiate(3).lt(MetaNum(2).iteraperiate(5)), true);
+  // base-independence of the marker: every base ≥ 3 gives the same value
+  checkBool("marker base-independent (3,10,4↑↑4 same marker)",
+    m3.iteraperiate(5).eq(MetaNum(10).iteraperiate(5)) &&
+    MetaNum(4).arrow(2)(4).iteraperiate(5).eq(MetaNum(10).iteraperiate(5)), true);
+  // ordinal height: y + [1|ω] + [1|ω^ω]; merge with y's own rows; round-trip
+  var oy = MetaNum(10).itermult(3);                       // [[2],[1,0,1]] layer 1
+  var ov = MetaNum(10).iteraperiate(oy);
+  checkBool("itap(10, ordinal) = y + [1|ω] + [1|ω^ω] (merged)",
+    JSON.stringify(ov.array) === "[[2],[1,1],[2,0,1]]" && ov.layer === 1, true);
+  checkBool("ordinal round-trip inv_itap(oy-itap) = oy",
+    ov.inv_iteraperiate(MetaNum(10)).eq(oy), true);
+  var oy2 = MetaNum(10).expoiter(3);                      // [[10],[3,0,1]] layer 1
+  var ov2 = MetaNum(10).iteraperiate(oy2);
+  checkBool("ordinal round-trip 2 (ω^ω·3 row)",
+    JSON.stringify(ov2.array) === "[[10],[1,1],[4,0,1]]" &&
+    ov2.inv_iteraperiate(MetaNum(10)).eq(oy2), true);
+  // log inverse: v.i_itap(x) recovers the height
+  var invOk = true, invBad = "";
+  for (var yj = 0; yj < [2,3,5,100].length; yj++) {
+    var yy = [2,3,5,100][yj];
+    var vj = MetaNum(10).iteraperiate(yy);
+    if (!vj.inv_iteraperiate(MetaNum(10)).eq(MetaNum(yy)) ||
+        !vj.i_itap(MetaNum(10)).eq(MetaNum(yy)) ||
+        !vj.iw0w(MetaNum(10)).eq(MetaNum(yy)) ||
+        !MetaNum.inv_iteraperiate(vj, MetaNum(10)).eq(MetaNum(yy))) {
+      invOk = false; invBad = " y=" + yy; break;
+    }
+  }
+  checkBool("itap log inverse round-trips (y = 2,3,5,100)", invOk, true, invBad);
+  checkBool("i_itap/iw0w/static aliases agree",
+    MetaNum(10).iteraperiate(5).i_itap(MetaNum(10)).eq(MetaNum(5)) &&
+    MetaNum(10).iteraperiate(5).iw0w(MetaNum(10)).eq(MetaNum(5)), true);
+  // root form: marker level → smallest reproducing base; base 2 now also
+  // reproduces the base-independent marker (B2-a no longer collapses it)
+  var v5 = MetaNum(10).iteraperiate(5);
+  checkBool("itap_root(5) = 2 (smallest reproducing base)",
+    v5.iteraperiate_root(5).eq(MetaNum(2)) &&
+    v5.r_itap(5).eq(MetaNum(2)) && v5.rw0w(5).eq(MetaNum(2)) &&
+    MetaNum.iteraperiate_root(v5, 5).eq(MetaNum(2)), true);
+  checkBool("2.itap(5) reproduces the marker value",
+    MetaNum(2).iteraperiate(5).eq(v5), true);
+  checkBool("(2{ω^ω+ω}9).itap_root(9) = 2",
+    MetaNum(2).iteraperiate(9).iteraperiate_root(9).eq(MetaNum(2)), true);
+  checkBool("itap_root y=1 returns the value",
+    MetaNum(7).iteraperiate_root(1).eq(MetaNum(7)), true);
+  checkBool("itap_root of 1 is 1", MetaNum(1).iteraperiate_root(5).eq(MetaNum(1)), true);
+  checkBool("itap_root of a negative value → NaN", MetaNum(-4).iteraperiate_root(5).isNaN(), true);
+  checkBool("itap_root with y ≤ 0 → NaN",
+    MetaNum(10).iteraperiate(5).iteraperiate_root(-5).isNaN(), true);
+})();
+
 // ─── 29. cuboiter (ω^ω*2) ───
 console.log("\n=== G3.32 cuboiter (ω^ω*2) ===");
 checkOp("cube(3,4)", m3.cuboiter(4));
@@ -1035,14 +1130,15 @@ checkBool("epsl NaN", MetaNum.epsilonate(m3, MetaNum.NaN).isNaN(), true);
 // λ[y] layer markers in STANDARD form (finite rows merged into r0, layer
 // lowered as far as it goes — README L17: layer L ⇒ ω^ω^…((L-1) ω^'s)^(bracket)):
 //   iter → 10{ω^y}10 (L1 [1,y]); itmu → 10{ω^ω+(y-1)}10 (L1 [1,0,1], r0=y-1)
-//   cube → 10{ω^ω+ω^y}10 (L1 r0[…,1@y] + [1,0,1]); expo → 10{ω^ω·y}10 (L1 [y,0,1])
+//   itap → 10{ω^ω+y}10 (L1 [1,0,1], r0=y); cube → 10{ω^ω+ω^y}10 (L1 r0[…,1@y] + [1,0,1]); expo → 10{ω^ω·y}10 (L1 [y,0,1])
 //   tria → 10{ω^(ω+y)}10 (L1 [1,y,1]); trix → 10{ω^(ω·y+10)}10 (L1 [1,10,y])
 //   apix → 10{ω^(ω^y)}10 (L1 [1,0…0,1] with y zeros)
 console.log("\n=== G3.38 λ[y] layer markers in STANDARD form ===");
-var wOps = ["iterate","itermult","cuboiter","expoiter","trioterate","trixxate","aperixxate"];
+var wOps = ["iterate","itermult","iteraperiate","cuboiter","expoiter","trioterate","trixxate","aperixxate"];
 var mk35 = {
   iterate:     { layer: 0, rows: null },                 // exact cascade, layer 0
   itermult:    { layer: 1, rows: "[[4],[1,0,1]]" },
+  iteraperiate: { layer: 1, rows: "[[5],[1,0,1]]" },
   cuboiter:    { layer: 1, rows: "[[10,0,0,0,0,1],[1,0,1]]" },
   expoiter:    { layer: 1, rows: "[[10],[5,0,1]]" },
   trioterate:  { layer: 1, rows: "[[10],[1,5,1]]" },
@@ -1068,7 +1164,7 @@ for (var wy = 2; wy <= 9; wy++) {
     if (wprev && !wr.gt(wprev)) wmono = false;
     wprev = wr;
   }
-  checkBool("ops strictly grow at y=" + wy + " (iter<itmu<cube<expo<tria<trix<apix)", wmono, true);
+  checkBool("ops strictly grow at y=" + wy + " (iter<itmu<itap<cube<expo<tria<trix<apix)", wmono, true);
 }
 
 // precision budget: exact while it fits maxRows/maxCols
@@ -1090,11 +1186,11 @@ console.log("\n=== G3.39 precision budget (maxRows/maxCols) ===");
   var i35 = m3.iterate(5);
   checkBool("iter(3,5) cascade truncated: array[0]=[10], array[1][0]+1, 19 rows",
     JSON.stringify(i35.array[0]) === "[10]" &&
-    JSON.stringify(i35.array[1]) === "[2,2,2,0,2,2]" && i35.array.length - 1 === 19, true);
+    JSON.stringify(i35.array[1]) === "[2,1,2,3,4,4]" && i35.array.length - 1 === 19, true);
   var h10000 = m3.h10000(10);
   checkBool("h10000(3,10) cascade truncated: array[0]=[10], array[1][0]+1",
     JSON.stringify(h10000.array[0]) === "[10]" &&
-    JSON.stringify(h10000.array[1]) === "[2,2,2,0,9]", true);
+    JSON.stringify(h10000.array[1]) === "[2,0,6,9,9]", true);
   // exact while the enumeration fits: 3{ω^2}3 needs 3^2 = 9 ≤ maxRows rows
   var i32 = m3.iterate(2);
   checkBool("iter(3,2) exact enumeration (no [10] base / no +1 marker)",
@@ -1145,9 +1241,9 @@ console.log("\n=== G3.41 all hyperoperations x=3, y=1 test ===");
 for (var oi = 0; oi < ops.length; oi++) {
   try {
     var res = m3[ops[oi]](1);
-    // rule 3 for limit ordinals: x{λ}1 = x{λ[1]}x = x{1}x = x^x, so
-    // aperiote(3,1) = 3^3 = 27 (other ops are successor levels -> x)
-    var expected1 = ops[oi] === "aperiote" ? 27 : 3;
+    // rule 3 for limit ordinals: x{λ}1 = x{λ[1]}1 = x{1}1 = x for every
+    // op (successor levels give x directly), so aperiote(3,1) = 3 too
+    var expected1 = 3;
     if (res.eq(expected1)) console.log("PASS | " + ops[oi] + "(3,1) | " + res.toString().slice(0, 100));
     else console.log("FAIL | " + ops[oi] + "(3,1) => " + res.toString().slice(0, 100));
   } catch (e) {
@@ -1208,8 +1304,8 @@ console.log("\n=== G3.45 inverse round-trip (small y and y > MSI) ===");
 var m10 = MetaNum(10);
 for (var oi = 0; oi < ops.length; oi++) {
   var fwdS, backS, fwdB, backB;
-  // small argument: under rule 3 (x{λ}b = x{λ[b]}x) limit-derived values end
-  // on the base x = 10; purely successor-level values still end on 3.
+  // small argument: under rule 3 (x{λ}b = x{λ[b]}b) the inverse recovers y;
+  // a few marker/huge-argument conventions fall back to the base x = 10
   try {
     fwdS = m10[ops[oi]](3);
     backS = fwdS[invOps[oi]](m10);
@@ -1376,7 +1472,7 @@ checkArr("powerexpande(1e16,3) array", mL16.powerexpande(3), [[16, 1], [2, 2, 1]
 checkArr("aperiote(3,1e16) array", m3.aperiote(mL16), [[16, 1], [1, 0, 1]]);
 // rule 3: 1e16{ω}3 = 1e16{3}1e16 — the huge base dominates, same marker
 // array as the y>MSI case
-checkArr("aperiote(1e16,3) array", mL16.aperiote(3), [[16, 1, 0, 1]]);
+checkArr("aperiote(1e16,3) array", mL16.aperiote(3), [[16, 1, 2]]);
 checkArr("expande(3,1e16) array", m3.expande(mL16), [[16, 1], [1, 1, 1]]);
 checkArr("multiexpande(3,1e16) array", m3.multiexpande(mL16), [[16, 1], [1, 2, 1]]);
 checkArr("powerexpande(3,1e16) array", m3.powerexpande(mL16), [[16, 1], [1, 3, 1]]);
@@ -1485,9 +1581,10 @@ checkBool("h21(3,20): lower rows carry x-2 = 1",
         lr.array[1][0] === 9, true);
     }
   }
-  // top row carries the fundamental-sequence index y-1
-  checkBool("h20(10,1000) top row = ω+999",
-    JSON.stringify(MetaNum(10).h20(1000).array[19]) === "[8,999,1]", true);
+  // top row carries the fundamental-sequence level ω+(y-1) with count y-2
+  // (first successor expansion); the rows below it carry x-2 = 8
+  checkBool("h20(10,1000) top row = ω+999, count y-2",
+    JSON.stringify(MetaNum(10).h20(1000).array[19]) === "[998,999,1]", true);
   checkBool("h20(10,MSI) top row = ω+(MSI-1)",
     MetaNum(10).h20(MSI).array[19][1] === MSI - 1, true);
 })();
@@ -1495,28 +1592,28 @@ checkBool("h21(3,20): lower rows carry x-2 = 1",
 // ─────────────────────────────────────
 // Fractional y for every level from ω*2 up (README "Non-integer arguments"):
 // a limit level takes its fundamental sequence at the FULL fractional index and
-// the fractional coefficients resolve against the base x (ω^(k)·(c+f) =
-// ω^(k)·c + ω^(k-1)·(x·f)); a leftover fractional constant becomes a fractional
-// argument one level up: x{γ+f}x = x{γ+1}(2·(x/2)^f).
+// the fractional coefficients resolve against the operand y (ω^(k)·(c+f) =
+// ω^(k)·c + ω^(k-1)·(y·f)); a leftover fractional constant becomes a fractional
+// argument one level up: x{γ+f}y = x{γ+1}(2·(y/2)^f).
 // ─────────────────────────────────────
 console.log("\n=== G3.53 h20+ with fractional y ===");
-checkBool("10{ω*2}2.1 = 10{ω+3}(2*5^0.1)",
-  MetaNum(10).h20(2.1).eq(MetaNum(10).powerexpande(2 * Math.pow(5, 0.1))), true);
-checkBool("3{ω*2}2.1 = 3{ω+3}(2*1.5^0.1)",
-  MetaNum(3).h20(2.1).eq(MetaNum(3).powerexpande(2 * Math.pow(1.5, 0.1))), true);
-checkBool("10{ω^2}2.1 = 10{ω*2+1}10",
-  MetaNum(10).h100(2.1).eq(MetaNum(10).h21(10)), true);
-checkBool("3{ω^2}2.1 = 3{ω*2+1}(2*1.5^0.3)",
-  MetaNum(3).h100(2.1).eq(MetaNum(3).h21(2 * Math.pow(1.5, 0.3))), true);
-// 10{ω^ω}2.1 = 10{ω^2.1}10 = 10{ω^2*10^0.1}10 → ω^2+ω*2+5.8925… → next level
+checkBool("10{ω*2}2.1 = 10{ω+3}(2*(2.1/2)^0.1)",
+  MetaNum(10).h20(2.1).eq(MetaNum(10).powerexpande(2 * Math.pow(2.1 / 2, 0.1))), true);
+checkBool("3{ω*2}2.1 = 3{ω+3}(2*(2.1/2)^0.1)",
+  MetaNum(3).h20(2.1).eq(MetaNum(3).powerexpande(2 * Math.pow(2.1 / 2, 0.1))), true);
+checkBool("10{ω^2}2.1 = 10{ω*2+1}(2*(2.1/2)^0.21)",
+  MetaNum(10).h100(2.1).eq(MetaNum(10).h21(2 * Math.pow(2.1 / 2, 0.21))), true);
+checkBool("3{ω^2}2.1 = 3{ω*2+1}(2*(2.1/2)^0.21)",
+  MetaNum(3).h100(2.1).eq(MetaNum(3).h21(2 * Math.pow(2.1 / 2, 0.21))), true);
+// 10{ω^ω}2.1 = 10{ω^2.1}2.1 = 10{ω^2*2.1^0.1}2.1 → ω^2+0.339638… → next level
 (function () {
-  var rf = MetaNum._resolveFracLevel([0, 0, Math.pow(10, 0.1)], 10);
+  var rf = MetaNum._resolveFracLevel([0, 0, Math.pow(2.1, 0.1)], 2.1);
   var up = rf.ord.slice(); up[0] += 1;
-  checkBool("10{ω^ω}2.1 = 10{ω^2+ω*2+6}(2*5^0.8925…) (level " +
+  checkBool("10{ω^ω}2.1 = 10{ω^2+1}(2*(2.1/2)^0.339638…) (level " +
     JSON.stringify(up) + ")",
-    JSON.stringify(up) === "[6,2,1]" &&
+    JSON.stringify(up) === "[1,0,1]" &&
     MetaNum(10).iterate(2.1).eq(
-      MetaNum._hyperopFromOrdinal(MetaNum(10), MetaNum(2 * Math.pow(5, rf.frac)), up)), true);
+      MetaNum._hyperopFromOrdinal(MetaNum(10), MetaNum(2 * Math.pow(2.1 / 2, rf.frac)), up)), true);
 })();
 // the fraction is not thrown away: y and floor(y) differ
 checkBool("h20(10,2.1) != h20(10,2) and lies strictly between 2 and 3",
@@ -1525,10 +1622,13 @@ checkBool("h20(10,2.1) != h20(10,2) and lies strictly between 2 and 3",
 checkBool("h100(10,10.25) lies strictly between 10 and 11",
   MetaNum(10).h100(10.25).gt(MetaNum(10).h100(10)) &&
   MetaNum(10).h100(10.25).lt(MetaNum(10).h100(11)), true);
-// Monotone in y across the integers for the LIMIT levels.  Sampled: the
-// 504-evaluation full grid (7 ops × 2 bases × y=2..10) only re-exercised the
-// same cascade code path, so it is reduced to representative ops/bases/m
-// (still covers ω, ω+1, ω*2, ω² and ω^ω strata and both small bases).
+// Monotone in y across the integers for the LIMIT levels.  The fractional
+// interpolation anchors at x{γ+1}2 = x{γ}x (README), so the grid step m →
+// m+f stays monotone while m ≤ x; for m > x the fractional value sits in the
+// interpolation band [x{γ+1}2, x{γ+1}(m+f)) BELOW the integer grid point —
+// that is the spec's behavior, checked separately.  Sampled: representative
+// ops/bases/m (still covers ω, ω+1, ω*2, ω² and ω^ω strata and both small
+// bases).
 (function () {
   var limOps = ["h20", "h30", "h100", "h1000", "iterate"];
   var bad = 0, firstBad = "";
@@ -1536,6 +1636,7 @@ checkBool("h100(10,10.25) lies strictly between 10 and 11",
     for (var b = 0; b < 2; b++) {
       var bx = [3, 10][b];
       for (var m = 2; m <= 10; m += 4) {
+        if (m > bx) continue;   // grid monotonicity is guaranteed only for y ≤ x
         var a = MetaNum(bx)[limOps[i]](m), c = MetaNum(bx)[limOps[i]](m + 0.001);
         var d = MetaNum(bx)[limOps[i]](m + 0.5), e = MetaNum(bx)[limOps[i]](m + 1);
         if (!(c.gte(a) && d.gte(c) && e.gte(d))) {
@@ -1544,8 +1645,15 @@ checkBool("h100(10,10.25) lies strictly between 10 and 11",
       }
     }
   }
-  checkBool("limit levels monotone across fractional y", bad === 0, true,
+  checkBool("limit levels monotone across fractional y (grid points y ≤ x)", bad === 0, true,
     bad === 0 ? "" : " first failure: " + firstBad);
+  // for m > x the value stays inside the interpolation band anchored at
+  // x{γ}x: h20(3,6.001) = 3{ω+7}(2·(6.001/2)^0.001) ∈ [3{ω+7}2, 3{ω+7}6.001)
+  var lo = MetaNum._hyperopFromOrdinal(MetaNum(3), MetaNum(2), [7, 1]);
+  var vv = MetaNum(3).h20(6.001);
+  var hi = MetaNum._hyperopFromOrdinal(MetaNum(3), MetaNum(6.001), [7, 1]);
+  checkBool("h20(3,6.001) lies in the band [3{ω+7}2, 3{ω+7}6.001) (y > x anchors at x{γ}x)",
+    vv.gte(lo) && vv.lt(hi), true);
 })();
 // the SUCCESSOR rule with a fractional argument is written in the same expanded
 // form: the α-1 row carries the m applications (ceil(y)-2 = m-1) and the cascade
@@ -1699,6 +1807,118 @@ checkBool("h31(10,5.1) < h31(10,5.5) < h31(10,5.9) < h31(10,6)",
 })();
 
 // ─────────────────────────────────────
+// v2.2.0 ordinal-level ROOT forms: c.<op>_root(b) = a mirrors the inv_* log
+// family (c.i_<op>(a) = b).  README example:
+//   (10{ω}15).aperiote_root(15) = 10, just like (10{ω}15).i_aper(10) = 15.
+// Beyond the representation budget the stored value no longer encodes the
+// base (huge-argument markers; base-independent layer markers at ω^ω+), so
+// the root returns the smallest base reproducing the stored value — the
+// same convention hyper_root documents for the finite levels.
+// ─────────────────────────────────────
+console.log("\n=== G4.15 ordinal-level root forms ===");
+(function () {
+  var v = MetaNum(10).aperiote(15);   // 10{ω}15
+  checkBool("(10{ω}15).aperiote_root(15) = 10", v.aperiote_root(15).eq(MetaNum(10)), true);
+  checkBool("(10{ω}15).r10(15) = 10 (code alias)", v.r10(15).eq(MetaNum(10)), true);
+  checkBool("(10{ω}15).r_aper(15) = 10 (short alias)", v.r_aper(15).eq(MetaNum(10)), true);
+  checkBool("(10{ω}15).i_aper(10) = 15 (log counterpart)", v.i_aper(MetaNum(10)).eq(MetaNum(15)), true);
+  checkBool("static MetaNum.aperiote_root(10{ω}15, 15) = 10",
+    MetaNum.aperiote_root(MetaNum(10).aperiote(15), MetaNum(15)).eq(MetaNum(10)), true);
+  // edge cases: a{α}1 = a, 1{α}b = 1, 2{α}2 = 4 (B2-a), invalid input → NaN
+  checkBool("aperiote_root y=1 returns the value (a{α}1 = a)", MetaNum(7).aperiote_root(1).eq(MetaNum(7)), true);
+  checkBool("aperiote_root of 1 is 1 (1{α}b = 1)", MetaNum(1).aperiote_root(5).eq(MetaNum(1)), true);
+  checkBool("(2{ω}9).aperiote_root(9) = 2 (2{9}9 roots back to base 2)",
+    MetaNum(2).aperiote(9).aperiote_root(9).eq(MetaNum(2)), true);
+  checkBool("aperiote_root of a negative value → NaN", MetaNum(-4).aperiote_root(5).isNaN(), true);
+  checkBool("aperiote_root with y ≤ 0 → NaN", MetaNum(10).aperiote(15).aperiote_root(-5).isNaN(), true);
+  // exact base recovery at every representable level (aperiote .. iterate)
+  var exact = [["aperiote","aperiote_root"],["expande","expande_root"],
+    ["multiexpande","multiexpande_root"],["powerexpande","powerexpande_root"],
+    ["aperioexpande","aperioexpande_root"],["explode","explode_root"],
+    ["multiexplode","multiexplode_root"],["aperioexplode","aperioexplode_root"],
+    ["detonate","detonate_root"],["aperiodetonate","aperiodetonate_root"],
+    ["aperionate","aperionate_root"],["megote","megote_root"],
+    ["multimegote","multimegote_root"],["aperimegote","aperimegote_root"],
+    ["megoexpande","megoexpande_root"],["aperimegoexpande","aperimegoexpande_root"],
+    ["megoaperionate","megoaperionate_root"],["gigote","gigote_root"],
+    ["aperigigote","aperigigote_root"],["gigoaperionate","gigoaperionate_root"],
+    ["aperiatote","aperiatote_root"],["powiainate","powiainate_root"],
+    ["expandainate","expandainate_root"],["megodainate","megodainate_root"],
+    ["powiairate","powiairate_root"],["aperioguate","aperioguate_root"],
+    ["iterate","iterate_root"]];
+  var bad = 0, firstBad = "";
+  for (var i = 0; i < exact.length; i++) {
+    for (var k = 0; k < 2; k++) {
+      var x = [3, 10][k];
+      var vx = MetaNum(x)[exact[i][0]](5);
+      var a = vx[exact[i][1]](MetaNum(5));
+      if (!a.eq(MetaNum(x))) { bad++; if (!firstBad) firstBad = exact[i][0] + "(" + x + ",5)"; }
+    }
+  }
+  checkBool("root recovers the base: aperiote..iterate (x=3/10, y=5)", bad === 0,
+    true, bad === 0 ? "" : " first failure: " + firstBad);
+  // marker levels (itermult..epsilonate): the stored layer marker is
+  // base-independent (D07 B2-b), so the root is the smallest reproducing
+  // base — 2, since the narrowed B2-a no longer collapses 2{λ}5 to 4 —
+  // verify both that property and the round-trip
+  var marker = [["itermult","itermult_root"],["iteraperiate","iteraperiate_root"],
+    ["cuboiter","cuboiter_root"],
+    ["expoiter","expoiter_root"],["trioterate","trioterate_root"],
+    ["trixxate","trixxate_root"],["aperixxate","aperixxate_root"],
+    ["epsilonate","epsilonate_root"]];
+  var bad2 = 0, firstBad2 = "";
+  for (var j = 0; j < marker.length; j++) {
+    var vm = MetaNum(10)[marker[j][0]](5);
+    var am = vm[marker[j][1]](MetaNum(5));
+    if (!am[marker[j][0]](MetaNum(5)).eq(vm)) { bad2++; if (!firstBad2) firstBad2 = marker[j][0] + " round-trip"; }
+    if (!am.eq(MetaNum(2))) { bad2++; if (!firstBad2) firstBad2 = marker[j][0] + " smallest base"; }
+  }
+  checkBool("marker levels: root = smallest base reproducing the marker (= 2)", bad2 === 0,
+    true, bad2 === 0 ? "" : " first failure: " + firstBad2);
+})();
+
+// ─────────────────────────────────────
+// G4.16 huge-y growth: with a large base, y > COEFF_BOUND(100) used to
+// collapse to the level λ itself ([1|λ], y-independent). It must instead
+// store the fundamental-sequence level λ[y] — the same convention the
+// y ≤ 100 cascade path produces — so results keep growing with y and
+// stay continuous across y = 100 → 101.
+// ─────────────────────────────────────
+console.log("\n=== G4.16 huge-y growth (y > COEFF_BOUND) ===");
+(function () {
+  var x = MetaNum(4).arrow(3)(4);   // 4↑↑↑4 — large base, ordinal engine
+  var ops = ["h20","h30","h100","h40","h110","h120","h2000","h10000"];
+  for (var i = 0; i < ops.length; i++) {
+    var prev = null, mono = true, firstBad = "";
+    for (var j = 0; j < 4; j++) {
+      var y = [101, 1000, 1e4, 1e6][j];
+      var v = new MetaNum(x)[ops[i]](y);
+      if (prev && !v.gt(prev)) { mono = false; if (!firstBad) firstBad = "y=" + y; }
+      prev = v;
+    }
+    checkBool("4↑↑↑4 " + ops[i] + "(y) strictly grows for y = 101..1e6", mono, true,
+      mono ? "" : " first break: " + firstBad);
+  }
+  // the stored ordinal row must be [1|λ[y]]: coefficient equals y
+  checkBool("h20(101) stores [1|ω+101]",
+    JSON.stringify(new MetaNum(x).h20(101).array.slice(-1)) === "[[1,101,1]]", true);
+  checkBool("h100(1e6) stores [1|ω·1000000]",
+    JSON.stringify(new MetaNum(x).h100(1e6).array.slice(-1)) === "[[1,0,1000000]]", true);
+  // continuity across the COEFF_BOUND boundary (value keeps growing):
+  // y=100 ≤ COEFF_BOUND expands the successor cascade [99|ω+99], y=101
+  // stores the huge-argument marker row [1|ω+101]
+  checkBool("h20 continuous across y=100→101",
+    JSON.stringify(new MetaNum(x).h20(100).array.slice(-1)) === "[[99,99,1]]" &&
+    JSON.stringify(new MetaNum(x).h20(101).array.slice(-1)) === "[[1,101,1]]" &&
+    new MetaNum(x).h20(100).lt(new MetaNum(x).h20(101)), true);
+  // 4↑↑4 (smaller large base) must behave identically
+  var x2 = MetaNum(4).arrow(2)(4);
+  checkBool("4↑↑4 h30(101) < h30(1e4) < h30(1e6)",
+    new MetaNum(x2).h30(101).lt(new MetaNum(x2).h30(1e4)) &&
+    new MetaNum(x2).h30(1e4).lt(new MetaNum(x2).h30(1e6)), true);
+})();
+
+// ─────────────────────────────────────
 // engine arrays: the (y-2) count law
 //   x{L}y = x{L-1}^{y-2}(x{L-1}x): 10{25}10 → count-8 rows/cols (the
 //   canonical all-8s), 4{25}4 → count-2; truncation keeps the largest
@@ -1812,14 +2032,23 @@ console.log("\n=== G3.57 D07 2{lambda}2 ===");
 (function () {
   var ops = ["aperiote", "aperionate", "iter", "itermult", "cuboiter", "expoiter",
              "trioterate", "trixxate", "aperixxate", "epsilonate"];
-  // B2-a: for base 2 every infinite/successor level collapses to 4 for any
-  // integer y >= 2 (rule 3 turns the argument into 2).
+  // B2-a collapses only the 2-diagonal: 2{λ}2 = 2{2}2 = 4 for every level
+  // (rule 3 turns the argument into 2).  For y ≥ 3 the new rule 2{λ}y =
+  // 2{λ[y]}y keeps growing with y.
   [2, 3, 5, 1000].forEach(function (y) {
     ops.forEach(function (op) {
       var v = new MetaNum(2)[op](y);
-      ok("2{" + op + "}" + y + " === 4", v.eq(4), v.toString());
+      if (y === 2) ok("2{" + op + "}2 === 4 (B2-a diagonal)", v.eq(4), v.toString());
+      else ok("2{" + op + "}" + y + " > 4", v.gt(4), v.toString());
     });
   });
+  // y ≥ 3 grows monotonically for every level, with an exact anchor at ω
+  ops.forEach(function (op) {
+    ok("2{" + op + "}3 < 2{" + op + "}5 < 2{" + op + "}1000",
+      new MetaNum(2)[op](3).lt(new MetaNum(2)[op](5)) &&
+      new MetaNum(2)[op](5).lt(new MetaNum(2)[op](1000)));
+  });
+  ok("2{aperiote}3 === 65536 (2{ω}3 = 2{3}3)", new MetaNum(2).aperiote(3).eq(65536));
   // finite levels must NOT collapse (2{1}3 = 8, 2{2}3 = 16)
   ok("2{1}3 === 8 (finite unaffected)", new MetaNum(2).arrow(1)(3).eq(8));
   ok("2{2}3 === 16 (finite unaffected)", new MetaNum(2).arrow(2)(3).eq(16));
@@ -1866,11 +2095,12 @@ checkArr("BEAF(5,5,5,5,BEAF(5,5,5,5,5))", MetaNum.BEAF(5, 5, 5, 5, beafInner5),
 //   expansion: largest-to-smallest evaluation; exact when it fits maxRows-1
 //   rows, else base [10] + first kept row count +1
 // ─────────────────────────────────────
-// {2,7,5,5} = 2{ω*4+5}7: rule 3 ends every limit step on the base 2, and
-// 2-2=0 means every cascade count vanishes; 2{α}2 collapses through
-// successors/limits down to the finite anchor 2{k}2=4 — result is exactly 4
-checkBool("BEAF(2,7,5,5) = 4 (base-2 rule-3 collapse)",
-  MetaNum.BEAF(2, 7, 5, 5).eq(4), true);
+// {2,7,5,5} = 2{ω*4+5}7 = 2{ω*4+4}(2{ω*4+5}6) → … — under the unified rule
+// 2{λ}7 = 2{λ[7]}7 the value keeps growing; only the 2-diagonal collapses to
+// 4 (2{α}2 = 2{2}2), so the result exceeds 4 and the lower-argument form
+checkBool("BEAF(2,7,5,5) > 4 and grows with the constant term",
+  MetaNum.BEAF(2, 7, 5, 5).gt(4) &&
+  MetaNum.BEAF(2, 7, 4, 5).lt(MetaNum.BEAF(2, 7, 5, 5)), true);
 // {3,2,4,6} = 3{ω*5+4}2
 checkBool("BEAF(3,2,4,6) top row [1,2,5]",
   JSON.stringify(MetaNum.BEAF(3, 2, 4, 6).array[MetaNum.BEAF(3, 2, 4, 6).array.length - 1])
@@ -2740,7 +2970,7 @@ checkFormat("canonical all-8s keeps α=1 (G600)", "G600", "1.000G600");
 // carry — a cascade that would spell 20 letter types keeps its top two levels,
 // and a combination longer than multiLetterLimit switches to !αAaβ
 // ─────────────────────────────────────
-checkFormat("20-row cascade compresses to two letter types", MetaNum.h10000(3, 10), "Iccc1.000Iccb10");
+checkFormat("20-row cascade compresses to two letter types", MetaNum.h10000(3, 10), "1.000Ijjk9");
 // a level whose letter name is longer than multiLetterLimit carries to the
 // SINGLE-letter form !αΓβ — "!" adds one ω^ layer on top of the level Γ names
 checkFormat("10-letter level carries to !1.000M9", MetaNum.iter(3, 10), "!1.000M9");
@@ -2866,9 +3096,17 @@ console.log("\n=== G6.3 two-letter rule ===");
 // ─────────────────────────────────────
 console.log("\n=== G6.4 binary-letter canonical forms (formatSingleLetterType) ===");
 (function () {
-  var fmtMod = require("./format-metanum.js");
-  var single = fmtMod.formatSingleLetterType;
-  var full = fmtMod.formatFull;
+  // Browser-safe: loaded via <script>, format-metanum.js exposes its top-level
+  // functions as globals and `require` does not exist at all.
+  var fmtMod = (typeof require === "function") ? require("./format-metanum.js") : null;
+  var single = (fmtMod && fmtMod.formatSingleLetterType) ||
+    (typeof formatSingleLetterType !== "undefined" ? formatSingleLetterType : null);
+  var full = (fmtMod && fmtMod.formatFull) ||
+    (typeof formatFull !== "undefined" ? formatFull : null);
+  if (!single || !full) {
+    console.log("SKIP | formatSingleLetterType / formatFull are not available here");
+    return;
+  }
   function typesOf(s) {
     var stripped = String(s).replace(/(\d(?:\.\d+)?)E(\d[\d,]*)/g, "$1$2");
     var tokens = stripped.match(/[A-Z][a-z]*/g) || [];
@@ -3001,8 +3239,8 @@ checkFormat("nested arrow(3,arrow(10,10000,10),3) → Aa1.000Aa10,000",
 // v2.0: rule 3 unification + pure dlsdl diagonal [2,10) convention
 // ─────────────────────────────────────────────────────────────────
 console.log("\n=== G6.6 diagonal letter convention ===");
-// rule 3: n{λ}b = n{λ[b]}n
-checkBool("aper(3,5) = 3{5}3", MetaNum.aperiote(3,5).eq(MetaNum(3).arrow(5)(3)), true);
+// rule 3: n{λ}b = n{λ[b]}b
+checkBool("aper(3,5) = 3{5}5", MetaNum.aperiote(3,5).eq(MetaNum(3).arrow(5)(5)), true);
 // diagonal letters (ending in 'a'): integer arguments all anchor at 2.000
 [10, 11, 50, 100].forEach(function (b) {
   checkFormat("10{100}" + b + " → 2.000Aa100", MetaNum.arrow(10, 100, b), "2.000Aa100");
@@ -3097,3 +3335,24 @@ console.log("\n=== G6.8 MetaNum(...).format() instance method ===");
 // FORMAT_OPTIONS: every option must take effect.  Each check flips the option
 // and asserts the display changes along the option's documented meaning.
 // ─────────────────────────────────────
+console.log("\n=== G7.12 format() \"null\" regression ===");
+(function () {
+  // inner r0 chain exceeding the repeat-letter budget used to leak the
+  // literal string "null" into the output; it must fall through to the
+  // Γ-canonical collapse instead.  The value that triggered the leak is the
+  // ω-diagonal x{10}x (the pre-unification aperiote); build it directly so
+  // the regression stays pinned even though aperiote now anchors at y.
+  var cases = [["3.3G5","N1.000G5"],["2.4G5","N1.000G5"],["1.5G8","N1.000G8"],["G5","N1.000G5"]];
+  for (var i = 0; i < cases.length; i++) {
+    var got = MetaNum(cases[i][0]).arrow(10)(MetaNum(cases[i][0])).format();
+    checkBool("format(" + cases[i][0] + " ω-diagonal) = " + cases[i][1] + " (no \"null\")",
+      got === cases[i][1], true, got === cases[i][1] ? "" : " got " + got);
+  }
+  // the unified aperiote x{ω}y = x{y}y outputs stay null-free as well
+  var cases2 = [["3.3G5","1.007N10"],["2.4G5","1.007N10"],["1.5G8","1.008N10"],["G5","1.007N10"]];
+  for (var k = 0; k < cases2.length; k++) {
+    var got2 = MetaNum.h10(cases2[k][0], 10).format();
+    checkBool("format(h10(" + cases2[k][0] + ",10)) = " + cases2[k][1] + " (no \"null\")",
+      got2 === cases2[k][1], true, got2 === cases2[k][1] ? "" : " got " + got2);
+  }
+})();

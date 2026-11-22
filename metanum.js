@@ -2541,13 +2541,90 @@
     return new MetaNum(x).arrow(arrows)(y);
   };
 
+  // ==================== ordinal-level root inverses ====================
+  // Root form of the ordinal-level hyperoperations — the {α}root analogue of
+  // the inv_* log family: if a{α}b = c then c.<op>_root(b) = a, mirroring
+  // c.i_<op>(a) = b.  E.g. (10{ω}15).aperiote_root(15) = 10 just like
+  // (10{ω}15).i_aper(10) = 15.  The base map a ↦ a{α}b is monotone
+  // nondecreasing (README rules 1-4), so the base is recovered by the same
+  // integer bisection hyper_root uses at the finite levels: the smallest
+  // base a with a{α}b ≥ c.  Beyond the representation budget the stored
+  // value no longer encodes the base (y ≥ MSI anchors at the huge-argument
+  // marker; the layer markers of the ω^ω+ levels are base-independent), so
+  // the root returns the smallest base reproducing the stored value — the
+  // same convention hyper_root documents for the finite levels.
+  function ordinalHyperRoot(c, y, fwd) {
+    c = new MetaNum(c);
+    y = new MetaNum(y);
+    if (c.isNaN() || y.isNaN() || y.lte(MetaNum.ZERO) || c.lte(MetaNum.ZERO)) {
+      return MetaNum.NaN.clone();
+    }
+    if (y.eq(MetaNum.ONE)) return c.clone();            // a{α}1 = a
+    if (c.lt(MetaNum.ONE)) return MetaNum.NaN.clone();  // a{α}b ≥ 1 for every a ≥ 1
+    if (c.eq(MetaNum.ONE)) return MetaNum.ONE.clone();  // 1{α}b = 1
+    return hyperBisect(function (a) { return fwd(a, y); }, c, 200);
+  }
+  // Each entry mirrors the inv_* log triple (inv_<op> = i_<short> = i<code>):
+  // <op>_root = r_<short> = r<code>, forwarding through the named op itself
+  // so the root inverts exactly the operation the caller used.
+  function defineHyperRoot(longName, shortName, codeName, forwardName) {
+    P[longName] = P[shortName] = P[codeName] = function (y) {
+      return ordinalHyperRoot(this, y, function (a, b) {
+        // B2-a: on the DIAGONAL b=2 every limit/successor cascade bottoms out
+        // at 2{...}2 = 2{2}2 = 4 (n{λ}b = n{λ[b]}b keeps the operand 2) —
+        // aperiote's arrow route would otherwise recurse level-by-level and
+        // overflow the stack at huge finite heights.  b > 2 grows normally.
+        if (a.eq(2) && b.eq(2)) return new MetaNum(4);
+        return a[forwardName](b);
+      });
+    };
+    Q[longName] = Q[shortName] = Q[codeName] = function (x, y) {
+      return new MetaNum(x)[longName](y);
+    };
+  }
+  defineHyperRoot('aperiote_root', 'r_aper', 'r10', 'aperiote');            // ω
+  defineHyperRoot('expande_root', 'r_expa', 'r11', 'expande');              // ω+1
+  defineHyperRoot('multiexpande_root', 'r_muea', 'r12', 'multiexpande');    // ω+2
+  defineHyperRoot('powerexpande_root', 'r_poea', 'r13', 'powerexpande');   // ω+3
+  defineHyperRoot('aperioexpande_root', 'r_apea', 'r20', 'aperioexpande'); // ω*2
+  defineHyperRoot('explode_root', 'r_expl', 'r21', 'explode');             // ω*2+1
+  defineHyperRoot('multiexplode_root', 'r_muel', 'r22', 'multiexplode');   // ω*2+2
+  defineHyperRoot('aperioexplode_root', 'r_apel', 'r30', 'aperioexplode'); // ω*3
+  defineHyperRoot('detonate_root', 'r_deto', 'r31', 'detonate');           // ω*3+1
+  defineHyperRoot('aperiodetonate_root', 'r_apdt', 'r40', 'aperiodetonate'); // ω*4
+  defineHyperRoot('aperionate_root', 'r_apeo', 'r100', 'aperionate');      // ω^2
+  defineHyperRoot('megote_root', 'r_mego', 'r101', 'megote');              // ω^2+1
+  defineHyperRoot('multimegote_root', 'r_mume', 'r102', 'multimegote');   // ω^2+2
+  defineHyperRoot('aperimegote_root', 'r_apmg', 'r110', 'aperimegote');   // ω^2+ω
+  defineHyperRoot('megoexpande_root', 'r_mgea', 'r111', 'megoexpande');    // ω^2+ω+1
+  defineHyperRoot('aperimegoexpande_root', 'r_apme', 'r120', 'aperimegoexpande'); // ω^2+ω*2
+  defineHyperRoot('megoaperionate_root', 'r_mgao', 'r200', 'megoaperionate'); // ω^2*2
+  defineHyperRoot('gigote_root', 'r_gigo', 'r201', 'gigote');              // ω^2*2+1
+  defineHyperRoot('aperigigote_root', 'r_apgg', 'r210', 'aperigigote');    // ω^2*2+ω
+  defineHyperRoot('gigoaperionate_root', 'r_ggap', 'r300', 'gigoaperionate'); // ω^2*3
+  defineHyperRoot('aperiatote_root', 'r_apat', 'r1000', 'aperiatote');    // ω^3
+  defineHyperRoot('powiainate_root', 'r_pwan', 'r1001', 'powiainate');     // ω^3+1
+  defineHyperRoot('expandainate_root', 'r_epan', 'r1010', 'expandainate'); // ω^3+ω
+  defineHyperRoot('megodainate_root', 'r_mgan', 'r1100', 'megodainate');   // ω^3+ω^2
+  defineHyperRoot('powiairate_root', 'r_pwar', 'r2000', 'powiairate');     // ω^3*2
+  defineHyperRoot('aperioguate_root', 'r_apgu', 'r10000', 'aperioguate'); // ω^4
+  defineHyperRoot('iterate_root', 'r_iter', 'rww', 'iterate');             // ω^ω
+  defineHyperRoot('itermult_root', 'r_itmu', 'rw01', 'itermult');          // ω^ω+1
+  defineHyperRoot('iteraperiate_root', 'r_itap', 'rw0w', 'iteraperiate');  // ω^ω+ω
+  defineHyperRoot('cuboiter_root', 'r_cube', 'rwx2', 'cuboiter');         // ω^ω*2
+  defineHyperRoot('expoiter_root', 'r_expo', 'rwa1', 'expoiter');          // ω^(ω+1)
+  defineHyperRoot('trioterate_root', 'r_tria', 'rwm2', 'trioterate');      // ω^(ω*2)
+  defineHyperRoot('trixxate_root', 'r_trix', 'rwp2', 'trixxate');          // ω^(ω^2)
+  defineHyperRoot('aperixxate_root', 'r_apix', 'rwpw', 'aperixxate');     // ω^(ω^ω)
+  defineHyperRoot('epsilonate_root', 'r_epsl', 'repsl', 'epsilonate');     // ε₀
+
   // level ω, rule 3 with the fundamental sequence ω[y] = y:
-  //   x{ω}y = x{ω[y]}x = x{y}x
-  // (the final operand is the base x, NOT the FS index y)
+  //   x{ω}y = x{ω[y]}y = x{y}y
+  // (the final operand stays y — the unified limit rule n{λ}b = n{λ[b]}b)
   //   aperiote(3,0) = 3{0}3 = 9; aperiote(3,1) = 3{1}3 = 27;
   //   aperiote(3,2) = 3{2}3 = 3^^3 = 7625597484987; ...
   P.aperiote = P.aper = P.h10 = function (y) {
-    return this.arrow(y)(this);
+    return this.arrow(y)(y);
   };
   Q.aperiote = Q.aper = Q.h10 = function (x, y) {
     return new MetaNum(x).aperiote(y);
@@ -2974,8 +3051,11 @@
     if (x.eq(MetaNum.ONE)) return MetaNum.ONE.clone();
     if (y.eq(MetaNum.ONE)) return x.clone();
     if (cf.length === 0) return x.mul(y); // rule 1: x{0}y = x*y
-    // B2-a: base-2 infinite-level collapse (see _hyperopFromOrdinal).
-    if (x.eq(2) && y.isint() && y.gte(2) && coeffsHaveOmegaPart(cf)) return new MetaNum(4);
+    // B2-a: base-2 collapse on the diagonal y=2 only — n{λ}b = n{λ[b]}b
+    // keeps the operand b, so b=2 stays 2 all the way down and the cascade
+    // bottoms out at 2{...}2 = 2{2}2 = 4 (see _hyperopFromOrdinal).  y > 2
+    // grows normally (2{ω}3 = 2{3}3 = 65536).
+    if (x.eq(2) && y.eq(2) && coeffsHaveOmegaPart(cf)) return new MetaNum(4);
 
     if (!coeffsHaveOmegaPart(cf)) {
       // finite level: arrow() handles both small and huge operands
@@ -2996,15 +3076,28 @@
       return Q._iterateOrdinal(x, succCoeffs(cf), x.clone(), yCnt - 1, depth);
     }
     // limit ordinal: fundamental sequence at y
-    var pL = 1;
-    while (pL < cf.length && (cf[pL] || 0) === 0) pL++;
     // A fundamental sequence whose cardinal is cascade-unrepresentable would
-    // need more distinct ordinal levels than the array can hold — collapse to
-    // the diagonalized single-row form (supremum of the iteration hierarchy).
-    var hugeFs = yCnt > COEFF_BOUND && (pL >= 2 || (cf[1] || 0) > 1);
-    if (hugeFs) return Q._applyOrdinalRows(x.max(y), cf, 1);
-    // rule 3: x{λ}y = x{λ[y]}x — the final operand is the base x
-    return Q._ordinalHyperop(x, x, fsCoeffs(cf, yCnt), depth + 1);
+    // need ~y distinct ordinal levels — more rows than the array can hold.
+    // Collapsing to the level λ itself froze the result (h20(x,101) =
+    // h20(x,1e6) = x+[1|λ], independent of y).  Instead store the FS level
+    // λ[y] as ONE row — the exact convention the y ≤ COEFF_BOUND cascade
+    // path produces ([1|ω+y] for ω*2, [1|ω*y] for ω^2, …) — so the result
+    // keeps growing with y all the way to MSI.  λ = ω is excluded: ω[y] = y
+    // is a finite level the rule-3 path below evaluates exactly.
+    var aboveOmega = (cf[1] || 0) > 1;
+    for (var mi = 2; mi < cf.length; mi++) if ((cf[mi] || 0) > 0) aboveOmega = true;
+    var hugeFs = yCnt > COEFF_BOUND && aboveOmega;
+    if (hugeFs) return Q._applyOrdinalRows(x.max(y), fsCoeffs(cf, Math.floor(yCnt)), 1);
+    // rule 3: x{λ}y = x{λ[y]}y — the operand stays y (README: n{λ}b = n{λ[b]}b)
+    var nxt = fsCoeffs(cf, yCnt);
+    if (coeffsHaveFraction(nxt)) {
+      // a fractional FS index leaves the fraction in the coefficients; they
+      // resolve against the OPERAND y — the machinery _hyperopFromOrdinalRaw
+      // owns (recursive fsCoeffs on a fractional coefficient would corrupt
+      // the CNF, so hand the case over instead of recursing here)
+      return Q._hyperopFromOrdinalRaw(x, y, nxt, true);
+    }
+    return Q._ordinalHyperop(x, y, nxt, depth + 1);
   };
 
   Q._iterateOrdinal = function (x, beta, V0, iters, depth) {
@@ -3043,26 +3136,33 @@
 
     var cf0 = trimCoeffs((coeffs || []).slice());
     if (cf0.length === 0) return x.mul(y); // rule 1: x{0}y = x*y
-    // B2-a: for base 2 every infinite level collapses (rule 3 turns the
-    // argument into 2; 2{...}2 = 2{2}2 = 4). Finite levels are excluded.
-    if (x.eq(2) && y.isint() && y.gte(2) && coeffsHaveOmegaPart(cf0)) return new MetaNum(4);
+    // B2-a: on the base-2 DIAGONAL y=2 every infinite level collapses
+    // (n{λ}b = n{λ[b]}b keeps the operand 2; 2{...}2 = 2{2}2 = 4). Finite
+    // levels are excluded, and y > 2 grows normally (2{ω}3 = 2{3}3).
+    if (x.eq(2) && y.eq(2) && coeffsHaveOmegaPart(cf0)) return new MetaNum(4);
     // Fractional level coefficients come from a fundamental sequence taken at a
-    // non-integer index.  On the diagonal ω = x, so ω^k·(c+f) = ω^k·c +
-    // ω^(k-1)·(x·f) — resolve top-down until only the constant term can still
-    // be fractional, then raise it to a fractional argument one level up:
-    // x{γ+f}x = x{γ+1}(2·(x/2)^f)  (10{ω*2}2.1 = 10{ω+3}2·5^0.1).
+    // non-integer operand b.  On the FS diagonal ω reads as b, so
+    // ω^k·(c+f) = ω^k·c + ω^(k-1)·(b·f) — resolve top-down until only the
+    // constant term can still be fractional, then raise it to a fractional
+    // argument one level up:
+    // x{γ+f}b = x{γ+1}(2·(b/2)^f)  (10{ω*2}2.1 = 10{ω+3}2*(2.1/2)^0.1).
     if (coeffsHaveFraction(cf0)) {
-      var xnf = x.toNumber();
-      if (isFinite(xnf) && xnf >= 2) {
-        var rs = Q._resolveFracLevel(cf0, xnf);
+      var ynf = y.toNumber();
+      if (isFinite(ynf) && ynf >= 2) {
+        var rs = Q._resolveFracLevel(cf0, ynf);
         if (rs.frac > 0) {
           var up = rs.ord.slice();
           while (up.length < 1) up.push(0);
           up[0] = (up[0] || 0) + 1;
-          var argF = 2 * Math.pow(xnf / 2, rs.frac);
+          var argF = 2 * Math.pow(ynf / 2, rs.frac);
           return Q._hyperopFromOrdinal(x, new MetaNum(argF), trimCoeffs(up));
         }
         cf0 = rs.ord;
+      } else {
+        // operand not a plain number (huge/ordinal): the fraction is below
+        // the representable scale — keep the integer part of every coefficient
+        for (var fi = 0; fi < cf0.length; fi++) cf0[fi] = Math.floor(cf0[fi] || 0);
+        cf0 = trimCoeffs(cf0);
       }
     }
     // Non-integer argument at ordinal levels (issues.md addition 3):
@@ -3116,13 +3216,14 @@
         return Q._ordinalHyperop(x, y, cf0);
       }
       if (ym >= 1) {
-        // Limit level: rule 3 with the FULL (fractional) index — λ[y] can
-        // carry fractional coefficients (10{ω*2}2.1 = 10{ω+2.1}10), resolved by
-        // the fractional-level rule above, so the fraction is never dropped.
+        // Limit level: rule 3 with the FULL (fractional) index, and the
+        // operand STAYS y — λ[y] can carry fractional coefficients
+        // (10{ω*2}2.1 = 10{ω+2.1}2.1), resolved by the fractional-level rule
+        // above against the operand, so the fraction is never dropped.
         // Nested (skipFrac) the index is floored, else every application would
         // take another fractional FS and recurse forever.
         var fsIdx = skipFrac ? Math.floor(yFracNum) : yFracNum;
-        return Q._hyperopFromOrdinalRaw(x, x, fsCoeffs(cf0, fsIdx), skipFrac);
+        return Q._hyperopFromOrdinalRaw(x, y, fsCoeffs(cf0, fsIdx), skipFrac);
       }
     }
     var cf = cf0;
@@ -3161,7 +3262,12 @@
   // sequence costs nothing; the budget keeps the LARGEST rows):
   //   successor α = β+m:  x{α}y = x{β+m-1}^(y-2)(x{β+m-1}x) — only the top row
   //     follows y, every row below carries x-2 (h13(10,20) → [8,0,1],[8,1,1],[18,2,1]).
-  //   limit α:  rule 3 turns the operand into the base x, so every row carries x-2.
+  //   limit α:  rule 3 keeps the OPERAND y (n{λ}b = n{λ[b]}b), so every
+  //     fundamental sequence before the first successor expansion is taken at
+  //     y, and the first successor row follows y too; once a successor
+  //     expansion has fired, rule 2 bottoms at x and every row below carries
+  //     x-2 with its fundamental sequences at x.
+  //     (10{ω*2}3 = 10{ω+3}3 → [1|ω+2],[8|ω+1],[8|ω], base 10{10}10.)
   // Only array[0][0] may be non-integer (same contract as arrow()); a fractional
   // argument enters as the outer count ceil(y)-2, the fractional start value x^f
   // of the first fundamental sequence (`fsOpd`), or a leftover constant term
@@ -3172,7 +3278,7 @@
     if (!(budget >= 1)) return rows;
     var cfs = trimCoeffs((cf || []).slice());
     var opd = Math.min(yn, MAX_SAFE_INTEGER);
-    var first = (cfs[0] || 0) > 0;      // successor: the outer count is y-2
+    var first = true;                 // the FIRST successor row follows y
     var fracOpd = (fsOpd === undefined) ? null : fsOpd;
     var baseIdx = xn;
     var fracRem = 0;                    // fractional constant carried to the base
@@ -3208,22 +3314,28 @@
         opd = Math.min(xn, MAX_SAFE_INTEGER);           // everything below the top
         continue;                                       // row is base-operand
       }
-      // limit: fundamental sequence at the current operand (rule 3)
+      // limit: fundamental sequence at the current operand (rule 3).  Before
+      // the first successor expansion the operand is still the ORIGINAL y
+      // (n{λ}b = n{λ[b]}b), so every fundamental sequence here is taken at y;
+      // afterwards rule 2 has bottomed at x and the index is x (or the
+      // fractional start value x^f on the fractional-argument path).
       var idx = (fracOpd !== null) ? fracOpd : opd;
       fracOpd = null;
       baseIdx = idx;
       var nxt = fsCoeffs(cfs, idx);
       if (coeffsHaveFraction(nxt)) {
         // a fractional index makes the coefficients fractional (ω^k·(c+f)) —
-        // resolve them against the base so every row coefficient stays an
-        // integer, carrying the leftover constant fraction into the base
-        var rs2 = Q._resolveFracLevel(nxt, xn);
+        // resolve them against the index (the operand of this application)
+        // so every row coefficient stays an integer, carrying the leftover
+        // constant fraction into the base
+        var rs2 = Q._resolveFracLevel(nxt, idx);
         cfs = rs2.ord;
         if (rs2.frac > 0) fracRem = rs2.frac;
       } else {
         cfs = trimCoeffs(nxt);
       }
-      opd = Math.min(xn, MAX_SAFE_INTEGER);             // operand becomes x
+      // the operand only drops to x once a successor expansion has fired
+      if (!first) opd = Math.min(xn, MAX_SAFE_INTEGER);
     }
     rows.baseIdx = baseIdx + fracRem;                   // descending by ordinal
     return rows;
@@ -3328,10 +3440,16 @@
     return steps + 1;
   }
 
-  // Inverse of a LIMIT level taken through the expanded cascade: x{λ}y = x{λ[y]}x
-  // makes every row depend on y only through the fundamental sequence, so instead
-  // of reading a count row we search the (monotone) forward map.
+  // Inverse of a LIMIT level taken through the expanded cascade: under the
+  // unified limit rule x{λ}y = x{λ[y]}y the rows depend on y through BOTH the
+  // fundamental sequence and the first successor count, so instead of reading
+  // a count row we search the (monotone) forward map.
   Q._invExpandedLimit = function (base, value, coeffs) {
+    // y=2 sits BELOW the bisection range and is a distinct value under the
+    // unified limit rule (10{ω*2}2 = 10{ω+1}10 < 10{ω*2}3), so probe it first
+    var v2 = Q._expandedHyperop(base, MetaNum.TWO, coeffs);
+    if (value.lt(v2)) return base.clone();
+    if (value.eq(v2)) return new MetaNum(2);
     var lo = 3, hi = MAX_SAFE_INTEGER, best = 0;
     var v3 = Q._expandedHyperop(base, new MetaNum(3), coeffs);
     if (value.lt(v3)) return base.clone();
@@ -3383,8 +3501,8 @@
     // expanded cascade path (base z is a small finite number ≥ 3): the forward
     // operation wrote the rule-1..4 cascade rows.
     //   successor α: the row at α-1 carries exactly y-2 applications → +2
-    //   limit α: every row carries x-2 and y only appears inside the
-    //     fundamental-sequence rows, so it is recovered from the forward map
+    //   limit α: y appears in the fundamental-sequence rows AND the first
+    //     successor count, so it is recovered from the forward map
     var zC = metaFiniteCount(z);
     if (z.array.length === 1 && z.layer === 0 && zC >= 3 && zC <= MAX_SAFE_INTEGER) {
       if ((cf[0] || 0) > 0) {
@@ -3742,13 +3860,14 @@
 
   // ---------------------------------------------------------------------------
   // Hyperoperations from ω^ω up to ε₀ — README rules 1-4 with the unified limit
-  // rule n{λ}b = n{λ[b]}n (the final operand is the BASE n).  Levels ≥ ω^ω have
+  // rule n{λ}b = n{λ[b]}b (the final operand is b).  Levels ≥ ω^ω have
   // no finite CNF row, so — unless λ[y] still fits a layer-0 row — the result
   // is the compact layer marker of λ[y] (Q._layerMarker).
   // ---------------------------------------------------------------------------
 
-  // iter (ω^ω): (ω^ω)[y] = ω^y  →  x{ω^ω}y = x{ω^y}x — the whole
-  // fundamental-sequence cascade as a layer-0 multi-row array.  For y >=
+  // iter (ω^ω): (ω^ω)[y] = ω^y  →  x{ω^ω}y = x{ω^y}y — the whole
+  // fundamental-sequence cascade as a layer-0 multi-row array (the operand
+  // stays y: iterate(3,5) = 3{ω^5}5 = … → top row [3,4,4,4,4,4]).  For y >=
   // maxCols the ω^y row no longer fits → layer-1 marker [[r0],[1,y]]
   // (= 10{ω^y}10); for y > MSI → the ω^ω marker row [1,0,1].
   P.iterate = P.iter = P.hww = function (y) {
@@ -3757,55 +3876,56 @@
     if (x.isNaN() || y.isNaN()) return MetaNum.NaN.clone();
     if (x.eq(MetaNum.ONE)) return MetaNum.ONE.clone();
     if (y.eq(MetaNum.ONE)) return x.clone();
-    // rule 3 collapses x{λ}y to x{λ[y]}x; for x=2 the argument becomes 2 and
-    // every further FS/successor step keeps it there, so the cascade ends at
-    // 2{...}2 = 2{2}2 = 4 for ANY limit/successor level λ and integer y >= 2
-    // (issue #17 D07/B2-a). Finite levels are excluded (2{1}3 = 8).
-    if (x.eq(2) && y.isint() && y.gte(2)) return new MetaNum(4);
+    // B2-a on the diagonal only: n{λ}b = n{λ[b]}b keeps the operand b, so
+    // b=2 stays 2 through every FS/successor step and the cascade ends at
+    // 2{...}2 = 2{2}2 = 4 for ANY limit/successor level λ (issue #17 D07/B2-a).
+    // y > 2 grows normally (2{ω^ω}3 = 2{ω^3}3 = …); finite levels are excluded
+    // (2{1}3 = 8).
+    if (x.eq(2) && y.eq(2)) return new MetaNum(4);
     if (y.lte(MetaNum.ZERO)) return MetaNum.NaN.clone();
 
     // iterate(x,y) = x{ω^ω}y. Rule 3 with the fundamental sequence
-    // (ω^ω)[y] = ω^y:  x{ω^ω}y = x{ω^y}x — final operand is the base x.
+    // (ω^ω)[y] = ω^y:  x{ω^ω}y = x{ω^y}y — the operand stays y.
     var yc = metaFiniteCount(y);
     if (yc === Math.floor(yc) && yc <= MAX_SAFE_INTEGER) {
       var m = Math.max(2, Math.floor(yc));
       if (m < MetaNum.maxCols) {
         // ω^y is a layer-0 ordinal (coeffs with 1 at index y): evaluate
-        // x{ω^y}x through the unified rule-1..3 engine. E.g.
-        // iterate(3,5) = 3{ω^5}3 = the full FS cascade (truncated when it
+        // x{ω^y}y through the unified rule-1..3 engine. E.g.
+        // iterate(3,5) = 3{ω^5}5 = the full FS cascade (truncated when it
         // overflows the row budget).
         var coeffs = [];
         for (var ci = 0; ci < m; ci++) coeffs.push(0);
         coeffs.push(1);
-        return Q._hyperopFromOrdinal(x, x, coeffs);
+        return Q._hyperopFromOrdinal(x, y, coeffs);
       }
       // y >= maxCols: ω^y needs a row longer than maxCols — store as the
       // layer-1 compact marker 10{ω^y}10, capped at MSI
       return Q._layerMarker([10], 1, [[1, m]]);
     }
     if (yc <= MAX_SAFE_INTEGER) {
-      // fractional y: (ω^ω)[y] = ω^y = ω^(m+f) = ω^m·ω^f, and on the diagonal
-      // ω^f reads as x^f — so the level is ω^m·(x^f), whose coefficients carry
-      // x^f at index m (README: 10{ω^ω}2.1 = 10{ω^2.1}10 = 10{ω^2*10^0.1}10).
-      // Flooring y would lose the fraction and make iterate(10,2.1)=iterate(10,2).
+      // fractional y: (ω^ω)[y] = ω^y = ω^(m+f) = ω^m·ω^f, and on the FS
+      // diagonal ω^f reads as y^f — so the level is ω^m·(y^f), whose
+      // coefficients carry y^f at index m (README: 10{ω^ω}2.1 =
+      // 10{ω^2*2.1^0.1}2.1 = 10{ω^2*1.077}2.1).  Flooring y would lose the
+      // fraction and make iterate(10,2.1)=iterate(10,2).
       var mf = Math.max(2, Math.floor(yc));
       var ff = Number((yc - Math.floor(yc)).toPrecision(15));
-      var xnf = x.toNumber();
-      var cfac = (isFinite(xnf) && xnf >= 2 && ff > 0) ? Math.pow(xnf, ff) : 1;
+      var cfac = (yc >= 2 && ff > 0) ? Math.pow(yc, ff) : 1;
       if (mf < MetaNum.maxCols) {
         var cfw = [];
         for (var cw = 0; cw < mf; cw++) cfw.push(0);
         cfw.push(cfac);
-        return Q._hyperopFromOrdinal(x, x, cfw);
+        return Q._hyperopFromOrdinal(x, y, cfw);
       }
-      // marker form: ω^m·(x^f) — the count must stay an integer, so write the
-      // fractional part out one level down: ω^m·floor(c) + ω^(m-1)·(x·frac),
+      // marker form: ω^m·(y^f) — the count must stay an integer, so write the
+      // fractional part out one level down: ω^m·floor(c) + ω^(m-1)·(y·frac),
       // the same resolution the CNF levels use
       if (mf >= MetaNum.maxCols) {
         var cfFl = Math.floor(cfac), cfFr = cfac - cfFl;
         var mkRows = [];
         if (cfFl >= 1) mkRows.push([cfFl, mf]);
-        if (cfFr > 1e-9 && mf >= 2) mkRows.push([Math.max(1, Math.round(xnf * cfFr)), mf - 1]);
+        if (cfFr > 1e-9 && mf >= 2) mkRows.push([Math.max(1, Math.round(yc * cfFr)), mf - 1]);
         if (mkRows.length === 0) mkRows.push([1, mf]);
         return Q._layerMarker([10], 1, mkRows);
       }
@@ -3882,7 +4002,7 @@
     if (x.isNaN() || y.isNaN()) return MetaNum.NaN.clone();
     if (x.eq(MetaNum.ONE)) return MetaNum.ONE.clone();
     if (y.eq(MetaNum.ONE)) return x.clone();
-    if (x.eq(2) && y.isint() && y.gte(2)) return new MetaNum(4);
+    if (x.eq(2) && y.eq(2)) return new MetaNum(4);
     if (y.lte(MetaNum.ZERO)) return MetaNum.NaN.clone();
     var yc = metaFiniteCount(y);
     if (yc <= MAX_SAFE_INTEGER) {
@@ -3938,7 +4058,83 @@
     return new MetaNum(x).inv_itermult(z);
   };
 
-  // cuboiter (ω^ω*2): (ω^ω*2)[y] = ω^ω + ω^y  →  x{ω^ω*2}y = x{ω^ω+ω^y}x
+  // iteraperiate (ω^ω+ω): limit level — (ω^ω+ω)[y] = ω^ω + y, so by rule 3
+  //   x{ω^ω+ω}y = x{ω^ω+y}y.
+  // For finite y ≥ 2 the level ω^ω+y is the itermult-style layer-1 marker
+  // [[y],[1,0,1]] = 10{ω^ω+y}10 — the height y IS the level's constant term
+  // (itermult stores its application count there instead).  For ordinal /
+  // out-of-range y the engine convention applies: y plus the ω^ω+ω marker
+  // rows [1|ω] and [1|ω^ω].  Monotone in y, strictly between itermult
+  // (ω^ω+1: ω^ω+(y-1)) and cuboiter (ω^ω·2: ω^ω+ω^y, and ω^y > y for y ≥ 2).
+  P.iteraperiate = P.itap = P.hw0w = function (y) {
+    var x = this.clone();
+    y = new MetaNum(y);
+    if (x.isNaN() || y.isNaN()) return MetaNum.NaN.clone();
+    if (x.eq(MetaNum.ONE)) return MetaNum.ONE.clone();
+    if (y.eq(MetaNum.ONE)) return x.clone();
+    if (x.eq(2) && y.eq(2)) return new MetaNum(4);
+    if (y.lte(MetaNum.ZERO)) return MetaNum.NaN.clone();
+    var yc = metaFiniteCount(y);
+    if (yc <= MAX_SAFE_INTEGER) {
+      var m = Math.max(2, Math.floor(yc));
+      if (m > MAX_SAFE_INTEGER) m = MAX_SAFE_INTEGER;
+      return Q._layerMarker([m], 1, [[1, 0, 1]]);
+    }
+    // ordinal / out-of-range operand: y plus the ω^ω+ω marker rows
+    var v = y.clone();
+    if (v.layer < 1) v.layer = 1;
+    v.array.push([1, 1]);      // [1|ω]
+    v.array.push([1, 0, 1]);   // [1|ω^ω]
+    return v.normalize();
+  };
+  Q.iteraperiate = Q.itap = Q.hw0w = function (x, y) {
+    return new MetaNum(x).iteraperiate(y);
+  };
+
+  P.inv_iteraperiate = P.i_itap = P.iw0w = function (z) {
+    var x = this.clone();
+    z = new MetaNum(z);
+    if (x.isNaN() || z.isNaN()) return MetaNum.NaN.clone();
+    if (x.array.length >= 2) {
+      // finite-height marker [[n],[1,0,1]] = 10{ω^ω+n}10: the height n is the
+      // level's constant term (r0[0]) — unlike itermult, whose stored count is
+      // one less than the height (n applications ⇒ y = n+1)
+      if (x.layer >= 1 && x.array.length === 2) {
+        var row = x.array[1];
+        if (row.length === 3 && row[0] === 1 && row[1] === 0 && row[2] === 1) {
+          return new MetaNum(Math.round(x.array[0][0] || 0));
+        }
+      }
+      // ordinal height: strip one [c|ω] and one [c|ω^ω] marker row and return
+      // the remaining value (normalize merged equal-level rows, so a decrement
+      // undoes the forward push even when the height carried its own rows)
+      var result = x.clone();
+      var stripped = 0;
+      for (var k = result.array.length - 1; k >= 1 && stripped < 2; k--) {
+        var row2 = result.array[k];
+        if (stripped === 0 && row2.length === 3 && row2[1] === 0 && row2[2] === 1) {
+          row2[0] -= 1;                          // one ω^ω
+          stripped++;
+          if (row2[0] <= 0) result.array.splice(k, 1);
+        } else if (stripped === 1 && row2.length === 2 && row2[1] === 1) {
+          row2[0] -= 1;                          // one ω
+          stripped++;
+          if (row2[0] <= 0) result.array.splice(k, 1);
+        }
+      }
+      if (stripped === 2) {
+        result.normalize();
+        if (result.array.length <= 1) result.layer = 0;
+        return result;
+      }
+    }
+    return z;
+  };
+  Q.inv_iteraperiate = Q.i_itap = Q.iw0w = function (x, z) {
+    return new MetaNum(x).inv_iteraperiate(z);
+  };
+
+  // cuboiter (ω^ω*2): (ω^ω*2)[y] = ω^ω + ω^y  →  x{ω^ω*2}y = x{ω^ω+ω^y}y
     // for k <= MSI, cube(3,k)=3{ω^ω+ω^k}3
     // ≈10{ω^ω+ω^k}10 → layer=1, array=[[10],[1,k],[1,0,1]] (ω^k + ω^ω)
     // for k > MSI, cube(3,k)≈10{ω^ω*2}10 → layer=1, array=[[10],[2,0,1]]
@@ -3948,7 +4144,7 @@
     if (x.isNaN() || y.isNaN()) return MetaNum.NaN.clone();
     if (x.eq(MetaNum.ONE)) return MetaNum.ONE.clone();
     if (y.eq(MetaNum.ONE)) return x.clone();
-    if (x.eq(2) && y.isint() && y.gte(2)) return new MetaNum(4);
+    if (x.eq(2) && y.eq(2)) return new MetaNum(4);
     if (y.lte(MetaNum.ZERO)) return MetaNum.NaN.clone();
     var yc = metaFiniteCount(y);
     if (yc <= MAX_SAFE_INTEGER) {
@@ -4000,7 +4196,7 @@
     return new MetaNum(x).inv_cuboiter(z);
   };
 
-  // expoiter (ω^(ω+1)): (ω^(ω+1))[y] = ω^ω*y  →  x{ω^(ω+1)}y = x{ω^ω*y}x
+  // expoiter (ω^(ω+1)): (ω^(ω+1))[y] = ω^ω*y  →  x{ω^(ω+1)}y = x{ω^ω*y}y
     // for k <= MSI, expo(3,k)=3{ω^ω*k}3
     // ≈10{ω^ω*k}10 → layer=1, array=[[10],[k,0,1]]
     // for k > MSI, expo(3,k)≈10{ω^(ω+1)}10 → layer=1, array=[[10],[1,1,1]]
@@ -4010,7 +4206,7 @@
     if (x.isNaN() || y.isNaN()) return MetaNum.NaN.clone();
     if (x.eq(MetaNum.ONE)) return MetaNum.ONE.clone();
     if (y.eq(MetaNum.ONE)) return x.clone();
-    if (x.eq(2) && y.isint() && y.gte(2)) return new MetaNum(4);
+    if (x.eq(2) && y.eq(2)) return new MetaNum(4);
     if (y.lte(MetaNum.ZERO)) return MetaNum.NaN.clone();
     var yc = metaFiniteCount(y);
     if (yc <= MAX_SAFE_INTEGER) {
@@ -4055,7 +4251,7 @@
     return new MetaNum(x).inv_expoiter(z);
   };
 
-  // trioterate (ω^(ω*2)): (ω^(ω*2))[y] = ω^(ω+y)  →  x{ω^(ω*2)}y = x{ω^(ω+y)}x
+  // trioterate (ω^(ω*2)): (ω^(ω*2))[y] = ω^(ω+y)  →  x{ω^(ω*2)}y = x{ω^(ω+y)}y
     // for k <= MSI, tria(3,k)=3{ω^(ω+k)}3
     // ≈10{ω^(ω+k)}10 → layer=1, array=[[10],[1,k,1]] (ord = ω+k)
     // for k > MSI, tria(3,k)≈10{ω^(ω*2)}10 → layer=1, array=[[10],[1,0,2]]
@@ -4065,7 +4261,7 @@
     if (x.isNaN() || y.isNaN()) return MetaNum.NaN.clone();
     if (x.eq(MetaNum.ONE)) return MetaNum.ONE.clone();
     if (y.eq(MetaNum.ONE)) return x.clone();
-    if (x.eq(2) && y.isint() && y.gte(2)) return new MetaNum(4);
+    if (x.eq(2) && y.eq(2)) return new MetaNum(4);
     if (y.lte(MetaNum.ZERO)) return MetaNum.NaN.clone();
     var yc = metaFiniteCount(y);
     if (yc <= MAX_SAFE_INTEGER) {
@@ -4110,7 +4306,7 @@
     return new MetaNum(x).inv_trioterate(z);
   };
 
-  // trixxate (ω^(ω^2)): (ω^(ω^2))[y] = ω^(ω*y)  →  x{ω^(ω^2)}y = x{ω^(ω*y)}x
+  // trixxate (ω^(ω^2)): (ω^(ω^2))[y] = ω^(ω*y)  →  x{ω^(ω^2)}y = x{ω^(ω*y)}y
     // for k <= MSI, trix(3,k)=3{ω^(ω*k)}3
     // ≈10{ω^(ω*k)}10 → layer=2, array=[[10],[k,1]] (bracket = ω*k, ω^bracket)
     // for k > MSI, trix(3,k)≈10{ω^(ω^2)}10 → layer=2, array=[[10],[1,2]]
@@ -4120,7 +4316,7 @@
     if (x.isNaN() || y.isNaN()) return MetaNum.NaN.clone();
     if (x.eq(MetaNum.ONE)) return MetaNum.ONE.clone();
     if (y.eq(MetaNum.ONE)) return x.clone();
-    if (x.eq(2) && y.isint() && y.gte(2)) return new MetaNum(4);
+    if (x.eq(2) && y.eq(2)) return new MetaNum(4);
     if (y.lte(MetaNum.ZERO)) return MetaNum.NaN.clone();
     var yc = metaFiniteCount(y);
     if (yc <= MAX_SAFE_INTEGER) {
@@ -4171,7 +4367,7 @@
     return new MetaNum(x).inv_trixxate(z);
   };
 
-  // aperixxate (ω^(ω^ω)): (ω^(ω^ω))[y] = ω^(ω^y)  →  x{ω^(ω^ω)}y = x{ω^(ω^y)}x
+  // aperixxate (ω^(ω^ω)): (ω^(ω^ω))[y] = ω^(ω^y)  →  x{ω^(ω^ω)}y = x{ω^(ω^y)}y
     // for k <= MSI, apix(3,k)=3{ω^(ω^k)}3
     // ≈10{ω^(ω^k)}10 → layer=3, array=[[k]] (bracket = the constant k, so the
     //   ordinal reads ω^(ω^k)); layer 3 is the ω^(ω^ω) level (README).
@@ -4182,7 +4378,7 @@
     if (x.isNaN() || y.isNaN()) return MetaNum.NaN.clone();
     if (x.eq(MetaNum.ONE)) return MetaNum.ONE.clone();
     if (y.eq(MetaNum.ONE)) return x.clone();
-    if (x.eq(2) && y.isint() && y.gte(2)) return new MetaNum(4);
+    if (x.eq(2) && y.eq(2)) return new MetaNum(4);
     if (y.lte(MetaNum.ZERO)) return MetaNum.NaN.clone();
     var yc = metaFiniteCount(y);
     if (yc <= MAX_SAFE_INTEGER) {
@@ -4245,7 +4441,7 @@
     return new MetaNum(x).inv_aperixxate(z);
   };
 
-  // epsilonate (ε₀ = ω↑↑ω): ε₀[y] = ω^ω^…(y ω's)  →  x{ε₀}y = x{ω↑↑y}x
+  // epsilonate (ε₀ = ω↑↑ω): ε₀[y] = ω^ω^…(y ω's)  →  x{ε₀}y = x{ω↑↑y}y
   // layer = y (README L17: layer L holds an ω-tower of height L), so
   //   epsl(3,k) ≈ 10{ω^ω^…^ω(k ω's)}10 → layer=k, array=[[10],[1,1]]
   //   (bracket = ω, (k-1) ω^'s above it → a tower of k ω's).
@@ -4256,10 +4452,12 @@
     if (x.isNaN() || y.isNaN()) return MetaNum.NaN.clone();
     if (x.eq(MetaNum.ONE)) return MetaNum.ONE.clone();
     if (y.eq(MetaNum.ONE)) return x.clone();
-    if (x.eq(2) && y.isint() && y.gte(2)) return new MetaNum(4);
+    if (x.eq(2) && y.eq(2)) return new MetaNum(4);
     if (y.lte(MetaNum.ZERO)) return MetaNum.NaN.clone();
-    // ε₀[2] = ω^ω, so epsilonate(x,2) = x{ω^ω}x = iterate(x,x) exactly (the
-    // same value itermult(x,2) produces — x{ε₀}2 = x{ω^ω+1}2).
+    // ε₀[2] = ω^ω has no finite coefficient row, so the result takes the
+    // λ[y]-marker convention (README): the ω^ω diagonal cascade —
+    // x.iterate(x) = x{ω^x}x — the same value itermult(x,2) produces
+    // (x{ω^ω+1}2 = x{ω^ω}x by the successor rule).
     if (y.eq(2)) return x.iterate(x);
     var yc = metaFiniteCount(y);
     if (yc <= MAX_SAFE_INTEGER) {
