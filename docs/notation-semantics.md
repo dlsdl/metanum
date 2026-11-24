@@ -173,7 +173,9 @@ formatter 新增 `formatBangAaValue`：识别去层形状 `[[x],[1,0×k,1]]`（k
 
 ## 7. 待办（按优先级）
 
-- [ ] **D06 协同改造**：parser（`diagBinMatch` 对角分支 + 补 `!<real>Aa<real>`）× formatter（对角 `!αΓβ` 输出）一起改，并放开往返测试。
-- [ ] **D07 通用化**：把 `cuboiter`/`expoiter`/`trioterate`/`trixxate`/`aperixxate`/`epsilonate` 由 marker 近似改为按 §3 的 `λ[b]` 精确级联（当前仅对 `x=2,y=2` 有正确快速路径）。
-- [ ] `toBeaf()` 次单位（`sign=2`）目前仍输出 `{e}`（丢符号），需在可表示范围表补充其行为。
-- [ ] 更正 README 第 6 节列出的 4 处表述。
+> 2026-11-24 更新：原待办中 D06 协同改造（已落地，见 §2）、README 四处勘误（FU-05 已关）、
+> `toBeaf()` 次单位丢符号（实测已输出 `{10,320}⁻¹` / `-{5}`，见 §4）均已修复并移除；
+> D07 通用化经两次复评撤回（not planned，见 [`d07-engine-design.md`](d07-engine-design.md) §7）。
+
+- [ ] §2「已知残余」中的容差级往返（x<2 / 短 mantissa）→ 登记为 K06（P3）。
+- [ ] 新的语义级问题请登记到 [`issue-17-defects.md`](issue-17-defects.md)（当前已知问题登记册），不在本节维护。

@@ -42,6 +42,8 @@ const h = MetaNum.fromString("[[10], [1, 3]]");   // bracket notation
 // From an array
 const i = MetaNum.fromArray([2.71828, 1, 2]);        // array=[[2.71828, 1, 2]], =10^^10^^10^2.71828
 const j = MetaNum.fromArray([10], 1, 1);          // layer 1
+const normalized = MetaNum.fromArray([1e10, 520.73, 1]);
+// Construction normalizes coefficients: normalized.array=[[10000000000,520,1]]; the numeric value is preserved.
 
 // From an object / JSON
 const k = MetaNum.fromJSON('{"sign":1,"array":[[428571]],"layer":0}');
@@ -58,7 +60,7 @@ const n = MetaNum.fromHyperE("EE100");
 
 ```javascript
 MetaNum.MAX_SAFE_INTEGER   // 9007199254740991
-MetaNum.E                  // log10(MSI)=15.954589770191
+MetaNum.MAX_E                  // log10(MSI)=15.954589770191
 MetaNum.POSITIVE_INFINITY  // Infinity
 MetaNum.NEGATIVE_INFINITY  // -Infinity
 MetaNum.GRAHAMS_NUMBER     // Graham's number (approximation)
@@ -151,8 +153,8 @@ MetaNum.arrow(3, 4, 3);         // 3↑↑↑↑3 = g_1
 // Chain notation
 new MetaNum(2).chain(4, 3);     // 2→4→3
 
-// Aperiation: a↑^a a
-new MetaNum(2).aper(3);         // 2↑↑↑2 = 4
+// Aperiation: x.aper(y) = x{y}y
+new MetaNum(2).aper(3);         // 2{3}3 = 65536
 ```
 
 ## Super-logarithm & Super-root
@@ -160,7 +162,8 @@ new MetaNum(2).aper(3);         // 2↑↑↑2 = 4
 ```javascript
 // Super-logarithm (inverse of tetration)
 new MetaNum(16).slog(2);        // slog_2(16) = 3
-new MetaNum(65536).slog();      // slog_10(65536) ≈ 2
+new MetaNum(65536).slog();      // slog_10(65536) ≈ 1.834 — the closed-form approximation,
+                                // NOT the principal-branch real inverse (hyper_log(65536,10,2) = 1.6827…)
 
 // Super-square-root
 new MetaNum(27).ssrt();         // ssqrt(27)
@@ -172,12 +175,19 @@ new MetaNum(100).linear_sroot(3); // ³ss̅r̅t̅(100)
 new MetaNum(10).layeradd(3);    // add 3 layers of exponentiation
 new MetaNum(10).layeradd10(3);  // 10^^3 (explicit base 10)
 
-// General hyperoperation inverses: if a{b}c = d then d.hyper_log(a)(b) = c and d.hyper_root(c)(b) = a
+// General hyperoperation inverses: if a{α}c = d then d.hyper_log(a)(α) = c and d.hyper_root(c)(α) = a
+// (real-valued: non-integer heights/bases come back as non-integers; see "Continuous real-valued inverses")
 MetaNum(14).hyper_log(2)(0);          // 2*7 = 14 → 7
 MetaNum(100000).hyper_log(10)(1);     // 10^5 → 5
 MetaNum(65536).hyper_log(2)(2);       // 2↑↑4 → 4 (slog)
 MetaNum(65536).hyper_root(4)(2);      // 2↑↑4 → 2 (base recovery)
 MetaNum(10).arrow(3)(3).hyper_root(3)(3); // 10↑↑↑3 → 10
+MetaNum(7).hyper_log(2)(0);           // 3.5 — a real answer, not 3 or 4
+MetaNum(3).hyper_log(2)(1);           // 1.5849625… = log₂(3)
+MetaNum(2).hyper_root(2)(1);          // 1.4142135… = √2
+MetaNum(2).tetr(2.5).hyper_log(2)(2); // 2.5 — the real height
+MetaNum(2).tetr(2.5).hyper_log(2)(2, { diagnostics: true });
+                                      // InverseResult { status: "approximate", value: 2.4999…, residual: …, … }
 ```
 
 ## Hyper-Operations up to ε₀
@@ -339,47 +349,22 @@ x.i_epsl(z)     // iepsl = inverse of epsilonate
 
 Each expansion operation also has a **root-form inverse** recovering the **base** (the log form `x.i_<op>(a)` above recovers the height `b`; the root form takes the height and recovers the base): if `a{α}b = c` then `c.<op>_root(b) = a`, e.g. `(10{ω}15).aperiote_root(15) = 10` just like `(10{ω}15).i_aper(10) = 15`.
 
-The base map `a ↦ a{α}b` is monotone, so the base is recovered by integer bisection — the same convention `hyper_root` uses at the finite levels. Beyond the representation budget the stored value no longer encodes the base (huge-argument markers; base-independent layer markers at the ω^ω+ levels), and the root returns the **smallest base reproducing the stored value**.
+The base map `a ↦ a{α}b` is monotone on the declared principal branch, so the base is recovered by the **continuous real-valued solver** described below — the same dispatcher `hyper_log`/`hyper_root` use at the finite levels. Beyond the representation budget the stored value no longer encodes the base (huge-argument markers; base-independent layer markers at the ω^ω+ levels), and the root returns the **smallest base reproducing the stored value** on the declared branch (`minimal-reproducing`, see below).
 
-```javascript
-x.aperiote_root(z)           // r10 = root form of aperiote
-x.expande_root(z)            // r11 = root form of expande
-x.multiexpande_root(z)       // r12 = root form of multiexpande
-x.powerexpande_root(z)       // r13 = root form of powerexpande
-x.aperioexpande_root(z)      // r20 = root form of aperioexpande
-x.explode_root(z)            // r21 = root form of explode
-x.multiexplode_root(z)       // r22 = root form of multiexplode
-x.aperioexplode_root(z)      // r30 = root form of aperioexplode
-x.detonate_root(z)           // r31 = root form of detonate
-x.aperiodetonate_root(z)     // r40 = root form of aperiodetonate
-x.aperionate_root(z)         // r100 = root form of aperionate
-x.megote_root(z)             // r101 = root form of megote
-x.multimegote_root(z)        // r102 = root form of multimegote
-x.aperimegote_root(z)        // r110 = root form of aperimegote
-x.megoexpande_root(z)        // r111 = root form of megoexpande
-x.aperimegoexpande_root(z)   // r120 = root form of aperimegoexpande
-x.megoaperionate_root(z)     // r200 = root form of megoaperionate
-x.gigote_root(z)             // r201 = root form of gigote
-x.aperigigote_root(z)        // r210 = root form of aperigigote
-x.gigoaperionate_root(z)     // r300 = root form of gigoaperionate
-x.aperiatote_root(z)         // r1000 = root form of aperiatote
-x.powiainate_root(z)         // r1001 = root form of powiainate
-x.expandainate_root(z)       // r1010 = root form of expandainate
-x.megodainate_root(z)        // r1100 = root form of megodainate
-x.powiairate_root(z)         // r2000 = root form of powiairate
-x.aperioguate_root(z)        // r10000 = root form of aperioguate
-x.iterate_root(z)            // rww = root form of iterate
-x.itermult_root(z)           // rw01 = root form of itermult
-x.iteraperiate_root(z)       // rw0w = root form of iteraperiate
-x.cuboiter_root(z)           // rwx2 = root form of cuboiter
-x.expoiter_root(z)           // rwa1 = root form of expoiter
-x.trioterate_root(z)         // rwm2 = root form of trioterate
-x.trixxate_root(z)           // rwp2 = root form of trixxate
-x.aperixxate_root(z)         // rwpw = root form of aperixxate
-x.epsilonate_root(z)         // repsl = root form of epsilonate
+Every root form also exists under its short alias (`x.r_aper(z)`, `x.r_expa(z)`, …), as a static (`MetaNum.aperiote_root(value, height)`), and under the equivalent `root_<op>` name (`x.root_aperiote(z)`, `MetaNum.root_aperiote(value, height)`). `root_<op>` is an added alias — `<op>_root` and `r*` keep their names and semantics.
+
+### Continuous real-valued inverses: definitions, API, algorithm, results and limits
+
+Both inverse families solve one equation with one unknown. The forward function is never redefined for the inverse:
+
 ```
+F(n, α, b) = n{α}b            (rules 1–4, the unified limit rule n{λ}b = n{λ[b]}b,
+                                successor interpolation x{α}(m+f) = x{α-1} applied m times to x^f,
+                                fractional coefficients and fractional levels — all unchanged)
 
-Every root form also exists under its short alias (`x.r_aper(z)`, `x.r_expa(z)`, …) and as a static (`MetaNum.aperiote_root(value, height)`).
+log form:   fix n and α, solve F(n, α, b) = c   for the real height  b
+root form:  fix α and b, solve F(n, α, b) = c   for the real base    n
+```
 
 ### The operations follow n{λ}b = n{λ[b]}b exactly
 
@@ -451,7 +436,8 @@ MetaNum.BEAF(3, 3, 2);       // 3↑↑3 = 7625597484987
 MetaNum.BEAF(3, 3, 3);       // 3↑↑↑3 = tritri
 
 // 4-entry: {a,b,c,d} = a(ω*(d-1)+c level operation)b
-MetaNum.BEAF(2, 2, 1, 2);    // 2{ω}2
+MetaNum.BEAF(2, 2, 1, 2);    // 2{ω+1}2 = 4
+MetaNum.BEAF(3, 3, 1, 2);    // 3{ω+1}3 (distinguishes the ordinal level from 3{ω}3)
 MetaNum.BEAF(3, 3, 3, 3);    // 3{ω*2+3}3
 
 // 5+ entry: ordinal arithmetic
@@ -541,7 +527,7 @@ Fractional inputs collapse into ONE plain row (the fractional hyper-operation re
 
 ```javascript
 MetaNum.hardy(1e10) < MetaNum.hardy("1e10+0.5") < MetaNum.hardy(1e10+1);   // single rows throughout
-MetaNum.hardy("1e10+0.5");  // [4581.009607833985, 10,10,10,10,10,10,10,10,10]
+MetaNum.hardy("1e10+0.5");  // [4581.009607833985, 8×10] (the base followed by eight 10s)
 MetaNum.hardy("1e10+1.5");  // [10030.57513899962, 11×10]
 ```
 
@@ -612,7 +598,7 @@ new MetaNum(100).valueOf();                // "100"
 new MetaNum(100).toFixed(2);               // "100.00"
 new MetaNum(100).toExponential(2);         // "1.00e+2"
 new MetaNum(100).toPrecision(3);           // "100"
-new MetaNum(100).toHyperE();               // "100"
+new MetaNum(100).toHyperE();               // "E2"
 new MetaNum(100).toStringWithDecimalPlaces(4); // "100.0000"
 new MetaNum(100).toJSON();                 // {sign:1, array:[[100]], layer:0}
 new MetaNum(100).format();                 // letter notation (format-metanum.js), e.g. MetaNum.hardy(4166).format() → "2.397G5", optional args: format(precision, small)
@@ -629,11 +615,11 @@ MetaNum.hyper(4, 2, 3);        // 2^^3 = 16  (n=4 means tetration)
 
 // Geometric series
 MetaNum.sumGeometricSeries(5, 1, 2);       // 1+2+4+8+16 = 31
-MetaNum.affordGeometricSeries(100, 1, 2, 0);
+MetaNum.affordGeometricSeries(100, 1, 2, 0);  // 6 (cost 63; the next item would cost 127 in total)
 
 // Arithmetic series
 MetaNum.sumArithmeticSeries(5, 1, 2);      // 1+3+5+7+9 = 25
-MetaNum.affordArithmeticSeries(100, 1, 2, 0);
+MetaNum.affordArithmeticSeries(100, 1, 2, 0);  // 10 (total cost 100)
 
 // Configuration
 MetaNum.config({ maxRows: 50, maxCols: 50, serializeMode: 1, debug: 1 });
@@ -655,7 +641,7 @@ Let n and b be natural numbers, and α be a countable ordinal
 
 - rule 1: If α=0, n{α}b=n×b
 - rule 2: If α is a successor ordinal, then n{α}b =n if b=1, =n{α-1}n{α}(b-1) if b>1
-- rule 3: If α is a limit ordinal, then n{α}b=n{α\[b]}n
+- rule 3: If α is a limit ordinal, then n{α}b=n{α\[b]}b
 - rule 4: Operations are calculated from right to left
 
 where α\[b] denotes the b-th element of the fundamental sequence assign to the limit ordinal of α, see also fundamental sequences for limit ordinals written in Cantor normal form:
@@ -668,24 +654,29 @@ where α\[b] denotes the b-th element of the fundamental sequence assign to the 
 
 ### The application count of each ordinal row
 
-Expanding rules 2-3 all the way down shows that **only the top row depends on the argument b**
-— every row below it is produced by decomposing with the base n as the operand:
-- successor α: n{α}b = n{α-1}^(b-2) (n{α-1}n), so the α-1 row carries **b-2** applications and every lower row (which comes from n{α-1}n, n{α-2}n, … whose operand is n) carries **n-2**;
-- limit α: rule 3 first rewrites n{α}b = n{α\[b]}n, so the operand is n at every level and **all** rows carry **n-2**.
-- when expanded ordinal rows >= maxRows, it is truncated, and array[0] is default [10] and the first ordinal row count add 1.(to get precise value)
+Expanding rules 2-3 all the way down requires distinguishing the successor terminal seed from operand preservation at limit steps:
+- successor α: n{α}b = n{α-1}^(b-2) (n{α-1}n), so the α-1 row carries **b-2** applications. The **n-2** count applies only to successor rows reached from the terminal seed n{α-1}n while their current operand is n; a nested successor row with current operand u instead carries **u-2** applications;
+- limit α: rule 3 rewrites n{α}b = n{α\[b]}b, preserving b both as the fundamental-sequence index and as the final operand. A limit step alone therefore does not introduce the base n or an n-2 count. Lower successor rows carry **n-2** only when their current operand is the terminal seed n produced by rule 2;
+- when expanded ordinal rows >= maxRows, it is truncated, and array[0] is default [10] and the first ordinal row count add 1.(to get precise value). Thus maxRows changes the displayed array; it does not change the untruncated mathematical expansion or the operand-derived application counts.
 
 ```javascript
 MetaNum(10).h13(20);   // 10{ω+3}20 = 10{ω+2}^18 10{ω+1}^8 10{ω}^8 10{ω}10
-// array → [[1e10,8,8,8,8,8,8,8,8], [8,0,1], [8,1,1], [18,2,1]]
+// array → [[1e10,8,8,8,8,8,8,8,8,8], [8,0,1], [8,1,1], [18,2,1]] (nine 8s after 1e10)
 MetaNum(10).h12(20);   // 10{ω+2}20 → [8,0,1] [18,1,1]
-MetaNum(3).h13(20);    // 3{ω+3}20  → [1,0,1] [1,1,1] [18,2,1]   (x-2 = 1)
+MetaNum(3).h13(20);    // 3{ω+3}20, including r0
+// array → [[3638334640023.7783,7625597484984], [1,0,1], [1,1,1], [18,2,1]]
 MetaNum(10).h21(20);   // 10{ω*2+1}20 = 10{ω*2}^18 (10{ω*2}10)
 // 10{ω*2}10 = 10{ω+10}10 → the ω..ω+9 cascade, every count x-2 = 8
 // array → [[…,8,…], [8,0,1] … [8,9,1], [18,0,2]]
 MetaNum(10).h22(20);   // … + [8,0,2] + [18,1,2]   (ω*2 row = 8, ω*2+1 row = 18)
 MetaNum(3).h21(20);    // 3{ω*2+1}20 → [1,0,1] [1,1,1] [1,2,1] [18,0,2]  (x-2 = 1)
-MetaNum(10).h100(20);  //10{ω^2}20=10{ω*20}10=10{ω*19+9}^8 10{ω*19+8}^8 ... 10{ω*18+1}^9 10
-// array → [[10], [9,1,18], [8,2,18] … [8,8,19], [8,9,19]] (maxrows=20)
+MetaNum.maxRows = 20;
+MetaNum(10).h100(20);  // 10{ω^2}20 = 10{ω*20}20, truncated
+// array → [[10], [9,1,19], [8,2,19], …, [8,18,19], [18,19,19]]
+MetaNum.maxRows = 50;
+MetaNum(10).h100(20);  // the same operation without maxRows=20 truncation
+// array → [[10], [9,1,16], [8,2,16], …, [8,18,19], [18,19,19]]
+MetaNum.maxRows = 20;
 ```
 
 ## Examples
@@ -698,21 +689,27 @@ MetaNum(10).h100(20);  //10{ω^2}20=10{ω*20}10=10{ω*19+9}^8 10{ω*19+8}^8 ... 
 
 10{3}3=10{2}10{2}10=10{2} 9(10{1})'s 10=10↑↑(10^10^10^10^10^10^10^10^10000000000)
 
-3{ω}5=3{5}3=3{4}3{5}2=3{4}3{4}3=3{4}3{3}3{3}3=3{4}3{3}3{2}3{2}3=3{4}3{3}3{2}3{1}3{1}3=3↑↑↑↑3↑↑↑3↑↑7625597484987
+3{ω}5=3{ω[5]}5=3{5}5=3{4}3{5}4=…=3{4}3{4}3{4}3{4}3=3↑↑↑↑(3↑↑↑↑(3↑↑↑↑(3↑↑↑↑3)))
 
-5{ω+1}4=5{ω}5{ω+1}3=5{ω}5{ω}5{ω+1}2=5{ω}5{ω}5{ω}5{ω+1}1=5{ω}5{ω}5{ω}5=5{ω}5{ω}5{5}5=5{ω}5{5{5}5}5=5{5{5{5}5}5}5
+5{ω+1}4=5{ω}5{ω+1}3=5{ω}5{ω}5{ω+1}2=5{ω}5{ω}5{ω}5{ω+1}1=5{ω}5{ω}5{ω}5
 
-4{ω+2}3=4{ω+1}4{ω+1}4=4{ω+1}4{ω}4{ω}4{ω}4=4{ω+1}4{4{4{4}4}4}4=4{ω}4{ω}... with 4{4{4{4}4}4}4 4's
+Let C=5{ω}5=5{ω[5]}5=5{5}5 and D=5{ω}C=5{ω[C]}C=5{C}C. Then 5{ω+1}4=5{ω}5{ω}C=5{ω}D=5{ω[D]}D=5{D}D.
+
+4{ω+2}3=4{ω+1}4{ω+2}2=4{ω+1}4{ω+1}4
+
+Let Q=4{ω}4=4{ω[4]}4=4{4}4, R=4{ω}Q=4{ω[Q]}Q=4{Q}Q, and S=4{ω}R=4{ω[R]}R=4{R}R. Then 4{ω+1}4=4{ω}4{ω}4{ω}4=S, so 4{ω+2}3=4{ω+1}S=4{ω}^(S-2)(4{ω}4)=4{ω}^(S-2)Q.
 
 10{ω×2}10=10{ω+10}10=9(10{ω+9})'s 10=8(10{ω+9})'s 9(10{ω+8})'s 10=8(10{ω+9})'s 8(10{ω+8})'s ... 8(10{ω+1})'s 8(10{ω})'s 8(10{9})'s ... 8(10{1})'s 10000000000
 
-10{ω^2}4=10{(ω^2)[4]}10=10{ω×4}10=10{(ω×4)[10]}10=10{ω×3+10}10=10{ω×3+9}10{ω×3+10}9=...=10{ω×3+9} 8(10{ω×3+8})'s ... 8(10{ω×3+1})'s 8(10{ω×3})'s 8(10{ω×2+9})'s ... 8(10{ω})'s ... 8(10{1})'s 10000000000
+10{ω^2}4=10{(ω^2)[4]}4=10{ω×4}4=10{(ω×4)[4]}4=10{ω×3+4}4=10{ω×3+3}10{ω×3+3}10{ω×3+3}10=10{ω×3+3}^2(10{ω×3+3}10)
 
-10{ω^ω}4=10{(ω^ω)[4]}10=10{ω^4}10=10{(ω^4)[10]}10=10{ω^3×10}10=... (every limit step ends on the base 10; successor steps iterate) ... 8(10{1})'s 10000000000
+10{ω^ω}4=10{(ω^ω)[4]}4=10{ω^4}4=10{(ω^4)[4]}4=10{ω^3×4}4
 
-10{ω^(ω^2)}4=10{(ω^(ω^2))[4]}10=10{ω^(ω×ω)}10=10{ω^(ω×4)}10=10{ω^(ω×3+10)}10=... (rule 3: each FS step ends on the base 10)
+Every further limit step in this example retains the current operand 4; a terminal operand 10 is introduced only by a subsequent successor step.
 
-10{ε₀}4=10{ε₀[4]}10=10{ω^(ω^(ω^ω))}10=10{ω^(ω^(ω^10))}10=... (ε₀[n+1]=ω^(ε₀[n]), final operand 10)
+10{ω^(ω^2)}4=10{(ω^(ω^2))[4]}4=10{ω^(ω×4)}4=10{(ω^(ω×4))[4]}4=10{ω^(ω×3+4)}4=10{(ω^(ω×3+4))[4]}4=10{ω^(ω×3+3)×4}4
+
+10{ε₀}4=10{ε₀[4]}4=10{ω^(ω^(ω^ω))}4=10{(ω^(ω^(ω^ω)))[4]}4=10{ω^(ω^(ω^4))}4
 
 # dlsdl's Letter Notation
 
@@ -874,7 +871,7 @@ We can, of-course, repeat what we did in the previous section as many times as w
 
 (iii) 10{ω\*β+α}10 = 10{ω\*β+int(α)+1}2\*5^frac(α)
 
-(iv) 10{ω\*(β+1)}α = 10{ω\*β+α}10
+(iv) 10{ω\*(β+1)}α = 10{(ω\*(β+1))[α]}α = 10{ω\*β+α}α
 
 Note that {ω\*β+γ} is a valid extended arrow operation. Also, in this new notation we can write Baα = 10{ω+α}10, Bbα = 10{ω\*2+1}α,... Bzα = 10{ω\*2+25}α.
 
@@ -890,7 +887,7 @@ Containing a very neat trick that allows us to do the double-diagonalization wit
 
 At any rate, it isn't too difficult to see that Aaa behaves "nicely" and allows us to speak of Aaa Canonical Forms of any number. Aaa1=Aa10, Aaa2=Ba10, ..., Aaa26=Za10 take the foundamental sequences.
 
-This also enables us to write the unversal Binary-Letter-Canonical form of any number up to Aaa: αAaaβ = 10{ω^2}(log5(α/2)+β). Since 10{ω^2}1=10{ω}10, 10{ω^2}2=10{ω\*2}10, α in αAaaβ has a range of [2,10).
+This also enables us to write the unversal Binary-Letter-Canonical form of any number up to Aaa: αAaaβ = 10{ω^2}(log5(α/2)+β). The limit examples are 10{ω^2}1=10{ω}1 and 10{ω^2}2=10{ω\*2}2. The mantissa range [2,10) follows from log5(α/2)∈[0,1): α=2 starts a unit interval, while the excluded α=10 endpoint is carried into β+1; it does not depend on giving these limit expansions a final operand 10.
 
 ## Symbol and letter notation
 
@@ -904,7 +901,7 @@ Extended arrow operations can be easily extended, like so:
 
 (iii) 10{...+ω^3\*β+ω^2\*γ+ω\*δ+α}10 = 10{...+ω^3\*β+ω^2\*γ+ω\*δ+int(α+1)}2\*5^frac(α)
 
-(iv) 10{(...+ω^3\*β+ω^2\*γ+ω\*δ+μ+1)\*ω^κ}α = 10{(...+ω^4\*β+ω^3\*γ+ω^2\*δ+ω\*μ+α)\*ω^(κ-1)}10
+(iv) For a limit ordinal μ, 10{μ}α = 10{μ[α]}α. In particular, 10{(...+ω^3\*β+ω^2\*γ+ω\*δ+μ+1)\*ω^κ}α = 10{(...+ω^4\*β+ω^3\*γ+ω^2\*δ+ω\*μ+α)\*ω^(κ-1)}α
 
 (v) 10{(...+ω^3\*β+ω^2\*γ+ω\*δ+α)\*ω^κ}10 = 10{(...+ω^4\*β+ω^3\*γ+ω^2\*δ+ω\*int(α)+frac(α)\*10)\*ω^κ}10
 
@@ -960,7 +957,7 @@ Then we can define (the β-th symbol or symbol combination)Aaα = 10{ω^ω^...^(
 
 Implementation of dlsdl's letter notation for large number library, currently metanum.js
 
-the letter notations follow **diagonal letters**: names ending in `a` (`Aa` = ω, `Ba` = ω·2, `Aaa` = ω², …) carry the mantissa `α = 2·5^f ∈ [2,10)`: `10{ω*3}100=10{ω*2+100}10` → `2.000Ca100`, `10{ω^2}100=10{ω*100}10` → `2.000Aaa100`. And mantissa `α∈[1,10)` for the other letters: `10{ω*3+1}100=10{ω*3}^99 10` → `1.000Cb100`
+the letter notations follow **diagonal letters**: names ending in `a` (`Aa` = ω, `Ba` = ω·2, `Aaa` = ω², …) carry the mantissa `α = 2·5^f ∈ [2,10)`: `10{ω*3}100=10{ω*2+100}100` → `2.000Ca100`, `10{ω^2}100=10{ω*100}100` → `2.000Aaa100`. And mantissa `α∈[1,10)` for the other letters: `10{ω*3+1}100=10{ω*3}^99 10` → `1.000Cb100`
 
 ## format options
 
@@ -977,7 +974,7 @@ the letter notations follow **diagonal letters**: names ending in `a` (`Aa` = ω
   repeatLetterThreshold     // 10. =n then n repeated single letters use next letter notation
   multiLetterDigits         // 11. α's decimal places in αAaβ,αAbβ...αAaaβ and above
   multiLetterRepeatThreshold// 12. =n then n repeated multi letter combinations use next letter notation
-  multiLetterLimit          // 13. =n then length of multi letter combinations does not exceed n, exceed then switch to next notation (length of Aa~Zz is 2, Aaa~Zzz is 3, Aaaa~Zzzz is 4...)
+  multiLetterLimit          // 13. Ordinary multi-letter combinations of length <=n are kept; longer ordinary combinations switch to the next notation. Exact diagonal tokens required for parse/format round-trips (for example Aaaaa10 when n=4) are exempt. The existing 64-token safety cap still applies.
   epsilonSignificantDigits  // 14. α's decimal places in αεβ
 ```
 
@@ -999,7 +996,7 @@ the letter notations follow **diagonal letters**: names ending in `a` (`Aa` = ω
 …………
 
 - 10{22}(repeatLetterThreshold+1) ~ 10{23}(repeatLetterThreshold+1): αZβ format; ZαEβ, ZEαEβ, ……, ZαZβ, ZZαZβ,…… format
-- 10{23}(repeatLetterThreshold+1) ~ 10{10^sciThreshold}10(=10{ω}(10^sciThreshold)): αAaβ format
+- 10{23}(repeatLetterThreshold+1) ~ 10{10^sciThreshold}(10^sciThreshold)(=10{ω}(10^sciThreshold)): αAaβ format
 - 10{ω}(10^sciThreshold) ~ 10{ω+1}(multiLetterRepeatThreshold+1): AaαEβ, ……, AaαAaβ, AaAaαAaβ…… format
 - 10{ω+1}(multiLetterRepeatThreshold+1) ~ 10{ω+1}(10^sciThreshold): αAbβ format
 - 10{ω+1}(10^sciThreshold) ~ 10{ω+2}(multiLetterRepeatThreshold+1): AbαEβ, ……, AbαAbβ, AbAbαAbβ…… format
@@ -1009,19 +1006,19 @@ the letter notations follow **diagonal letters**: names ending in `a` (`Aa` = ω
 
 - 10{ω+25}(multiLetterRepeatThreshold+1) ~ 10{ω+25}(10^sciThreshold): αAzβ format
 - 10{ω+25}(10^sciThreshold) ~ 10{ω+26}(multiLetterRepeatThreshold+1): AzαEβ to AzαAzβ, AzAzαAzβ…… format
-- 10{ω+26}(multiLetterRepeatThreshold+1) ~ 10{ω+10^sciThreshold}10(=10{ω×2}(10^sciThreshold)): αBaβ format
+- 10{ω+26}(multiLetterRepeatThreshold+1) ~ 10{ω+10^sciThreshold}(10^sciThreshold)(=10{ω×2}(10^sciThreshold)): αBaβ format
 - 10{ω×2}(10^sciThreshold) ~ 10{ω×2}(multiLetterRepeatThreshold+1): BaαEβ to BaαBaβ, BaBaαBaβ…… format
 
 …………
 
-- 10{ω×2+26}(multiLetterRepeatThreshold+1) ~ 10{ω×2+10^sciThreshold}10(=10{ω×3}(10^sciThreshold)): αCaβ format
+- 10{ω×2+26}(multiLetterRepeatThreshold+1) ~ 10{ω×2+10^sciThreshold}(10^sciThreshold)(=10{ω×3}(10^sciThreshold)): αCaβ format
 - 10{ω×3}(10^sciThreshold) ~ 10{ω×3}(multiLetterRepeatThreshold+1): CaαEβ to CaαCaβ, CaCaαCaβ…… format
 
 …………
 
 - 10{ω×26+25}(multiLetterRepeatThreshold+1) ~ 10{ω×26+25}(10^sciThreshold): αZzβ format
 - 10{ω×26+25}(10^sciThreshold) ~ 10{ω×26+26}(multiLetterRepeatThreshold+1): ZzαEβ to ZzαZzβ, ZzZzαZzβ…… format
-- 10{ω×26+26}(multiLetterRepeatThreshold+1) ~ 10{ω×(10^sciThreshold)}10(=10{ω^2}(10^sciThreshold)): αAaaβ format
+- 10{ω×26+26}(multiLetterRepeatThreshold+1) ~ 10{ω×(10^sciThreshold)}(10^sciThreshold)(=10{ω^2}(10^sciThreshold)): αAaaβ format
 - 10{ω^2}(10^sciThreshold) ~ 10{ω^2}(multiLetterRepeatThreshold+1): AaaαEβ to AaaαAaaβ, AaaAaaαAaaβ…… format
 
 …………
@@ -1059,7 +1056,7 @@ format(MetaNum.arrow(4, 4, 4));          // "GGFF2.187F3"   (GG + FF…F…; raw
 format(MetaNum.arrow(3, MetaNum.arrow(3, 4, 3), 3)); // "AaG2.045G2"  (Aa + G…G…)
 format(MetaNum([[3638334640023.7783, 7625597484984, 0, 1, 1]])); // "HG2.045G2" (H + G…G…)
 format(MetaNum("AaGGFFE8.072E153"));     // "AaGG3.340G3"
-format(MetaNum("AbGGFFE8.072E153"));     // "AbGG3.340G3"   (Ab / Ba / Bb / Aaa behave the same)
+format(MetaNum("AbGGFFE8.072E153"));     // "AbGG3.340G3"   (Ab / Ba / Bb / Aaa apply the same rules while preserving their own prefixes)
 format(MetaNum("AaaGF7.626E12"));        // "AaaG2.045G2"
 ```
 
@@ -1090,6 +1087,23 @@ formatFull(MetaNum.arrow(3, MetaNum.arrow(3, 4, 3), 3));  // "AaGF7.626E12"   (3
 formatFull(MetaNum("AaGGFFE8.072E153"));                 // "AaGGFFE8.072E153" (4 types)
 format(MetaNum("AaGGFFE8.072E153"));                     // "AaGG3.340G3"      (2 types)
 ```
+
+### Formatting helper API
+
+The following existing exports provide convenience formatting and structural analysis. Import them from `format-metanum.js` alongside `format`.
+
+| Export | Purpose and input | Output and example | Limits |
+|---|---|---|---|
+| `formatWhole(num)` | Formats a MetaNum input with precision 0. | String; `formatWhole(MetaNum(1234.56))` → `"1,234"`. | Still follows `FORMAT_OPTIONS`, including commas and notation thresholds. |
+| `formatSmall(num, precision = 2)` | Formats a MetaNum input through the small-value entry point with optional precision. | String; `formatSmall(MetaNum(0.0001))` → `"1.000E-4"`. | Scientific and reciprocal forms still depend on the other format options. |
+| `metaPolarize(r0, num)` | Analyzes an r0 row such as `[base,e,f,g,...]`; `num` is a retained compatibility argument. | Approximate `{bottom,top,height,repeat}`; `metaPolarize([100])` → `{bottom:1,top:2,height:1,repeat:1}`. | This is a display structure, not a new MetaNum or an exact inverse; an empty row is treated as `[0]`. |
+| `letterName(height)` | Maps a numeric level to E…Z, Aa…Zz, Aaa… | String; `letterName(699)` → `"Aaa"`. | Heights below 1 fall back to `E`; very large heights are limited by JavaScript numeric precision and string capacity. |
+| `symbolName(layer)` | Maps a symbol layer to the existing symbol table. | String; `symbolName(1)` → `"!"`, `symbolName(0)` → `""`. | Non-positive layers and layers beyond the explicit table return an empty string, not ε text. |
+| `getOrdinalLetter(ordRows)` | Recovers a nameable letter prefix from ordinal rows. | String or `null`; `getOrdinalLetter([[1,0,0,1]])` → `"Aaa"`. | Empty or unnameable input can return `null`; two-element ω-level rows map to `Aa`. |
+| `formatR0AsChain(r0, precision, used)` | Formats an r0 row as a letter chain; `used` is the caller's consumed repetition budget. | String or `null`; `formatR0AsChain([10,1,2],3)` → `"FF1.000E10"`. | Insufficient repetition budget can return `null`; ordinary `format` may further reduce the chain to two letter types. |
+| `polarizeFiniteChain(r0, finiteRows)` | Recovers display parameters from a finite r0/ordinal-row chain. | Approximate `{bottom,repeation,arrows}` or `null`; for `v=MetaNum.arrow(3,100,3)`, `polarizeFiniteChain(v.array[0],v.array.slice(1))` → `{bottom:≈2.375812,repeation:2,arrows:99}`. | Unrecoverable chains return `null`; values are approximate and the public field spelling `repeation` is retained. |
+| `gammaArgOf(v, level, iters = 60)` | Uses bisection on the smooth arrow curve to recover x in `10{level}x=v`. | Approximate number or `null`; `gammaArgOf(MetaNum("G5"),3,40)` → approximately 5. | The result is a double approximation, not necessarily an integer; exceeding the expansion guard returns `null`. |
+| `formatGammaBinary(x, level, precision)` | Formats an already recovered numeric argument as αΓβ. | String; `formatGammaBinary(5.5,3,3)` → `"3.162G5"`. | Precision, commas, and mantissa details follow `FORMAT_OPTIONS`; this function does not prove that x is recoverable. |
 
 **Canonical chain** (README “Letter-Canonical Forms”): every number > 1 is `Γα` for
 a unique α at each letter Γ, so the universal spelling walks
@@ -1134,12 +1148,9 @@ Every hyperoperation is stored EXACTLY while it fits the array budget and approx
 
 # Changelog
 
-- 2026-11-20 v2.2.0 Change(hyperop): unify the fundamental-sequence rule as `n{λ}b = n{λ[b]}b` (the final operand is b, not the base) across every ordinal-level algorithm — aperiote, the ordinal engine (`_ordinalHyperop`/`_hyperopFromOrdinalRaw`), the cascade generator, iterate and the marker methods — so fractional y stays continuous (e.g. `10{ω·2}1.0…01` no longer jumps to the `10{ω}10` scale); B2-a narrows to the 2-diagonal (`2{λ}2 = 4`, while `2{λ}y` now grows with y, e.g. `2{ω}3 = 65536`), fractional coefficients resolve against the operand (`x{γ+f}y = x{γ+1}(2·(y/2)^f)`), and `*_root` of a marker value returns the smallest reproducing base (now 2)
-- 2026-11-19 v2.2.0 Add: iteraperiate (`itap`/`hw0w`) — the ω^ω+ω level hyperoperation between itermult (ω^ω+1) and cuboiter (ω^ω·2), with its log inverse `inv_iteraperiate` (`i_itap`/`iw0w`) and root form `iteraperiate_root` (`r_itap`/`rw0w`)
-- 2026-11-18 v2.2.0 Fix(format): values whose inner r0 chain exceeds the repeat-letter budget no longer print the literal string "null" (e.g. `h10("3.3G5",10).format()` → `N1.000G5`); Fix(hyperop): with a large base, ordinal-level hyperoperations (h20+, e.g. `4↑↑↑4.h20(y)`) froze for y > 100 — the sup-collapse now stores the fundamental-sequence level `λ[y]` (same convention as the y ≤ 100 cascade), so results keep growing with y and stay continuous across y = 100 → 101
-- 2026-11-17 v2.2.0 Add: ordinal-level hyper-root family — the root-form inverses `c.{α}root(b) = a` (`aperiote_root`/`r10` … `epsilonate_root`/`repsl`) of the ordinal-level hyperoperations, mirroring the `inv_*` log family
+- 2026-11-24 v2.2.0 Unify limit rules and fractional continuity; add iteraperiate with log/root inverses and ordinal-level root forms; fix formatting and large-base ordinal growth beyond y=100
 - 2026-10-24 v2.1.2 Fix(format): `format` now caps every display at TWO letter combinations with an αΓβ binary tail
-- 2026-10-18 v2.1.1 Fix: round-trip @Aa1/#Aa1 and alpha-Gamma sub-unit forms; fix(format): exact token form for non-integer multi-a layers and past multiLetterLimit
+- 2026-10-18 v2.1.1 Fix round-trip @Aa1/#Aa1 and alpha-Gamma sub-unit forms; ordinary combinations beyond multiLetterLimit carry to the next notation, while exact diagonal tokens required for round-trips remain exempt
 - 2026-10-16 v2.1.0 Add hardy(x, base) and FGH(x, base), fix issue #15, #17, #19, #20, #21, #22
 - 2026-9-30 v2.0.2 Fix a lot of bugs e.g. hardy(non integer > 1000) throwing, hardy beyond the 1.8e308 range fails, format of "ω^n\*large numbers" fails, some FORMAT_OPTIONS not take effect
 - 2026-9-25 v2.0.1 Fix arrow(x,y,y) not being monotone in y and array except array[0][0] may be non-integer

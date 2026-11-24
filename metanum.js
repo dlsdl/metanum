@@ -1,5 +1,5 @@
-//Author: dlsdl v2.1.2
-//v2.1.2 Fix: round-trip @Aa1/#Aa1 and alpha-Gamma sub-unit forms; fix(format): exact token form for non-integer multi-a layers and past multiLetterLimit
+//Author: dlsdl v2.2.0
+//v2.2.0: Unify limit rules and fractional continuity; add iteraperiate with log/root inverses and ordinal-level root forms; fix formatting and large-base ordinal growth beyond y=100
 //Code snippets and templates from OmegaNum.js
 
 ;(function (globalScope) {
@@ -1788,6 +1788,7 @@
       }
       return MetaNum.ZERO.clone();
     }
+
     if (isSimple(x) && isSimple(base) && base.array[0][0] > 1) {
       var v = x.array[0][0];
       var b = base.array[0][0];
@@ -1842,11 +1843,21 @@
     if (x.sign === -1 || x.sign === -2 || base.sign === -1 || base.sign === -2) return MetaNum.NaN.clone();
     if (x.eq(MetaNum.ONE)) return MetaNum.ZERO.clone();
     if (x.eq(base)) return MetaNum.ONE.clone();
-    if (x.lt(base)) return MetaNum.ZERO.clone();
+    if (x.lt(base)) {
+      if (x.gt(MetaNum.ONE) && base.gt(MetaNum.ONE) && x.isFinite() && base.isFinite()) {
+        var unifiedLowPentLog = MetaNum.hyper_log(x, base, 3);
+        if (!unifiedLowPentLog.isNaN() && unifiedLowPentLog.isFinite()) return unifiedLowPentLog;
+      }
+      return MetaNum.ZERO.clone();
+    }
     var m = x.max(base);
     if (m.gt(hyperLevel(4, MAX_SAFE_INTEGER))) {
       if (x.gt(base)) return x.clone();
       return MetaNum.ZERO.clone();
+    }
+    if (x.gt(MetaNum.ONE) && base.gt(MetaNum.ONE) && x.isFinite() && base.isFinite()) {
+      var unifiedPentLog = MetaNum.hyper_log(x, base, 3);
+      if (!unifiedPentLog.isNaN() && unifiedPentLog.isFinite() && unifiedPentLog.isint()) return unifiedPentLog;
     }
     if (isSimple(x) && isSimple(base) && base.array[0][0] > 1) {
       var v = x.array[0][0];
@@ -1861,7 +1872,13 @@
           return new MetaNum(count).add(slogVal);
         }
       }
-      if (count > 0) return new MetaNum(count).add(new MetaNum(v).slog(base));
+      if (count > 0) {
+        if (v < 1) {
+          if (typeof unifiedPentLog !== "undefined" && !unifiedPentLog.isNaN() && unifiedPentLog.isFinite()) return unifiedPentLog;
+          return MetaNum.NaN.clone();
+        }
+        return new MetaNum(count).add(new MetaNum(v).slog(base));
+      }
     }
     var r = 0;
     for (var i = 0; i < 100; i++) {
@@ -1890,6 +1907,10 @@
       return MetaNum.NaN.clone();
     }
     if (height.eq(MetaNum.ONE)) return x.clone();
+    if (x.gt(MetaNum.ONE) && height.gt(MetaNum.ZERO) && x.isFinite() && height.isFinite()) {
+      var unifiedPentRoot = MetaNum.hyper_root(x, height, 3);
+      if (!unifiedPentRoot.isNaN() && unifiedPentRoot.isFinite()) return unifiedPentRoot;
+    }
     if (height.eq(2) && isSimple(x)) {
       var v2 = x.array[0][0];
       if (v2 <= 1) return MetaNum.ONE.clone();
@@ -1932,7 +1953,7 @@
       }
       return lo2.add(hi2).div(2);
     }
-    return x;
+    return MetaNum.NaN.clone();
   };
   Q.pentate_root = Q.pent_root = function (x, height) {
     return new MetaNum(x).pentate_root(height);
@@ -2287,6 +2308,30 @@
         var subDepth = MetaNum.maxCols - 1;
         var xBase = t.toNumber();
         var yBase = other.toNumber();
+        // x beyond MSI: the per-level counts (x-2) would exceed MAX_SAFE_INTEGER
+        // and must not be clamped into fake MSI rows.  The cascade is therefore
+        // NOT expanded row-by-row — the base stays in r0 (its own E-tower form)
+        // and the top composition (x{L-1})^(y-1)(x) is recorded as one row:
+        // aperiote(1.5e16,1187) = (1.5e16{1186})^1186 (10^16.176…)
+        //   → [[16.176…,1],[1186,1186]].
+        if (isFinite(xBase) && xBase > MAX_SAFE_INTEGER) {
+          var bigRes = new MetaNum(0);
+          bigRes.sign = 1;
+          bigRes.layer = 0;
+          if (t.array[0].length === 1) {
+            // plain huge base: keep it in the E-tower form 10^log10(x)
+            var logxB = Math.log10(xBase);
+            bigRes.array = [[isFinite(logxB) ? logxB : xBase, 1]];
+          } else {
+            bigRes.array = [t.array[0].slice()];
+          }
+          var bigY = isFinite(yBase) ? yBase : MAX_SAFE_INTEGER;
+          var bigTop = Math.max(bigY - 1, 1);
+          if (bigTop > MAX_SAFE_INTEGER) bigTop = MAX_SAFE_INTEGER;
+          bigRes.array.push([bigTop, arrowsNum - 1]);
+          bigRes.normalize();
+          return bigRes;
+        }
         var xCnt = isFinite(xBase) ? Math.min(Math.max(xBase - 2, 0), MAX_SAFE_INTEGER) : MAX_SAFE_INTEGER;
         // Top-of-chain count: x{L}y = x{L-1}^{y-1}(x), so every level below the
         // top carries (x-2) ops while level L-1 carries (y-2) ops for y>=3
@@ -2504,38 +2549,926 @@
     }
   }
 
-  P.hyper_log = function (a) {
-    var d = this.clone();
-    a = new MetaNum(a);
-    return function (b) {
-      b = new MetaNum(b);
-      if (b.lt(MetaNum.ZERO) || d.lte(MetaNum.ZERO) || a.lte(MetaNum.ZERO) || a.eq(MetaNum.ONE)) {
+  var INVERSE_DEFAULTS = {
+    tol: 1e-12,
+    maxIterations: 200,
+    maxBracketExpansions: 60,
+    branch: "principal",
+    acceleration: "auto",
+    diagnostics: false
+  };
+  var INVERSE_LIMITS = { maxIterations: 10000, maxBracketExpansions: 2048 };
+  var INVERSE_OPTION_KEYS = {
+    tol: true, maxIterations: true, maxBracketExpansions: true,
+    branch: true, acceleration: true, diagnostics: true
+  };
+
+  function normalizeInverseOptions(input) {
+    var options = {};
+    var clampedOptions = {};
+    var key;
+    for (key in INVERSE_DEFAULTS) options[key] = INVERSE_DEFAULTS[key];
+    if (input === undefined) return { options: options, clampedOptions: clampedOptions, error: null };
+    if (input === null || typeof input !== "object" || Array.isArray(input)) {
+      return { options: options, clampedOptions: clampedOptions, error: "options must be an object" };
+    }
+    for (key in input) {
+      if (Object.prototype.hasOwnProperty.call(input, key) && !Object.prototype.hasOwnProperty.call(INVERSE_OPTION_KEYS, key)) {
+        return { options: options, clampedOptions: clampedOptions, error: "unknown option: " + key };
+      }
+    }
+    if (input.tol !== undefined) {
+      if (typeof input.tol !== "number" || !isFinite(input.tol) || input.tol <= 0) {
+        return { options: options, clampedOptions: clampedOptions, error: "tol must be finite and positive" };
+      }
+      options.tol = input.tol;
+    }
+    var budgets = ["maxIterations", "maxBracketExpansions"];
+    for (var i = 0; i < budgets.length; i++) {
+      key = budgets[i];
+      if (input[key] === undefined) continue;
+      var budget = input[key];
+      if (typeof budget !== "number" || !isFinite(budget) || budget <= 0 || Math.floor(budget) !== budget) {
+        return { options: options, clampedOptions: clampedOptions, error: key + " must be a positive integer" };
+      }
+      if (budget > INVERSE_LIMITS[key]) {
+        clampedOptions[key] = INVERSE_LIMITS[key];
+        options[key] = INVERSE_LIMITS[key];
+      } else options[key] = budget;
+    }
+    if (input.branch !== undefined) {
+      if (input.branch !== "principal") return { options: options, clampedOptions: clampedOptions, error: "unsupported branch" };
+      options.branch = input.branch;
+    }
+    if (input.acceleration !== undefined) {
+      if (input.acceleration !== "auto" && input.acceleration !== "bisection") {
+        return { options: options, clampedOptions: clampedOptions, error: "unsupported acceleration" };
+      }
+      options.acceleration = input.acceleration;
+    }
+    if (input.diagnostics !== undefined) {
+      if (typeof input.diagnostics !== "boolean") {
+        return { options: options, clampedOptions: clampedOptions, error: "diagnostics must be boolean" };
+      }
+      options.diagnostics = input.diagnostics;
+    }
+    return { options: options, clampedOptions: clampedOptions, error: null };
+  }
+
+  function createInverseContext(direction, descriptor, levelText, normalized) {
+    return {
+      direction: direction,
+      descriptor: descriptor,
+      levelText: levelText,
+      options: normalized.options,
+      clampedOptions: normalized.clampedOptions,
+      iterations: 0,
+      expansions: 0,
+      forwardEvaluations: 0,
+      fallbackCount: 0,
+      bracket: null,
+      environment: { maxRows: MetaNum.maxRows, maxCols: MetaNum.maxCols }
+    };
+  }
+
+  function cloneInverseBracket(bracket) {
+    if (!bracket) return null;
+    return {
+      lo: bracket.lo === null || bracket.lo === undefined ? null : new MetaNum(bracket.lo),
+      hi: bracket.hi === null || bracket.hi === undefined ? null : new MetaNum(bracket.hi),
+      loCmp: bracket.loCmp === undefined ? null : bracket.loCmp,
+      hiCmp: bracket.hiCmp === undefined ? null : bracket.hiCmp,
+      coordinate: bracket.coordinate
+    };
+  }
+
+  function cloneInverseResidual(residual) {
+    if (!residual) return { kind: "unavailable", absolute: null, relative: null, comparison: null, width: null, reason: "not evaluated" };
+    var copy = {};
+    for (var key in residual) {
+      if (!Object.prototype.hasOwnProperty.call(residual, key)) continue;
+      copy[key] = residual[key] instanceof MetaNum ? residual[key].clone() : residual[key];
+    }
+    return copy;
+  }
+
+  function finalizeInverseResult(ctx, fields) {
+    fields = fields || {};
+    var status = fields.status || "unrecoverable";
+    var successful = status === "exact" || status === "minimal-reproducing" || status === "lower-bound" || status === "approximate";
+    var value = fields.value instanceof MetaNum ? fields.value.clone() : MetaNum.NaN.clone();
+    if (!successful || value.isNaN() || !value.isFinite()) value = MetaNum.NaN.clone();
+    if (!successful) status = fields.status || "unrecoverable";
+    var actualOptions = {};
+    for (var key in ctx.options) actualOptions[key] = ctx.options[key];
+    actualOptions.clampedOptions = {};
+    for (key in ctx.clampedOptions) actualOptions.clampedOptions[key] = ctx.clampedOptions[key];
+    return {
+      status: status,
+      value: value,
+      direction: ctx.direction,
+      operation: ctx.descriptor ? ctx.descriptor.op : "arrow",
+      unknown: ctx.direction === "log" ? "b" : "n",
+      level: ctx.levelText,
+      branch: ctx.options.branch,
+      method: fields.method || "none",
+      iterations: ctx.iterations,
+      expansions: ctx.expansions,
+      forwardEvaluations: ctx.forwardEvaluations,
+      fallbackCount: ctx.fallbackCount,
+      bracket: cloneInverseBracket(fields.bracket === undefined ? ctx.bracket : fields.bracket),
+      residual: cloneInverseResidual(fields.residual),
+      termination: fields.termination || status,
+      message: fields.message || status,
+      evidence: fields.evidence || (status === "exact" ? "definition-guaranteed" : "numerical-experiment"),
+      multipleSolutions: !!fields.multipleSolutions,
+      representationLevel: !!fields.representationLevel,
+      legacyAnchor: !!fields.legacyAnchor,
+      minimalityAttained: fields.minimalityAttained === undefined ? null : fields.minimalityAttained,
+      encoding: fields.encoding || null,
+      loss: fields.loss || null,
+      provenance: fields.provenance || null,
+      options: actualOptions,
+      environment: { maxRows: ctx.environment.maxRows, maxCols: ctx.environment.maxCols }
+    };
+  }
+
+  function inverseFailure(ctx, status, termination, message, flags) {
+    flags = flags || {};
+    flags.status = status;
+    flags.termination = termination || status;
+    flags.message = message || termination || status;
+    return finalizeInverseResult(ctx, flags);
+  }
+
+  function exposeInverseResult(result, diagnostics) {
+    return diagnostics ? result : result.value.clone();
+  }
+
+  function safeInverseNumber(x) {
+    if (!(x instanceof MetaNum) || !isNumeric(x)) return null;
+    var value = x.toNumber();
+    return isFinite(value) ? value : null;
+  }
+
+  function firstStructureDifference(a, b) {
+    if (a.layer !== b.layer) return { field: "layer", left: a.layer, right: b.layer };
+    var rows = Math.max(a.array.length, b.array.length);
+    for (var i = 0; i < rows; i++) {
+      var ar = a.array[i] || [], br = b.array[i] || [];
+      var cols = Math.max(ar.length, br.length);
+      for (var j = 0; j < cols; j++) {
+        if (ar[j] !== br[j]) return { field: "array", row: i, column: j, left: ar[j], right: br[j] };
+      }
+    }
+    return null;
+  }
+
+  function measureInverseResidual(value, target, bracket) {
+    var comparison = value.cmp(target);
+    var base = {
+      absolute: null,
+      relative: null,
+      comparison: typeof comparison === "number" && !isNaN(comparison) ? comparison : null,
+      width: null,
+      representationLevel: false
+    };
+    if (typeof comparison !== "number" || isNaN(comparison)) {
+      base.kind = "unavailable";
+      base.reason = "MetaNum comparison is unavailable";
+      return base;
+    }
+    var vn = safeInverseNumber(value), cn = safeInverseNumber(target);
+    if (vn !== null && cn !== null) {
+      var absolute = Math.abs(vn - cn);
+      var relative = absolute / Math.max(1, Math.abs(cn));
+      if (isFinite(absolute) && isFinite(relative)) {
+        base.kind = "number-absolute-relative";
+        base.absolute = absolute;
+        base.relative = relative;
+        return base;
+      }
+    }
+    var structured = value.layer > 0 || target.layer > 0 || value.array.length > 1 || target.array.length > 1;
+    base.representationLevel = comparison === 0 && (structured || vn === null || cn === null);
+    if (!structured && value.gt(MetaNum.ZERO) && target.gt(MetaNum.ZERO)) {
+      var lv = value.log10(), lc = target.log10();
+      var lvn = safeInverseNumber(lv), lcn = safeInverseNumber(lc);
+      if (lvn !== null && lcn !== null) {
+        var logAbsolute = Math.abs(lvn - lcn);
+        var logRelative = logAbsolute / Math.max(1, Math.abs(lcn));
+        if (isFinite(logAbsolute) && isFinite(logRelative)) {
+          base.kind = "log-space";
+          base.absolute = logAbsolute;
+          base.relative = logRelative;
+          base.transform = "log10";
+          return base;
+        }
+      }
+    }
+    if (structured) {
+      base.kind = "ordinal-structure";
+      base.structureDifference = firstStructureDifference(value, target);
+      base.reason = comparison === 0 ? "representation-level equality; numeric residual unavailable" : "ordinal structures differ";
+    } else if (bracket) {
+      base.kind = "bracket-only";
+      base.reason = "only comparison and bracket evidence are available";
+    } else {
+      base.kind = "meta-comparison";
+      base.reason = "numeric residual is not faithfully representable";
+    }
+    return base;
+  }
+
+  var OPERATION_REGISTRY = Object.create(null);
+  var OPERATION_DESCRIPTORS = [];
+
+  function registerOperationDescriptor(op, levelText, invShort, invCode, rootShort, rootCode, options) {
+    options = options || {};
+    var high = !!options.baseIndependent;
+    var descriptor = {
+      op: op,
+      levelText: levelText,
+      forwardKind: "named",
+      logNames: ["inv_" + op, invShort, invCode].concat(options.extraLogNames || []).filter(function (name) { return !!name; }),
+      rootNames: [op + "_root", rootShort, rootCode, "root_" + op],
+      logDomain: { unknown: "b", lower: 1, upper: null, lowerOpen: false, upperOpen: true, direction: 1, certificate: "ordinal-recursion" },
+      rootDomain: { unknown: "n", lower: high ? 2 : 1, upper: null, lowerOpen: false, upperOpen: true, direction: 1, certificate: high ? "base-independent-marker" : "ordinal-recursion" },
+      initialBracket: { log: [1, 2], root: high ? [2, 4] : [1, 2] },
+      monotonicityEvidence: high ? "representation-level ordinal marker monotonicity" : "successor/limit recursion on the principal domain",
+      structuralDecoder: null,
+      markerPolicy: options.markerPolicy || (high ? "base-independent-marker" : "ordinal-structure"),
+      legacyAnchorPolicy: high ? "legacy-anchor" : "verified"
+    };
+    OPERATION_REGISTRY[op] = descriptor;
+    OPERATION_DESCRIPTORS.push(descriptor);
+    return descriptor;
+  }
+
+  registerOperationDescriptor("aperiote", "ω", "i_aper", "i10", "r_aper", "r10");
+  registerOperationDescriptor("expande", "ω+1", "i_expa", "i11", "r_expa", "r11");
+  registerOperationDescriptor("multiexpande", "ω+2", "i_muea", "i12", "r_muea", "r12");
+  registerOperationDescriptor("powerexpande", "ω+3", "i_poea", "i13", "r_poea", "r13");
+  registerOperationDescriptor("aperioexpande", "ω*2", "i_apea", "i20", "r_apea", "r20");
+  registerOperationDescriptor("explode", "ω*2+1", "i_expl", "i21", "r_expl", "r21");
+  registerOperationDescriptor("multiexplode", "ω*2+2", "i_muel", "i22", "r_muel", "r22");
+  registerOperationDescriptor("aperioexplode", "ω*3", "i_apel", "i30", "r_apel", "r30");
+  registerOperationDescriptor("detonate", "ω*3+1", "i_deto", "i31", "r_deto", "r31");
+  registerOperationDescriptor("aperiodetonate", "ω*4", "i_apdt", "i40", "r_apdt", "r40");
+  registerOperationDescriptor("aperionate", "ω^2", "i_apeo", "i100", "r_apeo", "r100");
+  registerOperationDescriptor("megote", "ω^2+1", "i_mego", "i101", "r_mego", "r101");
+  registerOperationDescriptor("multimegote", "ω^2+2", "i_mume", "i102", "r_mume", "r102");
+  registerOperationDescriptor("aperimegote", "ω^2+ω", "i_apmg", "i110", "r_apmg", "r110");
+  registerOperationDescriptor("megoexpande", "ω^2+ω+1", "i_mgea", "i111", "r_mgea", "r111");
+  registerOperationDescriptor("aperimegoexpande", "ω^2+ω*2", "i_apme", "i120", "r_apme", "r120");
+  registerOperationDescriptor("megoaperionate", "ω^2*2", "i_mgao", "i200", "r_mgao", "r200");
+  registerOperationDescriptor("gigote", "ω^2*2+1", "i_gigo", "i201", "r_gigo", "r201");
+  registerOperationDescriptor("aperigigote", "ω^2*2+ω", "i_apgg", "i210", "r_apgg", "r210");
+  registerOperationDescriptor("gigoaperionate", "ω^2*3", "i_ggap", "i300", "r_ggap", "r300");
+  registerOperationDescriptor("aperiatote", "ω^3", "i_apat", "i1000", "r_apat", "r1000");
+  registerOperationDescriptor("powiainate", "ω^3+1", "i_pwan", "i1001", "r_pwan", "r1001");
+  registerOperationDescriptor("expandainate", "ω^3+ω", "i_epan", "i1010", "r_epan", "r1010");
+  registerOperationDescriptor("megodainate", "ω^3+ω^2", "i_mgan", "i1100", "r_mgan", "r1100");
+  registerOperationDescriptor("powiairate", "ω^3*2", "i_pwar", "i2000", "r_pwar", "r2000");
+  registerOperationDescriptor("aperioguate", "ω^4", "i_apgu", "i10000", "r_apgu", "r10000");
+  registerOperationDescriptor("iterate", "ω^ω", null, "iww", "r_iter", "rww", { extraLogNames: ["inv_iter"] });
+  registerOperationDescriptor("itermult", "ω^ω+1", "i_itmu", "iw01", "r_itmu", "rw01", { baseIndependent: true, markerPolicy: "ceil-height" });
+  registerOperationDescriptor("iteraperiate", "ω^ω+ω", "i_itap", "iw0w", "r_itap", "rw0w", { baseIndependent: true, markerPolicy: "floor-height" });
+  registerOperationDescriptor("cuboiter", "ω^ω*2", "i_cube", "iwx2", "r_cube", "rwx2", { baseIndependent: true });
+  registerOperationDescriptor("expoiter", "ω^(ω+1)", "i_expo", "iwa1", "r_expo", "rwa1", { baseIndependent: true });
+  registerOperationDescriptor("trioterate", "ω^(ω*2)", "i_tria", "iwm2", "r_tria", "rwm2", { baseIndependent: true });
+  registerOperationDescriptor("trixxate", "ω^(ω^2)", "i_trix", "iwp2", "r_trix", "rwp2", { baseIndependent: true });
+  registerOperationDescriptor("aperixxate", "ω^(ω^ω)", "i_apix", "iwpw", "r_apix", "rwpw", { baseIndependent: true });
+  registerOperationDescriptor("epsilonate", "ε₀", "i_epsl", "iepsl", "r_epsl", "repsl", { baseIndependent: true, markerPolicy: "epsilon-fraction" });
+
+  function getOperationDescriptor(levelOrOp) {
+    if (typeof levelOrOp === "string") return OPERATION_REGISTRY[levelOrOp] || null;
+    return levelOrOp && levelOrOp.op ? levelOrOp : null;
+  }
+
+  function createArrowDescriptor(level, levelText) {
+    return {
+      op: "arrow",
+      levelText: levelText,
+      level: level,
+      forwardKind: "arrow",
+      logDomain: { unknown: "b", lower: 0, upper: null, lowerOpen: false, upperOpen: true, direction: 1, certificate: "successor-recursion" },
+      rootDomain: { unknown: "n", lower: 1, upper: null, lowerOpen: false, upperOpen: true, direction: 1, certificate: "successor-recursion" },
+      initialBracket: { log: [0, 1], root: [1, 2] },
+      monotonicityEvidence: "finite/fractional successor recursion on the certified principal domain",
+      structuralDecoder: null,
+      markerPolicy: "not-applicable",
+      legacyAnchorPolicy: "verified"
+    };
+  }
+
+  function makeForwardEvaluator(descriptor, direction, fixed, ctx) {
+    return function (x) {
+      ctx.forwardEvaluations++;
+      try {
+        var n = new MetaNum(direction === "log" ? fixed : x);
+        var b = new MetaNum(direction === "log" ? x : fixed);
+        if (descriptor.forwardKind === "named" && isSmall(b) && isNumeric(b)) b = rawMetaNum(b.toNumber());
+        if (descriptor.forwardKind === "arrow") return n.arrow(descriptor.level)(b);
+        return n[descriptor.op](b);
+      } catch (e) {
         return MetaNum.NaN.clone();
       }
-      if (b.eq(MetaNum.ZERO)) return d.div(a);            // a·c = d
-      if (b.eq(MetaNum.ONE)) return d.log10().div(a.log10()); // a^c = d
-      return hyperBisect(function (x) { return a.arrow(b)(x); }, d, 200);
+    };
+  }
+
+  function evaluateAndCompare(ctx, evaluator, x, target, direction) {
+    var value = evaluator(x);
+    var comparison = value.isNaN() ? NaN : value.cmp(target);
+    var valid = !(value instanceof MetaNum) || !value.isNaN();
+    if (typeof comparison !== "number" || isNaN(comparison)) valid = false;
+    comparison = valid ? (comparison > 0 ? 1 : comparison < 0 ? -1 : 0) : NaN;
+    return {
+      x: x,
+      value: value,
+      cmp: comparison,
+      side: valid ? direction * comparison : NaN,
+      valid: valid,
+      residual: valid ? measureInverseResidual(value, target, ctx.bracket) : null
+    };
+  }
+
+  function inverseBranchContains(branch, x) {
+    if (!branch) return true;
+    if (!(x instanceof MetaNum)) x = new MetaNum(x);
+    if (branch.lower !== null && branch.lower !== undefined) {
+      var lower = x.cmp(branch.lower);
+      if (branch.lowerOpen ? lower <= 0 : lower < 0) return false;
+    }
+    if (branch.upper !== null && branch.upper !== undefined) {
+      var upper = x.cmp(branch.upper);
+      if (branch.upperOpen ? upper >= 0 : upper > 0) return false;
+    }
+    return true;
+  }
+
+  function verifyInverseCandidate(ctx, evaluator, candidate, target, details) {
+    details = details || {};
+    if (!(candidate instanceof MetaNum)) candidate = new MetaNum(candidate);
+    if (candidate.isNaN() || !candidate.isFinite()) return null;
+    if (!inverseBranchContains(details.branch === undefined ? ctx.branch : details.branch, candidate)) return null;
+    var evaluated = evaluateAndCompare(ctx, evaluator, candidate, target, ctx.branch && ctx.branch.direction === -1 ? -1 : 1);
+    if (!evaluated.valid) return null;
+    var status = details.status || (details.exact ? "exact" : "approximate");
+    var residual = evaluated.residual;
+    var sufficientlyClose = residual && residual.kind === "number-absolute-relative" &&
+      residual.relative !== null && residual.relative <= ctx.options.tol;
+    if (evaluated.cmp !== 0 && !((status === "approximate") && sufficientlyClose)) return null;
+    if ((status === "exact" || status === "minimal-reproducing" || status === "lower-bound") && evaluated.cmp !== 0) return null;
+    var representationLevel = !!details.representationLevel || !!residual.representationLevel;
+    var evidence = details.evidence || (representationLevel ? "representation-level" :
+      (status === "exact" || status === "minimal-reproducing" ? "definition-guaranteed" : "numerical-experiment"));
+    return finalizeInverseResult(ctx, {
+      status: status,
+      value: candidate,
+      method: details.method || "analytic",
+      residual: residual,
+      termination: details.termination || (status === "approximate" ? "verified-approximation" : "verified-candidate"),
+      message: details.message || "candidate verified by the public forward operation",
+      evidence: evidence,
+      multipleSolutions: details.multipleSolutions,
+      representationLevel: representationLevel,
+      legacyAnchor: details.legacyAnchor,
+      minimalityAttained: details.minimalityAttained,
+      encoding: details.encoding,
+      loss: details.loss,
+      provenance: details.provenance
+    });
+  }
+
+  function tryVerifiedIntegerAnchor(ctx, evaluator, candidate, target) {
+    var number = candidate instanceof MetaNum ? safeInverseNumber(candidate) : candidate;
+    if (number === null || !isFinite(number)) return null;
+    var nearest = Math.round(number);
+    var radius = Math.max(ctx.options.tol * Math.max(1, Math.abs(number)), Number.EPSILON * Math.max(1, Math.abs(number)) * 4);
+    if (Math.abs(number - nearest) > radius || !inverseBranchContains(ctx.branch, new MetaNum(nearest))) return null;
+    var evaluated = evaluateAndCompare(ctx, evaluator, new MetaNum(nearest), target, 1);
+    if (!evaluated.valid || evaluated.cmp !== 0) return null;
+    var representation = !!evaluated.residual.representationLevel;
+    var legacy = representation;
+    return finalizeInverseResult(ctx, {
+      status: legacy ? "approximate" : "exact",
+      value: new MetaNum(nearest),
+      method: "real-bracket",
+      residual: evaluated.residual,
+      termination: "verified-integer-anchor",
+      message: legacy ? "verified legacy integer representative" : "verified exact integer anchor",
+      evidence: legacy ? "representation-level" : "definition-guaranteed",
+      multipleSolutions: representation,
+      representationLevel: representation,
+      legacyAnchor: legacy
+    });
+  }
+
+  function analyzeInverseDomain(ctx, descriptor, direction, target, fixed, levelNumber) {
+    var branch = direction === "log" ? descriptor.logDomain : descriptor.rootDomain;
+    branch = {
+      unknown: branch.unknown,
+      lower: branch.lower,
+      upper: branch.upper,
+      lowerOpen: branch.lowerOpen,
+      upperOpen: branch.upperOpen,
+      direction: branch.direction,
+      certificate: branch.certificate,
+      initial: descriptor.initialBracket[direction].slice()
+    };
+    ctx.branch = branch;
+    if (descriptor.forwardKind === "arrow" && (levelNumber === 0 || levelNumber === 1)) {
+      branch.lower = null;
+      branch.initial = null;
+      return { branch: branch };
+    }
+    if (direction === "log") {
+      if (fixed.lt(MetaNum.ONE)) {
+        return { failure: inverseFailure(ctx, "unsupported-domain", "unsupported-base", "the principal high-level logarithm requires n > 1 or the degenerate n = 1 case") };
+      }
+    } else if (fixed.lt(MetaNum.ZERO)) {
+      return { failure: inverseFailure(ctx, "unsupported-domain", "negative-height", "negative heights are outside the certified principal root branch") };
+    }
+    return { branch: branch };
+  }
+
+  function tryDegenerateInverse(ctx, descriptor, direction, target, fixed, levelNumber, evaluator) {
+    function verified(candidate, status, flags) {
+      flags = flags || {};
+      flags.status = status;
+      flags.method = "degenerate";
+      flags.exact = status === "exact";
+      flags.minimalityAttained = status === "minimal-reproducing" ? true : flags.minimalityAttained;
+      var result = verifyInverseCandidate(ctx, evaluator, candidate, target, flags);
+      return result || inverseFailure(ctx, "unrecoverable", "degenerate-verification-failed", "the degenerate candidate did not reproduce the target");
+    }
+    var isNamed = descriptor.forwardKind === "named";
+    var highLevel = isNamed || levelNumber > 1;
+    if (!isNamed && levelNumber === 0) {
+      if ((direction === "log" && fixed.eq(MetaNum.ZERO)) || (direction === "root" && fixed.eq(MetaNum.ZERO))) {
+        if (target.neq(MetaNum.ZERO)) return inverseFailure(ctx, "no-solution", "outside-image", "zero coefficient has a constant zero image");
+        return inverseFailure(ctx, "unrecoverable", "unbounded-below", "all real unknowns reproduce zero; no finite minimum exists", { multipleSolutions: true });
+      }
+      return null;
+    }
+    if (!isNamed && levelNumber === 1) {
+      if (direction === "log" && fixed.eq(MetaNum.ONE)) {
+        if (target.neq(MetaNum.ONE)) return inverseFailure(ctx, "no-solution", "outside-image", "1^b is constantly 1");
+        return inverseFailure(ctx, "unrecoverable", "unbounded-below", "all real heights reproduce 1; no finite minimum exists", { multipleSolutions: true });
+      }
+      if (direction === "root" && fixed.eq(MetaNum.ZERO)) {
+        if (target.neq(MetaNum.ONE)) return inverseFailure(ctx, "no-solution", "outside-image", "a zero exponent has image 1 on the positive-base branch");
+        return finalizeInverseResult(ctx, {
+          status: "lower-bound", value: MetaNum.ZERO, method: "degenerate", termination: "open-infimum",
+          message: "0 is the unattained infimum of positive bases", evidence: "definition-guaranteed",
+          multipleSolutions: true, minimalityAttained: false
+        });
+      }
+      return null;
+    }
+    if (!highLevel) return null;
+    if (direction === "log") {
+      if (fixed.eq(MetaNum.ONE)) {
+        if (target.neq(MetaNum.ONE)) return inverseFailure(ctx, "no-solution", "constant-base", "base 1 has the constant image 1");
+        return verified(isNamed ? MetaNum.ONE : MetaNum.ZERO, "minimal-reproducing", { multipleSolutions: true });
+      }
+      if (isNamed && descriptor.op === "aperiote" && target.eq(MetaNum.ZERO)) {
+        return verified(MetaNum.ZERO, "exact", { branch: null });
+      }
+      var lowerImage = isNamed ? fixed : MetaNum.ONE;
+      if (target.lt(lowerImage)) return inverseFailure(ctx, "no-solution", "below-branch-image", "target lies below the principal branch image");
+      if (target.eq(MetaNum.ONE) && !isNamed) return verified(MetaNum.ZERO, "exact");
+      if (target.eq(fixed)) return verified(MetaNum.ONE, "exact");
+      if (fixed.eq(MetaNum.TWO) && target.eq(4)) return verified(MetaNum.TWO, "exact");
+    } else {
+      if (fixed.eq(MetaNum.ZERO)) {
+        if (isNamed) return inverseFailure(ctx, "unsupported-domain", "zero-height", "zero height is outside the named principal root branch");
+        if (target.neq(MetaNum.ONE)) return inverseFailure(ctx, "no-solution", "outside-image", "zero height has the constant image 1");
+        return verified(MetaNum.ONE, "minimal-reproducing", { multipleSolutions: true });
+      }
+      if (fixed.eq(MetaNum.ONE)) {
+        if (target.lt(MetaNum.ONE)) return inverseFailure(ctx, "no-solution", "below-branch-image", "height 1 maps the principal base branch to n >= 1");
+        if (target.eq(MetaNum.ONE)) return verified(MetaNum.ONE, "minimal-reproducing", { multipleSolutions: true, branch: null });
+        return verified(target, "exact", { branch: null });
+      }
+      if (target.lt(MetaNum.ONE)) return inverseFailure(ctx, "no-solution", "below-branch-image", "principal high-level roots are at least 1");
+      if (target.eq(MetaNum.ONE)) return verified(MetaNum.ONE, "minimal-reproducing", { multipleSolutions: true, branch: null });
+      if (fixed.eq(MetaNum.TWO) && target.eq(4)) return verified(MetaNum.TWO, "exact");
+    }
+    return null;
+  }
+
+  function tryAnalyticInverse(ctx, direction, target, fixed, levelNumber, evaluator) {
+    if (levelNumber !== 0 && levelNumber !== 1) return null;
+    var candidate;
+    if (levelNumber === 0) {
+      candidate = target.div(fixed);
+      var multiplied = verifyInverseCandidate(ctx, evaluator, candidate, target, {
+        branch: null, exact: true, method: "analytic", evidence: "definition-guaranteed"
+      });
+      return multiplied || inverseFailure(ctx, "unrepresentable", "analytic-verification-failed", "the multiplicative inverse candidate is not faithfully representable");
+    }
+    if (direction === "log") {
+      if (fixed.lte(MetaNum.ZERO) || fixed.eq(MetaNum.ONE)) {
+        return inverseFailure(ctx, "unsupported-domain", "invalid-log-base", "the analytic exponential logarithm requires n > 0 and n != 1");
+      }
+      if (target.lte(MetaNum.ZERO)) return inverseFailure(ctx, "no-solution", "outside-image", "a real exponential image is positive");
+      candidate = target.logBase(fixed);
+      var logarithm = verifyInverseCandidate(ctx, evaluator, candidate, target, {
+        branch: null, exact: candidate.isint(), method: "analytic"
+      });
+      return logarithm || inverseFailure(ctx, "unrecoverable", "analytic-verification-failed", "the logarithm candidate failed forward verification");
+    }
+    var exponent = safeInverseNumber(fixed);
+    var integerExponent = exponent !== null && Number.isInteger(exponent);
+    if (target.lt(MetaNum.ZERO) && (!integerExponent || Math.abs(exponent) % 2 !== 1)) {
+      return inverseFailure(ctx, "no-solution", "outside-real-image", "a negative target requires an odd integer exponent");
+    }
+    if (target.eq(MetaNum.ZERO)) {
+      if (integerExponent && exponent > 0) {
+        return verifyInverseCandidate(ctx, evaluator, MetaNum.ZERO, target, { branch: null, exact: true, method: "analytic" });
+      }
+      if (integerExponent && exponent < 0) {
+        return inverseFailure(ctx, "no-solution", "zero-negative-exponent", "zero has no real negative-integer power");
+      }
+      if (fixed.gt(MetaNum.ZERO)) {
+        return finalizeInverseResult(ctx, {
+          status: "lower-bound", value: MetaNum.ZERO, method: "analytic", termination: "open-infimum",
+          message: "0 is the unattained positive-base infimum", evidence: "definition-guaranteed", minimalityAttained: false
+        });
+      }
+      return inverseFailure(ctx, "no-solution", "outside-image", "zero is not in the image for this exponent");
+    }
+    if (target.gt(MetaNum.ZERO)) candidate = target.pow(fixed.rec());
+    else candidate = target.abs().pow(fixed.rec()).neg();
+    if (candidate.eq(MetaNum.ZERO)) {
+      return inverseFailure(ctx, "unrepresentable", "underflow", "a nonzero analytic root underflowed to zero");
+    }
+    var root = verifyInverseCandidate(ctx, evaluator, candidate, target, {
+      branch: null,
+      exact: candidate.isint(),
+      method: "analytic",
+      multipleSolutions: integerExponent && exponent % 2 === 0 && target.gt(MetaNum.ZERO)
+    });
+    return root || inverseFailure(ctx, "unrecoverable", "analytic-verification-failed", "the power-root candidate failed forward verification");
+  }
+
+  function tryStructuralInverse(ctx, descriptor, target, fixed, evaluator) {
+    if (ctx.direction !== "log" || descriptor.forwardKind !== "named") return null;
+    if (descriptor.markerPolicy === "epsilon-fraction" && target.layer >= 1) {
+      var matched = false;
+      var fsOffset = 1;                       // old form: y = layer + 1 + fraction
+      for (var ei = 1; ei < target.array.length; ei++) {
+        var er = target.array[ei];
+        if (er.length === 3 && er[0] === 1 && er[2] === 1 && (er[1] || 0) >= 2) matched = true;
+        // 5c form: the ω³ row [1,0,0,0,1] at layer (y-2) — y = layer + 2 + fraction
+        if (er.length === 5 && er[0] === 1 && er[1] === 0 && er[2] === 0 && er[3] === 0 && er[4] === 1) {
+          matched = true;
+          fsOffset = 2;
+        }
+      }
+      if (matched) {
+        var fraction = 0;
+        if (target.array[0].length === 1 && isFinite(target.array[0][0])) {
+          var stored = target.array[0][0];
+          // 5c form: the fraction sits in r0[0] ∈ [0,1) directly; the legacy
+          // y∈(2,3) form keeps it as 10+f
+          if (stored > 0 && stored < 1) fraction = stored;
+          else {
+            var storedFraction = stored - 10;
+            if (storedFraction >= 0 && storedFraction < 1) fraction = storedFraction;
+          }
+        }
+        // the forward caps the ε-tower at layer MSI-1 for every height >= MSI
+        // (P.epsilonate: metaFiniteCount(y) <= MSI keeps m = floor(y) = MSI, and
+        // anything larger stores the same marker), so layer+fsOffset >= MSI can
+        // only be reported as a lower bound — never as an exact structural recovery.
+        var capped = target.layer + fsOffset >= MAX_SAFE_INTEGER;
+        var epsilonCandidate = new MetaNum(target.layer + fsOffset + fraction);
+        var epsilonResult = verifyInverseCandidate(ctx, evaluator, epsilonCandidate, target, {
+          status: capped ? "lower-bound" : fraction > 0 ? "approximate" : "exact",
+          method: "structural",
+          encoding: "epsilon-layer",
+          loss: capped ? "capped" : "fraction-preserved",
+          representationLevel: capped || fraction > 0,
+          legacyAnchor: capped,
+          minimalityAttained: capped ? false : null,
+          evidence: capped || fraction > 0 ? "representation-level" : "definition-guaranteed"
+        });
+        if (epsilonResult) return epsilonResult;
+      }
+    }
+    if (typeof descriptor.structuralDecoder !== "function") return null;
+    var candidate;
+    try {
+      candidate = descriptor.structuralDecoder.call(target.clone(), fixed.clone());
+    } catch (e) {
+      return null;
+    }
+    if (!(candidate instanceof MetaNum) || candidate.isNaN() || !candidate.isFinite()) return null;
+    var high = descriptor.rootDomain.lower === 2;
+    var legacy = high || candidate.eq(fixed);
+    return verifyInverseCandidate(ctx, evaluator, candidate, target, {
+      status: legacy ? "approximate" : "exact",
+      method: "structural",
+      encoding: high ? descriptor.markerPolicy : "complete",
+      loss: high ? descriptor.markerPolicy : "none",
+      representationLevel: legacy,
+      legacyAnchor: legacy,
+      evidence: legacy ? "representation-level" : "definition-guaranteed",
+      multipleSolutions: legacy,
+      provenance: "legacy-structural-decoder"
+    });
+  }
+
+  function buildInitialBracket(ctx, evaluator, target, branch) {
+    var lo = branch.initial[0], hi = branch.initial[1];
+    var loEval = evaluateAndCompare(ctx, evaluator, lo, target, branch.direction);
+    var hiEval = evaluateAndCompare(ctx, evaluator, hi, target, branch.direction);
+    return { lo: lo, hi: hi, loEval: loEval, hiEval: hiEval, coordinate: "number" };
+  }
+
+  function expandBracket(ctx, evaluator, target, branch, bracket) {
+    var lo = bracket.lo, hi = bracket.hi;
+    var loEval = bracket.loEval, hiEval = bracket.hiEval;
+    if (!loEval.valid || !hiEval.valid) return { failure: "bracketing-failed", termination: "invalid-forward-point", bracket: bracket };
+    if (loEval.cmp === 0) return { endpoint: loEval, bracket: bracket };
+    if (hiEval.cmp === 0) return { endpoint: hiEval, bracket: bracket };
+    for (var expansion = 0; expansion < ctx.options.maxBracketExpansions; expansion++) {
+      bracket.lo = lo; bracket.hi = hi; bracket.loEval = loEval; bracket.hiEval = hiEval;
+      bracket.loCmp = loEval.cmp; bracket.hiCmp = hiEval.cmp;
+      if (loEval.side < 0 && hiEval.side > 0) return { bracket: bracket };
+      if (loEval.side > 0 && hiEval.side > 0) {
+        return { failure: "no-solution", termination: "below-branch-image", bracket: bracket };
+      }
+      if (!(loEval.side < 0 && hiEval.side < 0)) {
+        return { failure: "bracketing-failed", termination: "non-monotone", bracket: bracket };
+      }
+      lo = hi; loEval = hiEval;
+      var oldHi = hi, newHi;
+      if (bracket.coordinate === "number") {
+        if (oldHi > Number.MAX_VALUE / 2) {
+          bracket.coordinate = "metanum";
+          lo = new MetaNum(lo);
+          hi = new MetaNum(oldHi);
+          newHi = hi.mul(2);
+        } else {
+          newHi = oldHi === 0 ? 1 : oldHi * 2;
+          if (!isFinite(newHi) || newHi <= oldHi) {
+            return { failure: "bracketing-failed", termination: "expansion-stagnated", bracket: bracket };
+          }
+          hi = newHi;
+        }
+      } else newHi = hi.mul(2);
+      if (bracket.coordinate === "metanum") {
+        if (!(newHi instanceof MetaNum) || newHi.isNaN() || !newHi.isFinite() || !newHi.gt(hi)) {
+          return { failure: "unrepresentable", termination: "representation-ceiling", bracket: bracket };
+        }
+        hi = newHi;
+      }
+      ctx.expansions++;
+      hiEval = evaluateAndCompare(ctx, evaluator, hi, target, branch.direction);
+      if (!hiEval.valid) return { failure: "bracketing-failed", termination: "invalid-forward-point", bracket: bracket };
+      if (hiEval.cmp === 0) {
+        bracket.lo = lo; bracket.hi = hi; bracket.loEval = loEval; bracket.hiEval = hiEval;
+        bracket.loCmp = loEval.cmp; bracket.hiCmp = hiEval.cmp;
+        return { endpoint: hiEval, bracket: bracket };
+      }
+      if (loEval.side < 0 && hiEval.side > 0) {
+        bracket.lo = lo; bracket.hi = hi; bracket.loEval = loEval; bracket.hiEval = hiEval;
+        bracket.loCmp = loEval.cmp; bracket.hiCmp = hiEval.cmp;
+        return { bracket: bracket };
+      }
+    }
+    bracket.lo = lo; bracket.hi = hi; bracket.loEval = loEval; bracket.hiEval = hiEval;
+    bracket.loCmp = loEval.cmp; bracket.hiCmp = hiEval.cmp;
+    return { failure: "bracketing-failed", termination: "expansion-budget-exhausted", bracket: bracket };
+  }
+
+  function inverseMidpoint(lo, hi, coordinate) {
+    if (coordinate === "metanum") return lo.add(hi).div(2);
+    if ((lo >= 0 && hi >= 0) || (lo <= 0 && hi <= 0)) return lo + (hi - lo) / 2;
+    return lo / 2 + hi / 2;
+  }
+
+  function solveRealBracket(ctx, evaluator, target, branch) {
+    var built = buildInitialBracket(ctx, evaluator, target, branch);
+    var expanded = expandBracket(ctx, evaluator, target, branch, built);
+    ctx.bracket = expanded.bracket || built;
+    if (expanded.failure) {
+      return inverseFailure(ctx, expanded.failure, expanded.termination, expanded.termination);
+    }
+    if (expanded.endpoint) {
+      var endpointResult = tryVerifiedIntegerAnchor(ctx, evaluator, expanded.endpoint.x, target);
+      if (endpointResult) return endpointResult;
+      return verifyInverseCandidate(ctx, evaluator, expanded.endpoint.x, target, {
+        status: "approximate", method: "real-bracket", representationLevel: true,
+        termination: "reproducing-endpoint"
+      }) || inverseFailure(ctx, "unrecoverable", "endpoint-verification-failed", "the reproducing endpoint was not accepted");
+    }
+    var bracket = expanded.bracket;
+    ctx.bracket = bracket;
+    var lo = bracket.lo, hi = bracket.hi, loEval = bracket.loEval, hiEval = bracket.hiEval;
+    var previous = null, lastCandidate = null, slowAcceleration = 0, forceBisection = false;
+    for (var iteration = 0; iteration < ctx.options.maxIterations; iteration++) {
+      ctx.iterations = iteration + 1;
+      var midpoint = inverseMidpoint(lo, hi, bracket.coordinate);
+      var midpointInside = bracket.coordinate === "number" ? midpoint > lo && midpoint < hi : midpoint.gt(lo) && midpoint.lt(hi);
+      if (!midpointInside) {
+        var stagnant = loEval.cmp === 0 ? loEval : hiEval.cmp === 0 ? hiEval : null;
+        if (stagnant) {
+          return finalizeInverseResult(ctx, {
+            status: "approximate", value: new MetaNum(stagnant.x), method: "real-bracket", residual: stagnant.residual,
+            termination: "stagnated", message: "representation resolution reached with a reproducing endpoint",
+            evidence: "representation-level", representationLevel: true
+          });
+        }
+        return inverseFailure(ctx, "stagnated", "midpoint-not-interior", "the bracket midpoint reached representation resolution");
+      }
+      var candidate = midpoint, usedAcceleration = false, fallback = forceBisection;
+      if (ctx.options.acceleration === "auto" && !forceBisection && bracket.coordinate === "number") {
+        var lv = safeInverseNumber(loEval.value), hv = safeInverseNumber(hiEval.value), tv = safeInverseNumber(target);
+        if (lv !== null && hv !== null && tv !== null && hv !== lv) {
+          var secant = lo + (tv - lv) * (hi - lo) / (hv - lv);
+          if (isFinite(secant) && secant > lo && secant < hi && secant !== lastCandidate) {
+            candidate = secant;
+            usedAcceleration = true;
+          } else fallback = true;
+        } else fallback = true;
+      } else if (ctx.options.acceleration === "auto" && !forceBisection) fallback = true;
+      if (fallback) ctx.fallbackCount++;
+      forceBisection = false;
+      var evaluated = evaluateAndCompare(ctx, evaluator, candidate, target, branch.direction);
+      if (!evaluated.valid) return inverseFailure(ctx, "bracketing-failed", "invalid-forward-point", "forward evaluation produced NaN or an incomparable value");
+      if (usedAcceleration) {
+        var ar = safeInverseNumber(evaluated.value), lr = safeInverseNumber(loEval.value), hr = safeInverseNumber(hiEval.value), tr = safeInverseNumber(target);
+        if (ar !== null && lr !== null && hr !== null && tr !== null &&
+            Math.abs(ar - tr) > Math.max(Math.abs(lr - tr), Math.abs(hr - tr))) {
+          candidate = midpoint;
+          usedAcceleration = false;
+          ctx.fallbackCount++;
+          evaluated = evaluateAndCompare(ctx, evaluator, candidate, target, branch.direction);
+          if (!evaluated.valid) return inverseFailure(ctx, "bracketing-failed", "invalid-forward-point", "fallback forward evaluation failed");
+        }
+      }
+      var anchor = tryVerifiedIntegerAnchor(ctx, evaluator, candidate, target);
+      if (anchor) return anchor;
+      var oldWidth = bracket.coordinate === "number" ? hi - lo : null;
+      if (evaluated.side < 0) {
+        lo = candidate; loEval = evaluated;
+      } else {
+        hi = candidate; hiEval = evaluated;
+      }
+      bracket.lo = lo; bracket.hi = hi; bracket.loEval = loEval; bracket.hiEval = hiEval;
+      bracket.loCmp = loEval.cmp; bracket.hiCmp = hiEval.cmp;
+      if (usedAcceleration && oldWidth !== null) {
+        var newWidth = hi - lo;
+        if (newWidth > oldWidth / 2) slowAcceleration++; else slowAcceleration = 0;
+        if (slowAcceleration >= 2) {
+          forceBisection = true;
+          slowAcceleration = 0;
+        }
+      } else slowAcceleration = 0;
+      var stepOk = false;
+      if (bracket.coordinate === "number") {
+        var width = hi - lo;
+        var step = previous === null ? Infinity : Math.abs(candidate - previous);
+        stepOk = step <= ctx.options.tol * Math.max(1, Math.abs(candidate)) ||
+          width <= 2 * ctx.options.tol * Math.max(1, Math.abs(candidate));
+      } else {
+        var metaWidth = hi.sub(lo);
+        var toleranceWidth = candidate.abs().max(MetaNum.ONE).mul(2 * ctx.options.tol);
+        stepOk = metaWidth.lte(toleranceWidth);
+      }
+      var residualOk = evaluated.cmp === 0 || (evaluated.residual &&
+        evaluated.residual.kind === "number-absolute-relative" &&
+        evaluated.residual.relative !== null && evaluated.residual.relative <= ctx.options.tol);
+      if (stepOk && residualOk) {
+        return finalizeInverseResult(ctx, {
+          status: "approximate", value: new MetaNum(candidate), method: "real-bracket", residual: evaluated.residual,
+          termination: "converged", message: "solution-space and forward-residual criteria satisfied",
+          evidence: evaluated.residual.representationLevel ? "representation-level" : "numerical-experiment",
+          representationLevel: !!evaluated.residual.representationLevel
+        });
+      }
+      previous = candidate;
+      lastCandidate = candidate;
+    }
+    ctx.iterations = ctx.options.maxIterations;
+    return inverseFailure(ctx, "non-converged", "iteration-budget-exhausted", "the real solver exhausted maxIterations without convergence evidence");
+  }
+
+  // The public constructor maps an unparseable token to 0 (existing behaviour,
+  // unchanged).  The inverse must not solve that silent 0 as if the caller had
+  // passed the number 0: a non-empty string that constructs to 0 without being
+  // a zero literal is reported as invalid-input.
+  var INVERSE_ZERO_LITERAL = /^[+-]?(?:0+(?:\.0*)?|\.0+)(?:[eE][+-]?\d+)?$/;
+  function inverseStringInputInvalid(input, constructed) {
+    if (typeof input !== "string" || !(constructed instanceof MetaNum)) return false;
+    if (constructed.isNaN()) return false;
+    var text = input.trim();
+    if (text === "") return true;
+    return constructed.eq(MetaNum.ZERO) && !INVERSE_ZERO_LITERAL.test(text);
+  }
+
+  function dispatchInverse(target, fixed, level, descriptor, direction, optionsInput) {
+    var diagnostics = !!(optionsInput && optionsInput.diagnostics === true);
+    var normalized = normalizeInverseOptions(optionsInput);
+    var c, f, lev = null;
+    try { c = new MetaNum(target); } catch (e) { c = MetaNum.NaN.clone(); }
+    try { f = new MetaNum(fixed); } catch (e) { f = MetaNum.NaN.clone(); }
+    var levelNumber = null;
+    if (!descriptor) {
+      try { lev = new MetaNum(level); } catch (e) { lev = MetaNum.NaN.clone(); }
+      levelNumber = safeInverseNumber(lev);
+      descriptor = createArrowDescriptor(lev, lev.toString());
+    } else descriptor = getOperationDescriptor(descriptor);
+    var levelText = descriptor ? descriptor.levelText : lev === null ? "unknown" : lev.toString();
+    var ctx = createInverseContext(direction, descriptor, levelText, normalized);
+    if (normalized.error) return exposeInverseResult(inverseFailure(ctx, "invalid-input", "invalid-options", normalized.error), diagnostics);
+    if (!descriptor) return exposeInverseResult(inverseFailure(ctx, "invalid-level", "unknown-operation", "unknown operation descriptor"), diagnostics);
+    if (c.isNaN() || f.isNaN() || (lev && lev.isNaN())) {
+      return exposeInverseResult(inverseFailure(ctx, "invalid-input", "nan-input", "inverse inputs must not be NaN"), diagnostics);
+    }
+    if (inverseStringInputInvalid(target, c) || inverseStringInputInvalid(fixed, f) || (lev && inverseStringInputInvalid(level, lev))) {
+      return exposeInverseResult(inverseFailure(ctx, "invalid-input", "unparseable-input", "a string input is not a parsable number"), diagnostics);
+    }
+    if (!c.isFinite() || !f.isFinite() || (lev && !lev.isFinite())) {
+      return exposeInverseResult(inverseFailure(ctx, "non-finite-input", "infinite-input", "inverse inputs must be finite"), diagnostics);
+    }
+    if (!descriptor || descriptor.forwardKind !== "arrow" && !getOperationDescriptor(descriptor.op)) {
+      return exposeInverseResult(inverseFailure(ctx, "invalid-level", "unknown-operation", "unknown operation"), diagnostics);
+    }
+    if (descriptor.forwardKind === "arrow") {
+      if (levelNumber === null || levelNumber < 0 || (!Number.isInteger(levelNumber) && levelNumber < 1)) {
+        return exposeInverseResult(inverseFailure(ctx, "invalid-level", "unsupported-level", "arrow inverse level must be a supported nonnegative finite real"), diagnostics);
+      }
+      descriptor.level = lev.clone();
+      descriptor.levelText = String(levelNumber);
+      ctx.levelText = descriptor.levelText;
+    }
+    var evaluator = makeForwardEvaluator(descriptor, direction, f, ctx);
+    var domain = analyzeInverseDomain(ctx, descriptor, direction, c, f, levelNumber);
+    if (domain.failure) return exposeInverseResult(domain.failure, diagnostics);
+    var degenerate = tryDegenerateInverse(ctx, descriptor, direction, c, f, levelNumber, evaluator);
+    if (degenerate) return exposeInverseResult(degenerate, diagnostics);
+    var analytic = tryAnalyticInverse(ctx, direction, c, f, levelNumber, evaluator);
+    if (analytic) return exposeInverseResult(analytic, diagnostics);
+    var structural = tryStructuralInverse(ctx, descriptor, c, f, evaluator);
+    if (structural) return exposeInverseResult(structural, diagnostics);
+    if (descriptor.forwardKind === "named" && direction === "root" && descriptor.rootDomain.lower === 2) {
+      var twoEvaluation = evaluateAndCompare(ctx, evaluator, MetaNum.TWO, c, 1);
+      if (twoEvaluation.valid && twoEvaluation.cmp === 0) {
+        return exposeInverseResult(finalizeInverseResult(ctx, {
+          status: "minimal-reproducing", value: MetaNum.TWO, method: "degenerate", residual: twoEvaluation.residual,
+          termination: "minimum-on-n>=2-branch", message: "2 is the minimum of the declared n >= 2 reproducing branch",
+          evidence: "definition-guaranteed", representationLevel: true, minimalityAttained: true,
+          multipleSolutions: true
+        }), diagnostics);
+      }
+
+      return exposeInverseResult(inverseFailure(ctx, "unrecoverable", "base-independent-marker", "the target does not carry a recoverable base on the n >= 2 branch"), diagnostics);
+    }
+    var result = solveRealBracket(ctx, evaluator, c, ctx.branch);
+    return exposeInverseResult(result, diagnostics);
+  }
+
+  // Static forms receive the raw target before it is constructed: an unparseable
+  // target string is rejected here (the instance form has already lost that
+  // information when the receiver was constructed).
+  function inverseStaticTargetRejected(x, direction, options) {
+    if (typeof x !== "string") return null;
+    var constructed;
+    try { constructed = new MetaNum(x); } catch (e) { return null; }
+    if (!inverseStringInputInvalid(x, constructed)) return null;
+    var ctx = createInverseContext(direction, null, "unknown", normalizeInverseOptions(options));
+    return exposeInverseResult(inverseFailure(ctx, "invalid-input", "unparseable-input", "the target string is not a parsable number"),
+      !!(options && options.diagnostics === true));
+  }
+
+  P.hyper_log = function (a) {
+    var d = this.clone();
+    return function (b, options) {
+      return dispatchInverse(d, a, b, null, "log", options);
     };
   };
-  Q.hyper_log = function (d, a, b) {
-    return new MetaNum(d).hyper_log(a)(b);
+  Q.hyper_log = function (d, a, b, options) {
+    var rejected = inverseStaticTargetRejected(d, "log", options);
+    if (rejected) return rejected;
+    return new MetaNum(d).hyper_log(a)(b, options);
   };
 
   P.hyper_root = function (c) {
     var d = this.clone();
-    c = new MetaNum(c);
-    return function (b) {
-      b = new MetaNum(b);
-      if (b.lt(MetaNum.ZERO) || d.lte(MetaNum.ZERO) || c.lte(MetaNum.ZERO)) {
-        return MetaNum.NaN.clone();
-      }
-      if (b.eq(MetaNum.ZERO)) return d.div(c);            // a·c = d
-      if (c.eq(MetaNum.ONE)) return d.clone();            // a{b}1 = a
-      return hyperBisect(function (x) { return x.arrow(b)(c); }, d, 200);
+    return function (b, options) {
+      return dispatchInverse(d, c, b, null, "root", options);
     };
   };
-  Q.hyper_root = function (d, c, b) {
-    return new MetaNum(d).hyper_root(c)(b);
+  Q.hyper_root = function (d, c, b, options) {
+    var rejected = inverseStaticTargetRejected(d, "root", options);
+    if (rejected) return rejected;
+    return new MetaNum(d).hyper_root(c)(b, options);
   };
   Q.chain = function (x, y, arrows) {
     return new MetaNum(x).arrow(arrows)(y);
@@ -2553,70 +3486,22 @@
   // marker; the layer markers of the ω^ω+ levels are base-independent), so
   // the root returns the smallest base reproducing the stored value — the
   // same convention hyper_root documents for the finite levels.
-  function ordinalHyperRoot(c, y, fwd) {
-    c = new MetaNum(c);
-    y = new MetaNum(y);
-    if (c.isNaN() || y.isNaN() || y.lte(MetaNum.ZERO) || c.lte(MetaNum.ZERO)) {
-      return MetaNum.NaN.clone();
-    }
-    if (y.eq(MetaNum.ONE)) return c.clone();            // a{α}1 = a
-    if (c.lt(MetaNum.ONE)) return MetaNum.NaN.clone();  // a{α}b ≥ 1 for every a ≥ 1
-    if (c.eq(MetaNum.ONE)) return MetaNum.ONE.clone();  // 1{α}b = 1
-    return hyperBisect(function (a) { return fwd(a, y); }, c, 200);
+  function ordinalHyperRoot(c, y, descriptor, options) {
+    return dispatchInverse(c, y, null, descriptor, "root", options);
   }
-  // Each entry mirrors the inv_* log triple (inv_<op> = i_<short> = i<code>):
-  // <op>_root = r_<short> = r<code>, forwarding through the named op itself
-  // so the root inverts exactly the operation the caller used.
-  function defineHyperRoot(longName, shortName, codeName, forwardName) {
-    P[longName] = P[shortName] = P[codeName] = function (y) {
-      return ordinalHyperRoot(this, y, function (a, b) {
-        // B2-a: on the DIAGONAL b=2 every limit/successor cascade bottoms out
-        // at 2{...}2 = 2{2}2 = 4 (n{λ}b = n{λ[b]}b keeps the operand 2) —
-        // aperiote's arrow route would otherwise recurse level-by-level and
-        // overflow the stack at huge finite heights.  b > 2 grows normally.
-        if (a.eq(2) && b.eq(2)) return new MetaNum(4);
-        return a[forwardName](b);
-      });
-    };
-    Q[longName] = Q[shortName] = Q[codeName] = function (x, y) {
-      return new MetaNum(x)[longName](y);
-    };
+  function defineHyperRoot(descriptor) {
+    descriptor.rootNames.forEach(function (name) {
+      P[name] = function (y, options) {
+        return ordinalHyperRoot(this, y, descriptor, options);
+      };
+      Q[name] = function (x, y, options) {
+        var rejected = inverseStaticTargetRejected(x, "root", options);
+        if (rejected) return rejected;
+        return new MetaNum(x)[name](y, options);
+      };
+    });
   }
-  defineHyperRoot('aperiote_root', 'r_aper', 'r10', 'aperiote');            // ω
-  defineHyperRoot('expande_root', 'r_expa', 'r11', 'expande');              // ω+1
-  defineHyperRoot('multiexpande_root', 'r_muea', 'r12', 'multiexpande');    // ω+2
-  defineHyperRoot('powerexpande_root', 'r_poea', 'r13', 'powerexpande');   // ω+3
-  defineHyperRoot('aperioexpande_root', 'r_apea', 'r20', 'aperioexpande'); // ω*2
-  defineHyperRoot('explode_root', 'r_expl', 'r21', 'explode');             // ω*2+1
-  defineHyperRoot('multiexplode_root', 'r_muel', 'r22', 'multiexplode');   // ω*2+2
-  defineHyperRoot('aperioexplode_root', 'r_apel', 'r30', 'aperioexplode'); // ω*3
-  defineHyperRoot('detonate_root', 'r_deto', 'r31', 'detonate');           // ω*3+1
-  defineHyperRoot('aperiodetonate_root', 'r_apdt', 'r40', 'aperiodetonate'); // ω*4
-  defineHyperRoot('aperionate_root', 'r_apeo', 'r100', 'aperionate');      // ω^2
-  defineHyperRoot('megote_root', 'r_mego', 'r101', 'megote');              // ω^2+1
-  defineHyperRoot('multimegote_root', 'r_mume', 'r102', 'multimegote');   // ω^2+2
-  defineHyperRoot('aperimegote_root', 'r_apmg', 'r110', 'aperimegote');   // ω^2+ω
-  defineHyperRoot('megoexpande_root', 'r_mgea', 'r111', 'megoexpande');    // ω^2+ω+1
-  defineHyperRoot('aperimegoexpande_root', 'r_apme', 'r120', 'aperimegoexpande'); // ω^2+ω*2
-  defineHyperRoot('megoaperionate_root', 'r_mgao', 'r200', 'megoaperionate'); // ω^2*2
-  defineHyperRoot('gigote_root', 'r_gigo', 'r201', 'gigote');              // ω^2*2+1
-  defineHyperRoot('aperigigote_root', 'r_apgg', 'r210', 'aperigigote');    // ω^2*2+ω
-  defineHyperRoot('gigoaperionate_root', 'r_ggap', 'r300', 'gigoaperionate'); // ω^2*3
-  defineHyperRoot('aperiatote_root', 'r_apat', 'r1000', 'aperiatote');    // ω^3
-  defineHyperRoot('powiainate_root', 'r_pwan', 'r1001', 'powiainate');     // ω^3+1
-  defineHyperRoot('expandainate_root', 'r_epan', 'r1010', 'expandainate'); // ω^3+ω
-  defineHyperRoot('megodainate_root', 'r_mgan', 'r1100', 'megodainate');   // ω^3+ω^2
-  defineHyperRoot('powiairate_root', 'r_pwar', 'r2000', 'powiairate');     // ω^3*2
-  defineHyperRoot('aperioguate_root', 'r_apgu', 'r10000', 'aperioguate'); // ω^4
-  defineHyperRoot('iterate_root', 'r_iter', 'rww', 'iterate');             // ω^ω
-  defineHyperRoot('itermult_root', 'r_itmu', 'rw01', 'itermult');          // ω^ω+1
-  defineHyperRoot('iteraperiate_root', 'r_itap', 'rw0w', 'iteraperiate');  // ω^ω+ω
-  defineHyperRoot('cuboiter_root', 'r_cube', 'rwx2', 'cuboiter');         // ω^ω*2
-  defineHyperRoot('expoiter_root', 'r_expo', 'rwa1', 'expoiter');          // ω^(ω+1)
-  defineHyperRoot('trioterate_root', 'r_tria', 'rwm2', 'trioterate');      // ω^(ω*2)
-  defineHyperRoot('trixxate_root', 'r_trix', 'rwp2', 'trixxate');          // ω^(ω^2)
-  defineHyperRoot('aperixxate_root', 'r_apix', 'rwpw', 'aperixxate');     // ω^(ω^ω)
-  defineHyperRoot('epsilonate_root', 'r_epsl', 'repsl', 'epsilonate');     // ε₀
+  OPERATION_DESCRIPTORS.forEach(defineHyperRoot);
 
   // level ω, rule 3 with the fundamental sequence ω[y] = y:
   //   x{ω}y = x{ω[y]}y = x{y}y
@@ -2658,7 +3543,7 @@
       }
       return new MetaNum(1);
     }
-    return z;
+    return null;
   };
   Q.inv_aperiote = Q.i_aper = Q.i10 = function (x, z) {
     return new MetaNum(x).inv_aperiote(z);
@@ -2709,7 +3594,7 @@
         }
       }
     }
-    return z;
+    return null;
   };
   Q.inv_expande = Q.i_expa = Q.i11 = function (x, z) {
     return new MetaNum(x).inv_expande(z);
@@ -2757,7 +3642,7 @@
         }
       }
     }
-    return z;
+    return null;
   };
   Q.inv_multiexpande = Q.i_muea = Q.i12 = function (x, z) {
     return new MetaNum(x).inv_multiexpande(z);
@@ -2805,7 +3690,7 @@
         }
       }
     }
-    return z;
+    return null;
   };
   Q.inv_powerexpande = Q.i_poea = Q.i13 = function (x, z) {
     return new MetaNum(x).inv_powerexpande(z);
@@ -3011,6 +3896,7 @@
     var arr = [v.array[0].slice()];
     for (var i = 1; i < v.array.length; i++) arr.push(v.array[i].slice());
     mergeFiniteRowsIntoR0(arr);
+    var deLayered = false;
     while (L >= 2 && arr.length === 1) {
       var poly = arr[0].slice();
       while (poly.length > 0 && poly[poly.length - 1] === 0) poly.pop();
@@ -3019,9 +3905,15 @@
       if (row.length > MetaNum.maxCols) break;      // row would not fit
       arr = [[0], row];
       L--;
+      deLayered = true;
       mergeFiniteRowsIntoR0(arr);
     }
-    if ((arr[0][0] || 0) === 0) arr[0][0] = 10;   // innermost base marker
+    // a de-layered tower writes the innermost base marker 10 (README convention);
+    // caller-provided tail-CNF r0 keeps literal 0 (itap [[0,1],…], itmult [[c0],…])
+    if (deLayered && (arr[0][0] || 0) === 0) arr[0][0] = 10;
+    // literal 0 stays literal (维护者约定): an empty constant term is written
+    // as 0, not rewritten to the base marker 10 — e.g. iteraperiate's
+    // ω^ω+ω marker keeps r0 = [0, 1]
     v.array = arr;
     v.layer = L;
     return v.normalize();
@@ -3360,14 +4252,26 @@
     // carried fraction survives into the base
     var baseResult = x.arrow(Math.max(baseIdx, 3))(x);
     var result = baseResult.clone();
-    if (truncated) {
+    // the seed x{idx}x may itself carry ordinal rows (e.g. expande(1187,3)'s seed
+    // 1187{1187}1187 truncates to [10] + 19 rows): carry them into the result
+    // instead of discarding them — the cascade rows stack ON TOP of the seed's
+    // rows, then the budget truncation keeps the LARGEST rows with the
+    // first-kept count +1 marker.
+    var baseRows = [];
+    for (var br = 1; br < baseResult.array.length; br++) {
+      var brow = baseResult.array[br];
+      if (brow && brow.length >= 2 && (brow[0] || 0) > 0) baseRows.push(brow.slice());
+    }
+    var merged = baseRows.concat(rows);
+    if (truncated || merged.length > budget) {
       result.array = [[10]];
-      rows[0][0] = (rows[0][0] || 0) + 1;               // truncation marker
-      if (rows[0][0] > MAX_SAFE_INTEGER) rows[0][0] = MAX_SAFE_INTEGER;
+      merged = merged.slice(merged.length - budget);      // keep the LARGEST rows
+      merged[0][0] = (merged[0][0] || 0) + 1;             // truncation marker
+      if (merged[0][0] > MAX_SAFE_INTEGER) merged[0][0] = MAX_SAFE_INTEGER;
     } else {
       result.array = [baseResult.array[0].slice()];
     }
-    for (var i = 0; i < rows.length; i++) result.array.push(rows[i]);
+    for (var i = 0; i < merged.length; i++) result.array.push(merged[i]);
     result.layer = 0;
     return result.normalize();
   };
@@ -3478,7 +4382,7 @@
     x = new MetaNum(x);
     z = new MetaNum(z);
     if (x.isNaN() || z.isNaN()) return MetaNum.NaN.clone();
-    if (x.array.length <= 1) return z;
+    if (x.array.length <= 1) return null;
 
     var cf = trimCoeffs((coeffs || []).slice());
 
@@ -3496,7 +4400,7 @@
         }
       }
     }
-    if (cf.length === 0) return z;
+    if (cf.length === 0) return null;
 
     // expanded cascade path (base z is a small finite number ≥ 3): the forward
     // operation wrote the rule-1..4 cascade rows.
@@ -3518,7 +4422,7 @@
         if (lastRow && lastRow.length >= 2 && (lastRow[0] || 0) > 0) {
           return new MetaNum((lastRow[0] || 0) + 2);
         }
-        return z;
+        return null;
       }
       return Q._invExpandedLimit(z, x, cf);
     }
@@ -3536,7 +4440,7 @@
         }
       }
     }
-    return z;
+    return null;
   };
 
   // ---------------------------------------------------------------------------
@@ -3985,7 +4889,7 @@
         }
       }
     }
-    return z;
+    return null;
   };
   Q.inv_iterate = Q.inv_iter = Q.iww = function (x, z) {
     return new MetaNum(x).inv_iterate(z);
@@ -3993,9 +4897,19 @@
 
   // itermult (ω^ω+1): successor level — x{ω^ω+1}y = x{ω^ω} applied y-1 times
   // to x (rule 2).  k = 2 → iterate(x,x) exactly; 1 < k < 2 → x{ω^ω}(x^(k-1)).
-  // k > 2 → layer-1 marker [[k-1],[1,0,1]] = 10{ω^ω+(k-1)}10: finitely many
-  // ω^ω applications stay below ω^ω·2, so the count lives in the constant term
-  // (monotone in k, still below cuboiter's ω^ω+ω^k).
+  // k ≥ 2 → the layer-1 marker [[c0],[1,0,1]] with c0 = (y-2)/8: the marker is
+  // normalized at base 10, where 10{ω^ω+1}10 anchors c0 = 1 and the first
+  // segment [10{ω^ω}10 ↔ 0, 10{ω^ω+1}10 ↔ 1] interpolates (y-2)/8.
+  // itermult (ω^ω+1): the layer-1 marker encodes the level tail BELOW the ω^ω
+  // marker row [1,0,1] as CNF coefficients r0 = [c0, c1, …] (c0 = constant term,
+  // may be non-integer — the same fractional-r0 convention layer 0 uses for
+  // array[0][0]).  Anchors at base 10: 10{ω^ω+1}10 ↔ [[1],[1,0,1]], and the
+  // segment up to 10{ω^ω+2}10 = 10{ω^ω+1}^9(10) grows continuously to
+  // [[2],[1,0,1]].  Finite operands first interpolate inside the first segment
+  // [10{ω^ω}10 ↔ 0, 10{ω^ω+1}10 ↔ 1] as (y-2)/8 (base-independent: the marker
+  // is normalized at base 10, like the letter notation); beyond the anchor the
+  // fraction is below marker resolution → c0 = 1.  Ordinal / y > MSI keeps the
+  // engine convention (y plus the ω^ω marker row), so huge heights still differ.
   P.itermult = P.itmu = P.hw01 = function (y) {
     var x = this.clone();
     y = new MetaNum(y);
@@ -4011,10 +4925,16 @@
         var f = y.sub(MetaNum.ONE);
         return f.eq(MetaNum.ZERO) ? x.iterate(x) : x.iterate(x.pow(f));
       }
-      var n = Math.ceil(yc) - 1;                 // number of ω^ω applications
-      if (n < 1) n = 1;
-      if (n > MAX_SAFE_INTEGER) n = MAX_SAFE_INTEGER;
-      return Q._layerMarker([n], 1, [[1, 0, 1]]);
+      // fractional-level positions interpolate inside the first marker segment
+      if (yc < 3) {
+        var fracPos = (yc - 2) / 8;
+        return Q._layerMarker([fracPos], 1, [[1, 0, 1]]);
+      }
+      // c0 = (y-2)/8: base-10 normalized (10{ω^ω+1}10 ↔ 1); values beyond the
+      // anchor saturate at c0 = 1 (the next fraction is below marker resolution)
+      var c0 = (yc - 2) / 8;
+      if (c0 > 1) c0 = 1;
+      return Q._layerMarker([c0], 1, [[1, 0, 1]]);
     }
     // ordinal / out-of-range operand: y plus one ω^ω marker row
     return Q._ordinalOperandOp(y, 1, [1, 0, 1]);
@@ -4027,14 +4947,16 @@
     var x = this.clone();
     z = new MetaNum(z);
     if (x.isNaN() || z.isNaN()) return MetaNum.NaN.clone();
-    // marker [[n],[1,0,1]] = 10{ω^ω+n}10: the iteration count n sits in the
-    // constant term, so y = n + 1 applications of the ω^ω level.
+    // marker [[c0],[1,0,1]] = the ω^ω+1 marker: c0 is the base-10 normalized
+    // position, y = 2 + c0·8 (c0 = 1 saturates → the minimal reproducing height
+    // 10, since beyond the anchor the fraction is below marker resolution).
     if (x.layer >= 1) {
       for (var i = x.array.length - 1; i >= 1; i--) {
         var row = x.array[i];
         if (row.length === 3 && row[1] === 0 && row[2] === 1 && row[0] === 1) {
-          var n = Math.round(x.array[0][0] || 0);
-          return new MetaNum(n + 1);
+          var n = x.array[0][0] || 0;
+          if (n > 1) n = 1;
+          return new MetaNum(2 + n * 8);
         }
       }
     }
@@ -4052,20 +4974,20 @@
       }
       return result;
     }
-    return z;
+    return null;
   };
   Q.inv_itermult = Q.i_itmu = Q.iw01 = function (x, z) {
     return new MetaNum(x).inv_itermult(z);
   };
 
-  // iteraperiate (ω^ω+ω): limit level — (ω^ω+ω)[y] = ω^ω + y, so by rule 3
-  //   x{ω^ω+ω}y = x{ω^ω+y}y.
-  // For finite y ≥ 2 the level ω^ω+y is the itermult-style layer-1 marker
-  // [[y],[1,0,1]] = 10{ω^ω+y}10 — the height y IS the level's constant term
-  // (itermult stores its application count there instead).  For ordinal /
-  // out-of-range y the engine convention applies: y plus the ω^ω+ω marker
-  // rows [1|ω] and [1|ω^ω].  Monotone in y, strictly between itermult
-  // (ω^ω+1: ω^ω+(y-1)) and cuboiter (ω^ω·2: ω^ω+ω^y, and ω^y > y for y ≥ 2).
+  // iteraperiate (ω^ω+ω): limit level — (ω^ω+ω)[y] = ω^ω + y.  The layer-1
+  // marker encodes the level tail ω as CNF r0 = [0, 1] (c0 = constant, c1 = ω
+  // coefficient): 10{ω^ω+ω}10 ↔ [[0,1],[1,0,1]] and the segment up to
+  // 10{ω^ω+ω+1}10 = 10{ω^ω+ω}^9(10) grows continuously to [[1,1],[1,0,1]].
+  // For every finite height the FS tail y is below marker resolution against ω
+  // (3{ω^ω+ω}3 ≈ 10{ω^ω+ω}10 at marker scale), so all finite y ≤ MSI share the
+  // same marker; ordinal / y > MSI keeps the engine convention (y plus the
+  // [1|ω] and [1|ω^ω] marker rows), so huge heights still differ.
   P.iteraperiate = P.itap = P.hw0w = function (y) {
     var x = this.clone();
     y = new MetaNum(y);
@@ -4076,16 +4998,16 @@
     if (y.lte(MetaNum.ZERO)) return MetaNum.NaN.clone();
     var yc = metaFiniteCount(y);
     if (yc <= MAX_SAFE_INTEGER) {
-      var m = Math.max(2, Math.floor(yc));
-      if (m > MAX_SAFE_INTEGER) m = MAX_SAFE_INTEGER;
-      return Q._layerMarker([m], 1, [[1, 0, 1]]);
+      return Q._layerMarker([0, 1], 1, [[1, 0, 1]]);
     }
-    // ordinal / out-of-range operand: y plus the ω^ω+ω marker rows
+    // ordinal / out-of-range operand: y plus the ω^ω+ω marker rows, merged
+    // into canonical form (like terms fold: [[15,1],[1,1],[1,0,1]] →
+    // [[15,2],[1,0,1]])
     var v = y.clone();
     if (v.layer < 1) v.layer = 1;
     v.array.push([1, 1]);      // [1|ω]
     v.array.push([1, 0, 1]);   // [1|ω^ω]
-    return v.normalize();
+    return Q._standardizeLayerValue(v);
   };
   Q.iteraperiate = Q.itap = Q.hw0w = function (x, y) {
     return new MetaNum(x).iteraperiate(y);
@@ -4096,13 +5018,14 @@
     z = new MetaNum(z);
     if (x.isNaN() || z.isNaN()) return MetaNum.NaN.clone();
     if (x.array.length >= 2) {
-      // finite-height marker [[n],[1,0,1]] = 10{ω^ω+n}10: the height n is the
-      // level's constant term (r0[0]) — unlike itermult, whose stored count is
-      // one less than the height (n applications ⇒ y = n+1)
+      // finite marker [[c0,(c1…)],[1,0,1]] = the ω^ω+ω level marker: the tail ω
+      // is the operation's own level, identical for every finite height, so the
+      // inverse returns the minimal reproducing height 2 (the height itself is
+      // below marker resolution — 3{ω^ω+ω}3 ≈ 10{ω^ω+ω}10)
       if (x.layer >= 1 && x.array.length === 2) {
         var row = x.array[1];
         if (row.length === 3 && row[0] === 1 && row[1] === 0 && row[2] === 1) {
-          return new MetaNum(Math.round(x.array[0][0] || 0));
+          return new MetaNum(2);
         }
       }
       // ordinal height: strip one [c|ω] and one [c|ω^ω] marker row and return
@@ -4122,13 +5045,26 @@
           if (row2[0] <= 0) result.array.splice(k, 1);
         }
       }
+      // the [1|ω] row may have been merged into r0[1] (the like-terms fold):
+      // undo it by decrementing the ω coefficient there
+      if (stripped === 1 && result.array[0].length >= 2 && (result.array[0][1] || 0) > 0) {
+        result.array[0][1] -= 1;
+        if (result.array[0][1] === 0) {
+          result.array[0].splice(1, 1);
+          for (var t3 = 1; t3 < result.array[0].length; t3++) {
+            if (result.array[0][t3] !== 0) break;
+            result.array[0].splice(t3, 1); t3--;
+          }
+        }
+        stripped = 2;
+      }
       if (stripped === 2) {
         result.normalize();
         if (result.array.length <= 1) result.layer = 0;
         return result;
       }
     }
-    return z;
+    return null;
   };
   Q.inv_iteraperiate = Q.i_itap = Q.iw0w = function (x, z) {
     return new MetaNum(x).inv_iteraperiate(z);
@@ -4190,7 +5126,7 @@
         }
       }
     }
-    return z;
+    return null;
   };
   Q.inv_cuboiter = Q.i_cube = Q.iwx2 = function (x, z) {
     return new MetaNum(x).inv_cuboiter(z);
@@ -4245,7 +5181,7 @@
         }
       }
     }
-    return z;
+    return null;
   };
   Q.inv_expoiter = Q.i_expo = Q.iwa1 = function (x, z) {
     return new MetaNum(x).inv_expoiter(z);
@@ -4300,7 +5236,7 @@
         }
       }
     }
-    return z;
+    return null;
   };
   Q.inv_trioterate = Q.i_tria = Q.iwm2 = function (x, z) {
     return new MetaNum(x).inv_trioterate(z);
@@ -4361,7 +5297,7 @@
         }
       }
     }
-    return z;
+    return null;
   };
   Q.inv_trixxate = Q.i_trix = Q.iwp2 = function (x, z) {
     return new MetaNum(x).inv_trixxate(z);
@@ -4435,7 +5371,7 @@
         }
       }
     }
-    return z;
+    return null;
   };
   Q.inv_aperixxate = Q.i_apix = Q.iwpw = function (x, z) {
     return new MetaNum(x).inv_aperixxate(z);
@@ -4461,18 +5397,26 @@
     if (y.eq(2)) return x.iterate(x);
     var yc = metaFiniteCount(y);
     if (yc <= MAX_SAFE_INTEGER) {
-      var m = Math.max(2, Math.floor(yc));
-      if (m > MAX_SAFE_INTEGER) m = MAX_SAFE_INTEGER;
-      // v2.0.2: a fractional height (hardy of anything between 10^^m and
-      // 10^^(m+1)) interpolates through the base argument 10+f instead of being
-      // flat across the whole range — and only array[0][0] stays fractional
-      var marker = Q._layerMarker([10], m, [[1, 1]]);
+      if (yc < 3) {
+        // 2 ≤ y < 3: interpolate between the y=2 cascade and the y=3 marker
+        var marker = Q._layerMarker([10], 2, [[1, 1]]);
+        var mf0 = Number((yc - Math.floor(yc)).toPrecision(15));
+        if (isFinite(mf0) && mf0 > 0) marker.array[0][0] = 10 + mf0;
+        return marker;
+      }
+      var m = Math.min(Math.floor(yc), MAX_SAFE_INTEGER);
+      // 5c: the FS position of x{ε₀[y]}y is ω^ω^…^ω^3 with (m-2) ω's over the
+      // ω³ row — layer (m-2) + the ω³ row [1,0,0,0,1]: epsilonate(3,3) = the
+      // ω^(ω³) level, the same marker aperixxate(3,3) carries.  A fractional
+      // height interpolates through r0[0] = 10+f (the v2.0.2 convention).
+      var marker = Q._layerMarker([10], m - 2, [[1, 0, 0, 0, 1]]);
       var mf = Number((yc - Math.floor(yc)).toPrecision(15));
-      if (isFinite(mf) && mf > 0) marker.array[0][0] = 10 + mf;  // stays in array[0][0]
+      if (isFinite(mf) && mf > 0) marker.array[0][0] = 10 + mf;
       return marker;
     }
-    // ordinal / out-of-range operand: ε₀ caps the library → the MSI ω-tower
-    return Q._layerMarker([10], MAX_SAFE_INTEGER, [[1, 1]]);
+    // ordinal / out-of-range operand: ε₀ passes the library ceiling → Infinity
+    // (README: "Results > epsilonate(MSI) will return Infinity")
+    return MetaNum.POSITIVE_INFINITY.clone();
   };
   Q.epsilonate = Q.epsl = Q.hepsl = function (x, y) {
     return new MetaNum(x).epsilonate(y);
@@ -4511,11 +5455,28 @@
         }
       }
     }
-    return z;
+    return null;
   };
   Q.inv_epsilonate = Q.i_epsl = Q.iepsl = function (x, z) {
     return new MetaNum(x).inv_epsilonate(z);
   };
+
+  function installOrdinalLogAdapters() {
+    OPERATION_DESCRIPTORS.forEach(function (descriptor) {
+      descriptor.structuralDecoder = P["inv_" + descriptor.op] || null;
+      descriptor.logNames.forEach(function (name) {
+        P[name] = function (z, options) {
+          return dispatchInverse(this, z, null, descriptor, "log", options);
+        };
+        Q[name] = function (x, z, options) {
+          var rejected = inverseStaticTargetRejected(x, "log", options);
+          if (rejected) return rejected;
+          return new MetaNum(x)[name](z, options);
+        };
+      });
+    });
+  }
+  installOrdinalLogAdapters();
 
 
   P.choose = function (other) {
@@ -5193,14 +6154,55 @@
     return MetaNum.arrow(a, n.sub(2), b);
   };
 
+  function maxAffordableSeries(resourcesAvailable, firstPrice, cost, decreasingSupremum) {
+    if (resourcesAvailable.lt(firstPrice)) return MetaNum.ZERO.clone();
+    var low = MetaNum.ZERO.clone();
+    var high;
+    if (decreasingSupremum === undefined) {
+      high = resourcesAvailable.div(firstPrice).floor().add(MetaNum.ONE);
+    } else {
+      if (resourcesAvailable.gte(decreasingSupremum)) return MetaNum.POSITIVE_INFINITY.clone();
+      high = MetaNum.ONE.clone();
+      var expanded = false;
+      for (var expand = 0; expand < 2048; expand++) {
+        if (cost(high).gt(resourcesAvailable)) {
+          expanded = true;
+          break;
+        }
+        high = high.mul(2);
+      }
+      if (!expanded) return MetaNum.NaN.clone();
+    }
+    var settled = false;
+    for (var iteration = 0; iteration < 2048; iteration++) {
+      if (high.sub(low).lte(MetaNum.ONE)) {
+        settled = true;
+        break;
+      }
+      var mid = low.add(high).div(2).floor();
+      if (mid.lte(low) || mid.gte(high)) return MetaNum.NaN.clone();
+      if (cost(mid).lte(resourcesAvailable)) low = mid;
+      else high = mid;
+    }
+    if (!settled && high.sub(low).gt(MetaNum.ONE)) return MetaNum.NaN.clone();
+    if (cost(low).lte(resourcesAvailable) && cost(low.add(MetaNum.ONE)).gt(resourcesAvailable)) return low;
+    return MetaNum.NaN.clone();
+  }
+
   Q.affordGeometricSeries = function (resourcesAvailable, priceStart, priceRatio, currentOwned) {
     resourcesAvailable = new MetaNum(resourcesAvailable);
     priceStart = new MetaNum(priceStart);
     priceRatio = new MetaNum(priceRatio);
     currentOwned = new MetaNum(currentOwned);
-    return priceStart.eq(new MetaNum(1))
-      ? resourcesAvailable.add(new MetaNum(1)).floor()
-      : MetaNum.ONE;
+    if (resourcesAvailable.isNaN() || priceStart.isNaN() || priceRatio.isNaN() || currentOwned.isNaN() ||
+        !resourcesAvailable.isFinite() || !priceStart.isFinite() || !priceRatio.isFinite() || !currentOwned.isFinite() ||
+        resourcesAvailable.isneg() || priceStart.lte(MetaNum.ZERO) || priceRatio.lte(MetaNum.ZERO) ||
+        currentOwned.isneg() || !currentOwned.isint()) return MetaNum.NaN.clone();
+    var firstPrice = priceStart.mul(priceRatio.pow(currentOwned));
+    if (priceRatio.eq(MetaNum.ONE)) return resourcesAvailable.div(firstPrice).floor().max(MetaNum.ZERO);
+    var cost = function (n) { return Q.sumGeometricSeries(n, firstPrice, priceRatio); };
+    var supremum = priceRatio.lt(MetaNum.ONE) ? firstPrice.div(MetaNum.ONE.sub(priceRatio)) : undefined;
+    return maxAffordableSeries(resourcesAvailable, firstPrice, cost, supremum);
   };
 
   Q.affordArithmeticSeries = function (resourcesAvailable, priceStart, priceAdd, currentOwned) {
@@ -5208,11 +6210,14 @@
     priceStart = new MetaNum(priceStart);
     priceAdd = new MetaNum(priceAdd);
     currentOwned = new MetaNum(currentOwned);
-    if (priceAdd.eq(MetaNum.ZERO)) return resourcesAvailable.div(priceStart).floor();
-    var a = priceAdd;
-    var b = priceStart.mul(2).sub(priceAdd);
-    var c = priceStart.sub(priceAdd).sub(resourcesAvailable.mul(2)).add(a);
-    return b.neg().add(b.pow(2).sub(a.mul(c).mul(4)).sqrt()).div(a.mul(2)).floor();
+    if (resourcesAvailable.isNaN() || priceStart.isNaN() || priceAdd.isNaN() || currentOwned.isNaN() ||
+        !resourcesAvailable.isFinite() || !priceStart.isFinite() || !priceAdd.isFinite() || !currentOwned.isFinite() ||
+        resourcesAvailable.isneg() || priceStart.lte(MetaNum.ZERO) || priceAdd.isneg() ||
+        currentOwned.isneg() || !currentOwned.isint()) return MetaNum.NaN.clone();
+    var firstPrice = priceStart.add(priceAdd.mul(currentOwned));
+    if (priceAdd.eq(MetaNum.ZERO)) return resourcesAvailable.div(firstPrice).floor().max(MetaNum.ZERO);
+    var cost = function (n) { return Q.sumArithmeticSeries(n, firstPrice, priceAdd); };
+    return maxAffordableSeries(resourcesAvailable, firstPrice, cost);
   };
 
   Q.sumGeometricSeries = function (numItems, start, ratio, numItemsStart) {
@@ -5221,9 +6226,10 @@
     start = new MetaNum(start);
     ratio = new MetaNum(ratio);
     numItemsStart = new MetaNum(numItemsStart);
-    if (numItems.lt(numItemsStart)) return MetaNum.ZERO.clone();
-    return start.mul(MetaNum.ONE.sub(ratio.pow(numItems.sub(numItemsStart).add(MetaNum.ONE))))
-      .div(MetaNum.ONE.sub(ratio));
+    var n = numItems.sub(numItemsStart);
+    if (n.lte(MetaNum.ZERO)) return MetaNum.ZERO.clone();
+    if (ratio.eq(MetaNum.ONE)) return start.mul(n);
+    return start.mul(MetaNum.ONE.sub(ratio.pow(n))).div(MetaNum.ONE.sub(ratio));
   };
 
   Q.sumArithmeticSeries = function (numItems, start, add, numItemsStart) {
@@ -5232,10 +6238,9 @@
     start = new MetaNum(start);
     add = new MetaNum(add);
     numItemsStart = new MetaNum(numItemsStart);
-    if (numItems.lt(numItemsStart)) return MetaNum.ZERO.clone();
-    var n = numItems.sub(numItemsStart).add(MetaNum.ONE);
-    var last = start.add(add.mul(n.sub(MetaNum.ONE)));
-    return n.mul(start.add(last)).div(new MetaNum(2));
+    var n = numItems.sub(numItemsStart);
+    if (n.lte(MetaNum.ZERO)) return MetaNum.ZERO.clone();
+    return n.mul(start).add(add.mul(n).mul(n.sub(MetaNum.ONE)).div(2));
   };
 
   Q.choose = function (x, y) {
@@ -6073,6 +7078,16 @@
       }
 
       // Handle layer symbol prefix + letter pattern + optional finOps + number (e.g., !Abcd1234, !AaE16, @Bcde500)
+      // The finOps form may also carry the exact α mantissa ("!2.000AaE0", the
+      // E/F/G/H marker format): strip it to the plain symPrefix shape and fold
+      // it into r0[0] via the !αAaβ convention (!Aa(β+log₅(α/2))) after the
+      // finOps digits are applied.
+      var symMantVal = null;
+      var symMantStrip = rem.match(/^([!@#\$%&~<>?])(\d+(?:\.\d+)?)((?:[A-Z][a-z]+)+)([A-Z]+)(\d+(?:\.\d+)?)\s*$/);
+      if (symMantStrip) {
+        symMantVal = Number(symMantStrip[2]);
+        rem = symMantStrip[1] + symMantStrip[3] + symMantStrip[4] + symMantStrip[5];
+      }
       // Tokens may carry "^count" application counts and be space-separated —
       // the toString spelling of multi-row ordinal cascades ("!Ijj^8 … 10").
       var symPrefixMatch = rem.match(/^([!@#\$%&~<>?])((?:[A-Z][a-z]+(?:\^\d+)?\s*)+)([A-Z]*)((?:\d+(?:\.\d+)?(?:[Ee]\d+)?))\s*$/);
@@ -6177,6 +7192,10 @@
               if (finLevel > 0) {
                 x.array[0][finLevel] = (x.array[0][finLevel] || 0) + 1;
               }
+            }
+            // The stripped exact-α mantissa folds into the ω^0 coefficient
+            if (symMantVal !== null && isFinite(symMantVal) && symMantVal > 0) {
+              x.array[0][0] = (x.array[0][0] || 0) + Math.log(symMantVal / 2) / Math.log(5);
             }
           }
           x._oaRowData = [];

@@ -1,5 +1,5 @@
-// Author: dlsdl v2.1.2
-// v2.1.2 Fix(format): `format` now caps every display at TWO letter combinations with an αΓβ binary tail
+// Author: dlsdl v2.2.0
+// v2.2.0: Unify limit rules and fractional continuity; add iteraperiate with log/root inverses and ordinal-level root forms; fix formatting and large-base ordinal growth beyond y=100
 // Code snippets and templates from format-omeganum.js
 // Uses dlsdl's Letter Notation (see README.md)
 
@@ -847,6 +847,37 @@ function formatLayer(num, precision, precision2, precision3, precision4) {
         }
         let innerStr = format(inner, epsPrecision, false)
         return innerStr + "ε" + commaFormat(num.layer)
+    }
+
+    // ω^ω-family tail-CNF markers (a single Aa row [1,0,1] at a symbol layer):
+    // r0[0] is the ω^0 coefficient (the integer-form argument) and r0[j] (j≥1,
+    // non-negative integers) are the E/F/G/H-form digits — E↔ω^ω+ω^1, F↔ω^2,
+    // G↔ω^3, … — matching the parser's finOps convention (!AaE16 → r0=[16,1],
+    // layer 1).  Emitted as "!2.000Aa" + E×c1 + F×c2 + … + c0 so the string
+    // round-trips exactly through the symPrefix/finOps parse path.
+    if (num.layer >= 1 && num.array.length === 2 &&
+        num.array[1].length === 3 &&
+        num.array[1][0] === 1 && num.array[1][1] === 0 && num.array[1][2] === 1 &&
+        num.array[0].length >= 2) {
+        let finR0 = num.array[0]
+        let finLetters = ""
+        let finOk = true
+        for (let fj = 1; fj < finR0.length; fj++) {
+            let fc = finR0[fj]
+            if (typeof fc !== "number" || fc !== Math.floor(fc) || fc < 0 || fc > 26 || fj > 22) { finOk = false; break }
+            if (fc > 0) finLetters += letterName(fj).repeat(fc)
+        }
+        let finC0 = finR0[0]
+        // c0 must be an integer: a non-integer c0 with higher digits is a
+        // height tower chain (e.g. iterate(3,1.5e16) → r0=[16.176,1]), not a
+        // tail-CNF marker — leave those to the legacy chain format.
+        if (finOk && typeof finC0 === "number" && isFinite(finC0) && finC0 >= 0 &&
+            finC0 === Math.floor(finC0) && finC0 < 1e15) {
+            let c0Str = (finC0 === Math.floor(finC0)) ? String(finC0) : String(Math.round(finC0 * 1e12) / 1e12)
+            if (!/e/i.test(c0Str)) {
+                return sym + regularFormat(2, precision4) + "Aa" + finLetters + c0Str
+            }
+        }
     }
 
     // The 10{ω^n}10 cascade at a symbol layer — the stored form of @Aa<n> (layer 1), #Aa<n> (layer 2), index is the total ω^-layer count.
@@ -1702,8 +1733,8 @@ function formatOrdinal(num, precision, precision4) {
                 // Repeated Aa below threshold: use AaAa... prefix
                 let tokAa = letterTokenOf(baseHeight)
                 if (tokAa.sym) {
-                    // multiLetterLimit symbol carry: the diagonal letter reads as one more symbol with the chain as its argument
-                    return composeLetterChain(tokAa.sym + regularFormat(2, precision4) + tokAa.letter,
+                    // multiLetterLimit symbol carry: the diagonal letter reads as one more symbol with the chain as its argument — the chain keeps the only mantissa
+                    return composeLetterChain(tokAa.sym + tokAa.letter,
                         r0, argStr, precision4)
                 }
                 // past the collapse threshold the repeats shift the argument and advance the letter
@@ -1718,11 +1749,12 @@ function formatOrdinal(num, precision, precision4) {
                 }
                 return composeLetterChain(letter.repeat(totalAaCount), r0, repArgStr, precision4)
             } else {
-                // Single Aa
+                // Single Aa.  When the name carries to the symbol form (!H = the
+                // ω^4 diagonal), the r0 chain already carries its own mantissa —
+                // keep only the LAST mantissa (issue: "!2.000H1.500E16" had two).
                 let tokAa = letterTokenOf(baseHeight)
                 if (tokAa.sym) {
-                    return composeLetterChain(tokAa.sym + regularFormat(2, precision4) + tokAa.letter,
-                        r0, argStr, precision4)
+                    return composeLetterChain(tokAa.sym + tokAa.letter, r0, argStr, precision4)
                 }
                 return composeLetterChain(letter, r0, argStr, precision4)
             }
@@ -1891,12 +1923,16 @@ function formatOrdinal(num, precision, precision4) {
                                        r0Str, precision4)
             }
             if (totalRepeat >= collapseAt) {
-                // Collapse to next letter — the repeat count shifts the argument, so the mantissa keeps the [1,10) convention
+                // Collapse to next letter — the repeat count shifts the argument:
+                // the parameter is the integer repeat index and the r0 tower folds
+                // into the mantissa (αΓβ = Γ(β+log α)), never spelling the r0
+                // chain as a second tail: explode(3^^^3,1187)'s row [1186,0,2]
+                // → "6.002Bb1186", not "6.002BbF7.626E12".
                 let mantissa = Math.log10(Math.max(alpha, 0.001)) + totalRepeat
                 let newLetter = letterName(baseLetterHeight + 1)
-                let mantVal = diagonalMantissa(newLetter, mantissa)
-                return composeLetterChain(regularFormat(mantVal, precision4) + newLetter,
-                    r0, r0Str, precision4)
+                let betaInt = Math.floor(mantissa)
+                return regularFormat(diagonalMantissa(newLetter, mantissa), precision4) +
+                       newLetter + commaFormat(betaInt)
             } else if (totalRepeat > 1) {
                 // Repeated letters + chain: one token per application, the innermost one in front of the chain (Ba(Ba(1e16)) → the stacked "BaBa1.000E16" — apea(apea(a)) must stay visible)
                 let outerLetters = letter.repeat(totalRepeat)

@@ -31,6 +31,24 @@ function checkRT(name, input) {
   }
 }
 
+// ── G0 process gate (hyper_inv spec 4.2.3 / tasks 10.1) ──────────────────────
+// Every line that starts with "FAIL |" or "ERROR |" is counted here, and the
+// end of the file turns any such line into a non-zero process exit code.  The
+// legacy helpers above only print; this wrapper adds the exit-code contract
+// without touching a single existing assertion.
+var GATE_COUNTS = { fail: 0, error: 0 };
+(function () {
+  var rawLog = console.log;
+  console.log = function () {
+    var first = arguments[0];
+    if (typeof first === "string") {
+      if (first.indexOf("FAIL |") === 0) GATE_COUNTS.fail++;
+      else if (first.indexOf("ERROR |") === 0) GATE_COUNTS.error++;
+    }
+    return rawLog.apply(console, arguments);
+  };
+})();
+
 
 // G1  PARSING & ROUND-TRIP
 //     G1.1  letter chains (1-4 letters, symbols, ε) round-trip
@@ -1014,20 +1032,22 @@ console.log("\n=== G3.31b iteraperiate (ω^ω+ω) ===");
   // aliases + static form
   checkBool("itap/hw0w alias", m3.itap(5).eq(m3.hw0w(5)), true);
   checkBool("static MetaNum.iteraperiate", MetaNum.iteraperiate(3, 5).eq(m3.iteraperiate(5)), true);
-  // marker: [[y],[1,0,1]] = 10{ω^ω+y}10 for every finite y ≥ 2
-  checkBool("itap(10,5) marker [[5],[1,0,1]]",
-    JSON.stringify(MetaNum(10).iteraperiate(5).array) === "[[5],[1,0,1]]" &&
+  // marker: the ω^ω+ω level marker [[0,1],[1,0,1]] (tail ω in r0 CNF, literal
+  // empty constant term) — identical for every finite y ≥ 2
+  // (3{ω^ω+ω}3 ≈ 10{ω^ω+ω}10 at marker scale)
+  checkBool("itap(10,5) marker [[0,1],[1,0,1]]",
+    JSON.stringify(MetaNum(10).iteraperiate(5).array) === "[[0,1],[1,0,1]]" &&
     MetaNum(10).iteraperiate(5).layer === 1, true);
-  checkBool("itap(10,100) marker [[100],[1,0,1]]",
-    JSON.stringify(MetaNum(10).iteraperiate(100).array) === "[[100],[1,0,1]]", true);
-  // strictly grows with y, and sits strictly between itermult and cuboiter
+  checkBool("itap(10,100) marker [[0,1],[1,0,1]] (finite y share one marker)",
+    JSON.stringify(MetaNum(10).iteraperiate(100).array) === "[[0,1],[1,0,1]]", true);
+  // finite heights sit below marker resolution: constant marker for y = 2..1e6
   var prev = null, mono = true;
   for (var yi = 0; yi < [2,3,4,5,100,1e4,1e6].length; yi++) {
     var yv = MetaNum(10).iteraperiate([2,3,4,5,100,1e4,1e6][yi]);
-    if (prev && !yv.gt(prev)) mono = false;
+    if (prev && !yv.eq(prev)) mono = false;
     prev = yv;
   }
-  checkBool("itap(10,y) strictly grows for y = 2..1e6", mono, true);
+  checkBool("itap(10,y) constant marker for finite y = 2..1e6", mono, true);
   checkBool("itmu(10,5) < itap(10,5) < cube(10,5)",
     MetaNum(10).itermult(5).lt(MetaNum(10).iteraperiate(5)) &&
     MetaNum(10).iteraperiate(5).lt(MetaNum(10).cuboiter(5)), true);
@@ -1036,42 +1056,46 @@ console.log("\n=== G3.31b iteraperiate (ω^ω+ω) ===");
   // edge cases: y=1, x=1, B2-a, NaN
   checkBool("itap(7,1) = 7 (a{α}1 = a)", MetaNum(7).iteraperiate(1).eq(MetaNum(7)), true);
   checkBool("itap(1,5) = 1 (1{α}b = 1)", MetaNum(1).iteraperiate(5).eq(MetaNum(1)), true);
-  // B2-a only collapses the 2-diagonal; 2{λ}y grows with y for y ≥ 3
-  checkBool("itap(2,3) > 4 and grows with y (B2-a is the 2-diagonal only)",
+  // B2-a only collapses the 2-diagonal; 2{λ}y for y ≥ 3 carries the level
+  // marker (the y-dependence is below marker resolution at the ω^ω scale)
+  checkBool("itap(2,3) > 4 and shares the finite-y marker (B2-a is the 2-diagonal only)",
     MetaNum(2).iteraperiate(3).gt(MetaNum(4)) &&
-    MetaNum(2).iteraperiate(3).lt(MetaNum(2).iteraperiate(5)), true);
+    MetaNum(2).iteraperiate(3).eq(MetaNum(2).iteraperiate(5)), true);
   // base-independence of the marker: every base ≥ 3 gives the same value
   checkBool("marker base-independent (3,10,4↑↑4 same marker)",
     m3.iteraperiate(5).eq(MetaNum(10).iteraperiate(5)) &&
     MetaNum(4).arrow(2)(4).iteraperiate(5).eq(MetaNum(10).iteraperiate(5)), true);
   // ordinal height: y + [1|ω] + [1|ω^ω]; merge with y's own rows; round-trip
-  var oy = MetaNum(10).itermult(3);                       // [[2],[1,0,1]] layer 1
+  var oy = MetaNum(10).itermult(3);                       // [[0.125],[1,0,1]] layer 1
   var ov = MetaNum(10).iteraperiate(oy);
-  checkBool("itap(10, ordinal) = y + [1|ω] + [1|ω^ω] (merged)",
-    JSON.stringify(ov.array) === "[[2],[1,1],[2,0,1]]" && ov.layer === 1, true);
+  checkBool("itap(10, ordinal) = y + [1|ω] + [1|ω^ω] (like terms merged)",
+    JSON.stringify(ov.array) === "[[0.125,1],[2,0,1]]" && ov.layer === 1, true);
   checkBool("ordinal round-trip inv_itap(oy-itap) = oy",
     ov.inv_iteraperiate(MetaNum(10)).eq(oy), true);
   var oy2 = MetaNum(10).expoiter(3);                      // [[10],[3,0,1]] layer 1
   var ov2 = MetaNum(10).iteraperiate(oy2);
   checkBool("ordinal round-trip 2 (ω^ω·3 row)",
-    JSON.stringify(ov2.array) === "[[10],[1,1],[4,0,1]]" &&
+    JSON.stringify(ov2.array) === "[[10,1],[4,0,1]]" &&
     ov2.inv_iteraperiate(MetaNum(10)).eq(oy2), true);
-  // log inverse: v.i_itap(x) recovers the height
+  // log inverse: the finite marker is constant, so the inverse returns the
+  // minimal reproducing height 2 — verified by forward reproduction
   var invOk = true, invBad = "";
   for (var yj = 0; yj < [2,3,5,100].length; yj++) {
     var yy = [2,3,5,100][yj];
     var vj = MetaNum(10).iteraperiate(yy);
-    if (!vj.inv_iteraperiate(MetaNum(10)).eq(MetaNum(yy)) ||
-        !vj.i_itap(MetaNum(10)).eq(MetaNum(yy)) ||
-        !vj.iw0w(MetaNum(10)).eq(MetaNum(yy)) ||
-        !MetaNum.inv_iteraperiate(vj, MetaNum(10)).eq(MetaNum(yy))) {
+    var back = vj.inv_iteraperiate(MetaNum(10));
+    if (!back.eq(MetaNum(2)) ||
+        !MetaNum(10).iteraperiate(back).eq(vj) ||
+        !vj.i_itap(MetaNum(10)).eq(back) ||
+        !vj.iw0w(MetaNum(10)).eq(back) ||
+        !MetaNum.inv_iteraperiate(vj, MetaNum(10)).eq(back)) {
       invOk = false; invBad = " y=" + yy; break;
     }
   }
-  checkBool("itap log inverse round-trips (y = 2,3,5,100)", invOk, true, invBad);
+  checkBool("itap log inverse returns the minimal reproducing height (y = 2,3,5,100)", invOk, true, invBad);
   checkBool("i_itap/iw0w/static aliases agree",
-    MetaNum(10).iteraperiate(5).i_itap(MetaNum(10)).eq(MetaNum(5)) &&
-    MetaNum(10).iteraperiate(5).iw0w(MetaNum(10)).eq(MetaNum(5)), true);
+    MetaNum(10).iteraperiate(5).i_itap(MetaNum(10)).eq(MetaNum(2)) &&
+    MetaNum(10).iteraperiate(5).iw0w(MetaNum(10)).eq(MetaNum(2)), true);
   // root form: marker level → smallest reproducing base; base 2 now also
   // reproduces the base-independent marker (B2-a no longer collapses it)
   var v5 = MetaNum(10).iteraperiate(5);
@@ -1137,8 +1161,8 @@ console.log("\n=== G3.38 λ[y] layer markers in STANDARD form ===");
 var wOps = ["iterate","itermult","iteraperiate","cuboiter","expoiter","trioterate","trixxate","aperixxate"];
 var mk35 = {
   iterate:     { layer: 0, rows: null },                 // exact cascade, layer 0
-  itermult:    { layer: 1, rows: "[[4],[1,0,1]]" },
-  iteraperiate: { layer: 1, rows: "[[5],[1,0,1]]" },
+  itermult:    { layer: 1, rows: "[[0.375],[1,0,1]]" },   // c0 = (y-2)/8 base-10 normalized
+  iteraperiate: { layer: 1, rows: "[[0,1],[1,0,1]]" },    // level tail ω, constant for finite y
   cuboiter:    { layer: 1, rows: "[[10,0,0,0,0,1],[1,0,1]]" },
   expoiter:    { layer: 1, rows: "[[10],[5,0,1]]" },
   trioterate:  { layer: 1, rows: "[[10],[1,5,1]]" },
@@ -1151,9 +1175,9 @@ for (var wi = 0; wi < wOps.length; wi++) {
     (wexp.rows === null || JSON.stringify(wv.array) === wexp.rows);
   checkBool(wf + "(3,5) λ[5] marker (layer " + wexp.layer + ")", wok, true);
 }
-checkBool("epsl(3,5) = 10{ω^ω^ω^ω^ω}10 → standard form layer 4, row [1,10,1]",
-  m3.epsilonate(5).layer === 4 &&
-  JSON.stringify(m3.epsilonate(5).array) === "[[10],[1,10,1]]", true);
+checkBool("epsl(3,5) = 10{ω^ω^ω^ω^ω}10 → FS position layer 3 over the ω³ row [1,0,0,0,1] (5c)",
+  m3.epsilonate(5).layer === 3 &&
+  JSON.stringify(m3.epsilonate(5).array) === "[[10],[1,0,0,0,1]]", true);
 checkBool("epsl(3,2) = 3{ε₀[2]}3 = 3{ω^ω}3 = itmu(3,2)",
   m3.epsilonate(2).eq(m3.itermult(2)), true);
 // the ordinal levels grow with the operation, for every y
@@ -1322,7 +1346,11 @@ for (var oi = 0; oi < ops.length; oi++) {
   try {
     fwdB = m10[ops[oi]](mBigBase);
     backB = fwdB[invOps[oi]](m10);
-    var okB = !backB.isNaN() && backB.isFinite() && backB.gte(m1) && fwdB.gt(m10);
+    // epsilonate passes the ε₀ ceiling at y > MSI and returns Infinity (the
+    // documented convention), so its inverse is NaN by the non-finite rule
+    var okB = ops[oi] === "epsilonate"
+      ? fwdB.toString() === "Infinity"
+      : !backB.isNaN() && backB.isFinite() && backB.gte(m1) && fwdB.gt(m10);
     console.log((okB ? "PASS" : "FAIL") + " | " + invOps[oi] + " y>MSI | fwd=" +
       fwdB.toString().slice(0, 80) + " back=" + backB.toString().slice(0, 80));
   } catch (e) {
@@ -2985,6 +3013,23 @@ checkFormat("short diagonal keeps the letter form", m3.aperixxate(3), "!2.000Aaa
 checkFormat("cascade inner α stays [1,10) (AbAa600)", "AbAa600", "Ab1.000Aa600");
 
 // ─────────────────────────────────────
+// ω^ω-family tail-CNF markers: !Aa 整数形式/E形式/F形式/G形式/… 对应
+// ω^ω+ω^0/1/2/3/… 层级。The r0 tail-CNF digits spell as finOps letters
+// (E↔ω^1, F↔ω^2, G↔ω^3, …) after the Aa block, with the ω^0 coefficient c0
+// as the trailing integer — matching the parser's !AaE16 → r0=[16,1] finOps
+// convention, so every form round-trips exactly.
+// ─────────────────────────────────────
+checkFormat("!Aa integer form (ω^ω+1)", MetaNum(10).itermult(10), "!2.000Aa1");
+checkFormat("E form (ω^ω+ω, iteraperiate marker)", m3.iteraperiate(3), "!2.000AaE0");
+ok("E form round-trip", MetaNum(format(m3.iteraperiate(3))).eq(m3.iteraperiate(3)));
+checkFormat("F form (ω^ω+ω^2, cuboiter y=2)", MetaNum(10).cuboiter(2), "!2.000AaF10");
+ok("F form round-trip", MetaNum(format(MetaNum(10).cuboiter(2))).eq(MetaNum(10).cuboiter(2)));
+checkFormat("G form (ω^ω+ω^3, cuboiter y=3)", MetaNum(10).cuboiter(3), "!2.000AaG10");
+ok("G form round-trip", MetaNum(format(MetaNum(10).cuboiter(3))).eq(MetaNum(10).cuboiter(3)));
+// non-marker height tower chains at the ω^ω layer keep the legacy chain format
+checkFormat("height tower chain keeps the chain format", MetaNum(3).iterate(1.5e16), "!Aa1.500E16");
+
+// ─────────────────────────────────────
 // issue #14: stacking the SAME function must nest the letter — the rows are a
 // composition, so the top row leads and the row below it (which collapses from
 // its repeat count) keeps the single α and β:
@@ -3355,4 +3400,1402 @@ console.log("\n=== G7.12 format() \"null\" regression ===");
     checkBool("format(h10(" + cases2[k][0] + ",10)) = " + cases2[k][1] + " (no \"null\")",
       got2 === cases2[k][1], true, got2 === cases2[k][1] ? "" : " got " + got2);
   }
+})();
+console.log("\n=== G8.9 series and purchase contracts ===");
+(function () {
+  function checkSeriesValue(name, got, expected) {
+    checkBool(name, got instanceof MetaNum && got.eq(expected), true, "got=" + got + " expected=" + expected);
+  }
+  function independentCost(count, firstPrice, growth, geometric) {
+    var total = 0;
+    var price = firstPrice;
+    for (var i = 0; i < count; i++) {
+      total += price;
+      price = geometric ? price * growth : price + growth;
+    }
+    return total;
+  }
+  function checkPurchase(name, got, resources, priceStart, growth, owned, expected, geometric) {
+    var valid = got instanceof MetaNum && got.isFinite() && got.isint() && got.gte(0) && got.eq(expected);
+    var count = got.toNumber();
+    var firstPrice = geometric ? priceStart * Math.pow(growth, owned) : priceStart + growth * owned;
+    var currentCost = independentCost(count, firstPrice, growth, geometric);
+    var nextCost = independentCost(count + 1, firstPrice, growth, geometric);
+    checkBool(name, valid && currentCost <= resources && nextCost > resources, true,
+      "got=" + got + " cost=" + currentCost + " next=" + nextCost + " expected=" + expected);
+  }
+
+  checkSeriesValue("geometric series uses exactly N items", MetaNum.sumGeometricSeries(5, 1, 2), 31);
+  checkSeriesValue("arithmetic series uses exactly N items", MetaNum.sumArithmeticSeries(5, 1, 2), 25);
+  checkSeriesValue("geometric series equal empty interval", MetaNum.sumGeometricSeries(5, 1, 2, 5), 0);
+  checkSeriesValue("geometric series reverse empty interval", MetaNum.sumGeometricSeries(4, 1, 2, 5), 0);
+  checkSeriesValue("arithmetic series equal empty interval", MetaNum.sumArithmeticSeries(5, 1, 2, 5), 0);
+  checkSeriesValue("arithmetic series reverse empty interval", MetaNum.sumArithmeticSeries(4, 1, 2, 5), 0);
+  checkSeriesValue("geometric series unit ratio", MetaNum.sumGeometricSeries(5, 3, 1), 15);
+  checkSeriesValue("arithmetic series zero add", MetaNum.sumArithmeticSeries(5, 3, 0), 15);
+  checkSeriesValue("geometric series nonzero start index", MetaNum.sumGeometricSeries(5, 3, 2, 2), 21);
+  checkSeriesValue("arithmetic series nonzero start index", MetaNum.sumArithmeticSeries(5, 3, 2, 2), 15);
+
+  for (var n = 0; n <= 10; n++) {
+    checkSeriesValue("geometric independent accumulation N=" + n,
+      MetaNum.sumGeometricSeries(n, 2, 3), independentCost(n, 2, 3, true));
+    checkSeriesValue("arithmetic independent accumulation N=" + n,
+      MetaNum.sumArithmeticSeries(n, 2, 3), independentCost(n, 2, 3, false));
+  }
+
+  var geometricCases = [
+    [100, 1, 2, 0, 6], [100, 1, 2, 2, 4], [62, 1, 2, 0, 5],
+    [63, 1, 2, 0, 6], [100, 2, 1, 7, 50], [0.5, 1, 2, 0, 0],
+    [0, 1, 2, 0, 0], [1.4, 1, 0.5, 0, 1]
+  ];
+  for (var g = 0; g < geometricCases.length; g++) {
+    var gc = geometricCases[g];
+    checkPurchase("geometric purchase " + gc.join("/"),
+      MetaNum.affordGeometricSeries(gc[0], gc[1], gc[2], gc[3]), gc[0], gc[1], gc[2], gc[3], gc[4], true);
+  }
+  checkBool("geometric purchase at decreasing-ratio supremum",
+    MetaNum.affordGeometricSeries(2, 1, 0.5, 0).eq(MetaNum.POSITIVE_INFINITY), true);
+  checkBool("geometric purchase NaN propagation",
+    MetaNum.affordGeometricSeries(MetaNum.NaN, 1, 2, 0).isNaN(), true);
+
+  var arithmeticCases = [
+    [100, 1, 2, 0, 10], [100, 1, 2, 2, 8], [99, 1, 2, 0, 9],
+    [100, 2, 0, 7, 50], [0.5, 1, 2, 0, 0], [0, 1, 2, 0, 0]
+  ];
+  for (var a = 0; a < arithmeticCases.length; a++) {
+    var ac = arithmeticCases[a];
+    checkPurchase("arithmetic purchase " + ac.join("/"),
+      MetaNum.affordArithmeticSeries(ac[0], ac[1], ac[2], ac[3]), ac[0], ac[1], ac[2], ac[3], ac[4], false);
+  }
+  checkBool("arithmetic purchase NaN propagation",
+    MetaNum.affordArithmeticSeries(MetaNum.NaN, 1, 2, 0).isNaN(), true);
+})();
+console.log("\n=== G8.10 formatting exports and exact-token contracts ===");
+(function () {
+  var fmt = require("./format-metanum.js");
+  var exportNames = ["format", "formatFull", "formatWhole", "formatSmall", "formatSingleLetterType",
+    "metaPolarize", "letterName", "symbolName", "getOrdinalLetter", "formatR0AsChain", "FORMAT_OPTIONS",
+    "polarizeFiniteChain", "gammaArgOf", "formatGammaBinary"];
+  for (var i = 0; i < exportNames.length; i++) {
+    var expectedType = exportNames[i] === "FORMAT_OPTIONS" ? "object" : "function";
+    checkBool("format export " + exportNames[i], typeof fmt[exportNames[i]] === expectedType, true);
+  }
+  var savedLimit = fmt.FORMAT_OPTIONS.multiLetterLimit;
+  try {
+    fmt.FORMAT_OPTIONS.multiLetterLimit = 4;
+    checkBool("multiLetterLimit keeps length at limit", fmt.format(MetaNum("Aaaa10")) === "2.000Aaaa10", true);
+    checkBool("multiLetterLimit carries ordinary overflow", fmt.format(MetaNum("Aaaab10")) === "!1.000H10", true);
+    checkBool("multiLetterLimit preserves exact diagonal token", fmt.format(MetaNum("Aaaaa10")) === "Aaaaa10", true);
+    ["Aaaaa3.5", "Aaaaa5", "Aaaaa10"].forEach(function (token) {
+      var value = MetaNum(token);
+      checkBool("exact token round-trip " + token, MetaNum(fmt.format(value)).eq(value), true);
+    });
+  } finally {
+    fmt.FORMAT_OPTIONS.multiLetterLimit = savedLimit;
+  }
+})();
+
+console.log("\n=== G8.11 documented public behavior ===");
+(function () {
+  var fmt = require("./format-metanum.js");
+  checkBool("README aper(3)", MetaNum(2).aper(3).eq(65536), true);
+
+  var savedRows = MetaNum.maxRows;
+  var savedCols = MetaNum.maxCols;
+  try {
+    MetaNum.maxRows = 20;
+    MetaNum.maxCols = 20;
+    checkArr("README Hardy base and eight trailing tens", MetaNum.hardy("1e10+0.5"),
+      [[4581.009607833985,10,10,10,10,10,10,10,10]]);
+    checkArr("README h100 maxRows=20", MetaNum(10).h100(20),
+      [[10],[9,1,19],[8,2,19],[8,3,19],[8,4,19],[8,5,19],[8,6,19],[8,7,19],[8,8,19],[8,9,19],
+       [8,10,19],[8,11,19],[8,12,19],[8,13,19],[8,14,19],[8,15,19],[8,16,19],[8,17,19],[8,18,19],[18,19,19]]);
+    MetaNum.maxRows = 50;
+    checkArr("README h100 maxRows=50", MetaNum(10).h100(20),
+      [[10],[9,1,16],[8,2,16],[8,3,16],[8,4,16],[8,5,16],[8,6,16],[8,7,16],[8,8,16],[8,9,16],
+       [8,0,17],[8,1,17],[8,2,17],[8,3,17],[8,4,17],[8,5,17],[8,6,17],[8,7,17],[8,8,17],[8,9,17],
+       [8,0,18],[8,1,18],[8,2,18],[8,3,18],[8,4,18],[8,5,18],[8,6,18],[8,7,18],[8,8,18],[8,9,18],
+       [8,0,19],[8,1,19],[8,2,19],[8,3,19],[8,4,19],[8,5,19],[8,6,19],[8,7,19],[8,8,19],[8,9,19],
+       [8,10,19],[8,11,19],[8,12,19],[8,13,19],[8,14,19],[8,15,19],[8,16,19],[8,17,19],[8,18,19],[18,19,19]]);
+    MetaNum.maxRows = 20;
+    checkArr("README h13 base 10", MetaNum(10).h13(20),
+      [[10000000000,8,8,8,8,8,8,8,8,8],[8,0,1],[8,1,1],[18,2,1]]);
+    checkArr("README h13 base 3", MetaNum(3).h13(20),
+      [[3638334640023.7783,7625597484984],[1,0,1],[1,1,1],[18,2,1]]);
+  } finally {
+    MetaNum.maxRows = savedRows;
+    MetaNum.maxCols = savedCols;
+  }
+  checkBool("README Hyper-E text", MetaNum(100).toHyperE() === "E2", true);
+  checkArr("README fromArray normalization", MetaNum.fromArray([1e10,520.73,1]), [[10000000000,520,1]]);
+  checkBool("README BEAF omega+1 base 2", MetaNum.BEAF(2,2,1,2).eq(4), true);
+  checkBool("README BEAF omega+1 distinguishable base", MetaNum.BEAF(3,3,1,2).eq(MetaNum(3).h11(3)), true);
+  checkBool("README slog approximation", Math.abs(MetaNum(65536).slog().toNumber() - 1.8342488308601794) <= 1e-12, true);
+  ["Ab", "Ba", "Bb", "Aaa"].forEach(function (prefix) {
+    checkBool("README prefix preserved " + prefix,
+      fmt.format(MetaNum(prefix + "GGFFE8.072E153")) === prefix + "GG3.340G3", true);
+  });
+})();
+
+console.log("\n=== G8.12 formatting helper examples ===");
+(function () {
+  var fmt = require("./format-metanum.js");
+  checkBool("formatWhole example", fmt.formatWhole(MetaNum(1234.56)) === "1,234", true);
+  checkBool("formatSmall example", fmt.formatSmall(MetaNum(0.0001)) === "1.000E-4", true);
+  checkBool("metaPolarize example", JSON.stringify(fmt.metaPolarize([100])) ===
+    JSON.stringify({bottom:1,top:2,height:1,repeat:1}), true);
+  checkBool("letterName example", fmt.letterName(699) === "Aaa", true);
+  checkBool("symbolName examples", fmt.symbolName(0) === "" && fmt.symbolName(1) === "!", true);
+  checkBool("getOrdinalLetter examples", fmt.getOrdinalLetter([[1,0,0,1]]) === "Aaa" && fmt.getOrdinalLetter([]) === null, true);
+  checkBool("formatR0AsChain example", fmt.formatR0AsChain([10,1,2],3) === "FF1.000E10", true);
+  var chainValue = MetaNum.arrow(3,100,3);
+  var polarized = fmt.polarizeFiniteChain(chainValue.array[0], chainValue.array.slice(1));
+  checkBool("polarizeFiniteChain example", polarized !== null &&
+    Math.abs(polarized.bottom - 2.3758120875933075) <= 1e-12 && polarized.repeation === 2 && polarized.arrows === 99, true);
+  var gammaArg = fmt.gammaArgOf(MetaNum("G5"),3,40);
+  checkBool("gammaArgOf example", gammaArg !== null && Math.abs(gammaArg - 5) <= 1e-9, true);
+  checkBool("formatGammaBinary example", fmt.formatGammaBinary(5.5,3,3) === "3.162G5", true);
+})();
+console.log("\n=== G8.13 README contract structure ===");
+(function () {
+  var readme = require("fs").readFileSync("README.md", "utf8");
+  var changelog = readme.split("# Changelog")[1] || "";
+  checkBool("README has one v2.2.0 changelog entry", (changelog.match(/v2\.2\.0/g) || []).length === 1, true);
+  checkBool("README v2.2.0 keeps all capability categories",
+    ["limit rules", "iteraperiate", "root forms", "null", "large-base"].every(function (term) {
+      return changelog.indexOf(term) !== -1;
+    }), true);
+  var limitLine = readme.split("\n").filter(function (line) { return line.indexOf("multiLetterLimit") !== -1 && line.indexOf("// 13.") !== -1; })[0] || "";
+  var historyLine = readme.split("\n").filter(function (line) { return line.indexOf("v2.1.1") !== -1; })[0] || "";
+  checkBool("README multiLetterLimit ordinary and exact rules",
+    limitLine.indexOf("Ordinary") !== -1 && limitLine.indexOf("Exact") !== -1 && limitLine.indexOf("64-token") !== -1, true);
+  checkBool("README v2.1.1 ordinary and exact rules",
+    historyLine.indexOf("ordinary") !== -1 && historyLine.indexOf("exact diagonal tokens") !== -1, true);
+  var helperDocs = readme.split("### Formatting helper API")[1] || "";
+  helperDocs = helperDocs.split("**Canonical chain**")[0];
+  var helpers = ["formatWhole", "formatSmall", "metaPolarize", "letterName", "symbolName", "getOrdinalLetter",
+    "formatR0AsChain", "polarizeFiniteChain", "gammaArgOf", "formatGammaBinary"];
+  for (var i = 0; i < helpers.length; i++) {
+    var row = helperDocs.split("\n").filter(function (line) { return line.indexOf("`" + helpers[i]) !== -1; })[0] || "";
+    checkBool("README helper contract " + helpers[i], row.indexOf("→") !== -1 && row.split("|").length >= 5, true);
+  }
+})();
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// G9  hyper_inv: continuous real-number log/root inverses
+//      (spec .codeartsdoer/specs/hyper_inv/spec.md sections 5.1–5.8,
+//       design.md sections 2.1–2.7, tasks 10.1–12.5)
+//      G9.0   checkInverseCase reporter + evidence bookkeeping (10.1)
+//      G9.1   reporter self-check: injected failure is detectable (10.1)
+//      G9.2   full registry, aliases, parameter order, options (10.2)
+//      G9.3   closed-form non-integer / known integer / sign / reciprocal (10.3)
+//      G9.4   forward anchors and inverse substitution use one forward (10.4)
+//      G9.5   per-family integer / non-integer height and base matrix (11.1)
+//      G9.6   round-trip vs. substitution residual separation (11.2)
+//      G9.7   successor break points m±δ (11.3)
+//      G9.8   fundamental-sequence break points + fractional coefficient (11.4)
+//      G9.9   domain boundaries, multi/no-solution, invalid & non-finite (12.1)
+//      G9.10  markers, saturation, truncation, COEFF/MSI/cap, minimality (12.2)
+//      G9.11  large numbers, tolerance ladder, numeric strings, underflow (12.3)
+//      G9.12  failure injection: budgets, stagnation, fallback, overflow (12.4)
+//      G9.13  input immutability, config isolation, determinism (12.5)
+//      G9.14  summary + process gate (10.1 / 14.2)
+// ═══════════════════════════════════════════════════════════════════════════
+console.log("\n=== G9.0 inverse test harness ===");
+
+var INVERSE_STATS = {
+  total: 0, pass: 0, fail: 0, error: 0, skipped: 0,
+  evidence: { "definition-guaranteed": 0, "representation-level": 0, "numerical-experiment": 0, "not-applicable": 0 },
+  categories: {}, failedCases: []
+};
+
+function inverseValueSummary(v) {
+  if (!(v instanceof MetaNum)) return String(v);
+  var arr = JSON.stringify(v.array);
+  if (arr.length > 48) arr = arr.slice(0, 45) + "...";
+  return v.toString().slice(0, 40) + " {sign=" + v.sign + ",layer=" + v.layer + ",array=" + arr + "}";
+}
+
+function inverseFailureCategory(status, termination, expectedFailure) {
+  if (expectedFailure) return "expected-outcome";
+  if (status === "non-converged" || status === "bracketing-failed" || status === "stagnated") return "numeric-non-convergence";
+  if (status === "unrecoverable" || status === "unrepresentable" || status === "unsupported-domain") return "representation-unrecoverable";
+  return "requirement-unsatisfied";
+}
+
+// checkInverseCase: one line per case with the full spec 10.1 record.
+// spec = { caseId, requirement, operation, direction, call, run, note,
+//          expect: { status:[..], value, approx:{to,tol}, isNaN, isint,
+//                    termination:[..], multipleSolutions, representationLevel,
+//                    legacyAnchor, minimalityAttained, residualKind, check },
+//          solError: { from, tol }, residualMax, reproduce: { forward, target } }
+function checkInverseCase(spec) {
+  var id = spec.caseId, req = spec.requirement || "";
+  INVERSE_STATS.total++;
+  if (spec.run === false) {
+    INVERSE_STATS.skipped++;
+    console.log("SKIP | INV " + id + " | " + req + " | reason: " + (spec.note || "not executed"));
+    return;
+  }
+  var result;
+  try { result = spec.call(); }
+  catch (e) {
+    INVERSE_STATS.error++;
+    INVERSE_STATS.categories["test-environment-error"] = (INVERSE_STATS.categories["test-environment-error"] || 0) + 1;
+    INVERSE_STATS.failedCases.push(id + "(error)");
+    console.log("ERROR | INV " + id + " | " + req + " | call threw: " + e.message);
+    return;
+  }
+  var isResult = result !== null && typeof result === "object" && typeof result.status === "string";
+  var value = isResult ? result.value : result;
+  var problems = [];
+  var expectedFailure = false;
+  var exp = spec.expect || {};
+  if (exp.isNaN) expectedFailure = true;
+  if (exp.status && typeof exp.status === "string") exp.status = [exp.status];
+  if (!isResult && (exp.status || exp.termination || exp.multipleSolutions !== undefined ||
+      exp.representationLevel !== undefined || exp.legacyAnchor !== undefined ||
+      exp.minimalityAttained !== undefined || spec.residualMax !== undefined || spec.residualKind)) {
+    problems.push("diagnostic fields requested but the call returned a plain MetaNum");
+  }
+  if (isResult) {
+    if (exp.status && exp.status.indexOf(result.status) === -1) problems.push("status " + result.status + " not in [" + exp.status.join(",") + "]");
+    if (exp.termination) {
+      if (typeof exp.termination === "string") exp.termination = [exp.termination];
+      if (exp.termination.indexOf(result.termination) === -1) problems.push("termination " + result.termination + " not in [" + exp.termination.join(",") + "]");
+    }
+    if (exp.multipleSolutions !== undefined && result.multipleSolutions !== exp.multipleSolutions) problems.push("multipleSolutions=" + result.multipleSolutions);
+    if (exp.representationLevel !== undefined && result.representationLevel !== exp.representationLevel) problems.push("representationLevel=" + result.representationLevel);
+    if (exp.legacyAnchor !== undefined && result.legacyAnchor !== exp.legacyAnchor) problems.push("legacyAnchor=" + result.legacyAnchor);
+    if (exp.minimalityAttained !== undefined && result.minimalityAttained !== exp.minimalityAttained) problems.push("minimalityAttained=" + result.minimalityAttained);
+    if (exp.residualKind && (!result.residual || result.residual.kind !== exp.residualKind)) problems.push("residualKind=" + (result.residual && result.residual.kind));
+    if (spec.residualMax !== undefined) {
+      var rel = result.residual && result.residual.relative;
+      var cmpv = result.residual && result.residual.comparison;
+      if (rel === null || rel === undefined) {
+        if (cmpv !== 0) problems.push("no faithful residual evidence (kind=" + (result.residual && result.residual.kind) + ", cmp=" + cmpv + ")");
+      } else if (rel > spec.residualMax) problems.push("R_rel=" + rel + " > " + spec.residualMax);
+    }
+  }
+  if (exp.isNaN) { if (!(value instanceof MetaNum) || !value.isNaN()) problems.push("expected NaN, got " + inverseValueSummary(value)); }
+  else if (!exp.allowNaN && (value === undefined || value === null || !(value instanceof MetaNum) || value.isNaN())) {
+    problems.push("expected a finite MetaNum, got " + inverseValueSummary(value));
+  } else {
+    if (exp.value !== undefined && !value.eq(MetaNum(exp.value))) problems.push("value " + inverseValueSummary(value) + " != " + MetaNum(exp.value).toString());
+    if (exp.approx) {
+      var got = value.toNumber();
+      if (!Number.isFinite(got) || Math.abs(got - exp.approx.to) > exp.approx.tol * Math.max(1, Math.abs(exp.approx.to)))
+        problems.push("value " + inverseValueSummary(value) + " outside " + exp.approx.to + "±" + exp.approx.tol);
+    }
+    if (exp.isint !== undefined && value.isint() !== exp.isint) problems.push("isint=" + value.isint() + " expected " + exp.isint);
+    if (spec.solError) {
+      var se = value.sub(MetaNum(spec.solError.from)).toNumber();
+      if (!Number.isFinite(se) || Math.abs(se) > spec.solError.tol * Math.max(1, Math.abs(spec.solError.from)))
+        problems.push("solution error " + se + " > " + spec.solError.tol + "*max(1,|" + spec.solError.from + "|)");
+    }
+    if (spec.reproduce && !(value instanceof MetaNum && value.isNaN())) {
+      // exact anchors reproduce with strict cmp==0; approximate solutions may
+      // instead show a faithfully computable R_rel <= 1e-9 (spec 5.6.1(6))
+      var fwd = spec.reproduce.forward(value), tgt = MetaNum(spec.reproduce.target);
+      var reproduced = fwd instanceof MetaNum && fwd.cmp(tgt) === 0;
+      if (!reproduced && fwd instanceof MetaNum && !fwd.isNaN() && !tgt.isNaN()) {
+        var fn = fwd.toNumber(), tn = tgt.toNumber();
+        if (Number.isFinite(fn) && Number.isFinite(tn)) reproduced = Math.abs(fn - tn) / Math.max(1, Math.abs(tn)) <= 1e-9;
+      }
+      if (!reproduced) problems.push("forward substitution did not reproduce the target");
+    }
+  }
+  var customCheck = exp.check || spec.check;
+  if (customCheck) { var extra = customCheck(result, value); if (extra && extra.length) problems = problems.concat(extra); }
+  var cat = inverseFailureCategory(isResult ? result.status : "(value)", isResult ? result.termination : "", expectedFailure);
+  var evidence = isResult ? (result.evidence || "not-applicable") : "not-applicable";
+  var line = (isResult ? result.status : "value") + " value=" + (value instanceof MetaNum ? value.toString().slice(0, 26) : String(value)) +
+    " term=" + (isResult ? result.termination : "-") +
+    " | solErr=" + (spec.solError ? spec.solError.tol : "-") +
+    " res=" + (isResult && result.residual ? result.residual.kind + "/" + (result.residual.relative === null ? "null" : result.residual.relative) : "-") +
+    " | it/exp/fw/fb=" + (isResult ? [result.iterations, result.expansions, result.forwardEvaluations, result.fallbackCount].join("/") : "-/-/-/-") +
+    " | flags=" + (isResult ? [result.multipleSolutions ? "M" : "-", result.representationLevel ? "R" : "-", result.legacyAnchor ? "L" : "-"].join("") : "-") +
+    " | " + evidence;
+  if (problems.length === 0) {
+    INVERSE_STATS.pass++;
+    INVERSE_STATS.evidence[evidence] = (INVERSE_STATS.evidence[evidence] || 0) + 1;
+    if (!expectedFailure) INVERSE_STATS.categories["expected-outcome"] = (INVERSE_STATS.categories["expected-outcome"] || 0) + 1;
+    else INVERSE_STATS.categories[cat] = (INVERSE_STATS.categories[cat] || 0) + 1;
+    console.log("PASS | INV " + id + " | " + req + " | " + (spec.operation || "") + " " + (spec.direction || "") + " | " + line +
+      (spec.note ? " | note: " + spec.note : ""));
+  } else {
+    INVERSE_STATS.fail++;
+    INVERSE_STATS.categories[cat] = (INVERSE_STATS.categories[cat] || 0) + 1;
+    INVERSE_STATS.failedCases.push(id);
+    console.log("FAIL | INV " + id + " | " + req + " | " + (spec.operation || "") + " " + (spec.direction || "") + " | " + line +
+      " | PROBLEMS: " + problems.join("; "));
+    if (value instanceof MetaNum) console.log("  value detail: " + inverseValueSummary(value));
+  }
+}
+
+// G9.1 the reporter itself must be able to see an injected failure (10.1).
+// The injected FAIL line is captured BEFORE it reaches the process gate and
+// the bookkeeping is restored, so the self-check never contaminates the gate.
+(function () {
+  var captured = [];
+  var outerLog = console.log;
+  console.log = function () { captured.push(Array.prototype.join.call(arguments, " ")); };
+  var savedStats = JSON.stringify({ pass: INVERSE_STATS.pass, fail: INVERSE_STATS.fail, total: INVERSE_STATS.total,
+    categories: INVERSE_STATS.categories, failedCases: INVERSE_STATS.failedCases });
+  try {
+    checkInverseCase({
+      caseId: "G9.1.injected", requirement: "10.1 injected failure detection", operation: "harness", direction: "-",
+      call: function () { return MetaNum.hyper_log(7, 2, 0, { diagnostics: true }); },
+      expect: { status: ["wrong-on-purpose"] }
+    });
+  } finally {
+    console.log = outerLog;
+    var restored = JSON.parse(savedStats);
+    INVERSE_STATS.pass = restored.pass; INVERSE_STATS.fail = restored.fail; INVERSE_STATS.total = restored.total;
+    INVERSE_STATS.categories = restored.categories; INVERSE_STATS.failedCases = restored.failedCases;
+  }
+  var injectedLine = captured.filter(function (l) { return l.indexOf("FAIL | INV G9.1.injected") === 0; })[0] || "";
+  checkInverseCase({
+    caseId: "G9.1.1", requirement: "10.1 injected failure is detectable and does not leak into the gate",
+    operation: "harness", direction: "-", call: function () { return MetaNum(1); },
+    expect: { value: 1, check: function () {
+      var p = [];
+      if (!injectedLine) p.push("injected case produced no FAIL line");
+      if (injectedLine.indexOf("PROBLEMS: status exact not in [wrong-on-purpose]") === -1) p.push("FAIL line lacks the problem detail");
+      if (GATE_COUNTS.fail !== 0) p.push("injected FAIL reached the process gate");
+      if (INVERSE_STATS.fail !== 0) p.push("injected FAIL stayed in the stats");
+      return p;
+    } },
+    note: "injected line captured: " + injectedLine.slice(0, 90)
+  });
+  checkInverseCase({
+    caseId: "G9.1.2", requirement: "10.1 pass-line format carries status/value/termination/residual/counts/evidence",
+    operation: "hyper_log", direction: "log", call: function () { return MetaNum.hyper_log(7, 2, 0); },
+    expect: { value: 3.5, isint: false }, solError: { from: 3.5, tol: 1e-12 }
+  });
+})();
+
+// ───────────────────────────────────────────────────────────────────────────
+// G9.2 full registry, aliases, parameter order and options (tasks 10.2)
+// ───────────────────────────────────────────────────────────────────────────
+console.log("\n=== G9.2 registry, aliases, parameter order, options ===");
+// design.md 2.1.4 — one row per named ordinal operation:
+// [op, log short, log code, root short, root code, base-independent marker?]
+var INV_REGISTRY = [
+  ["aperiote", "i_aper", "i10", "r_aper", "r10", false],
+  ["expande", "i_expa", "i11", "r_expa", "r11", false],
+  ["multiexpande", "i_muea", "i12", "r_muea", "r12", false],
+  ["powerexpande", "i_poea", "i13", "r_poea", "r13", false],
+  ["aperioexpande", "i_apea", "i20", "r_apea", "r20", false],
+  ["explode", "i_expl", "i21", "r_expl", "r21", false],
+  ["multiexplode", "i_muel", "i22", "r_muel", "r22", false],
+  ["aperioexplode", "i_apel", "i30", "r_apel", "r30", false],
+  ["detonate", "i_deto", "i31", "r_deto", "r31", false],
+  ["aperiodetonate", "i_apdt", "i40", "r_apdt", "r40", false],
+  ["aperionate", "i_apeo", "i100", "r_apeo", "r100", false],
+  ["megote", "i_mego", "i101", "r_mego", "r101", false],
+  ["multimegote", "i_mume", "i102", "r_mume", "r102", false],
+  ["aperimegote", "i_apmg", "i110", "r_apmg", "r110", false],
+  ["megoexpande", "i_mgea", "i111", "r_mgea", "r111", false],
+  ["aperimegoexpande", "i_apme", "i120", "r_apme", "r120", false],
+  ["megoaperionate", "i_mgao", "i200", "r_mgao", "r200", false],
+  ["gigote", "i_gigo", "i201", "r_gigo", "r201", false],
+  ["aperigigote", "i_apgg", "i210", "r_apgg", "r210", false],
+  ["gigoaperionate", "i_ggap", "i300", "r_ggap", "r300", false],
+  ["aperiatote", "i_apat", "i1000", "r_apat", "r1000", false],
+  ["powiainate", "i_pwan", "i1001", "r_pwan", "r1001", false],
+  ["expandainate", "i_epan", "i1010", "r_epan", "r1010", false],
+  ["megodainate", "i_mgan", "i1100", "r_mgan", "r1100", false],
+  ["powiairate", "i_pwar", "i2000", "r_pwar", "r2000", false],
+  ["aperioguate", "i_apgu", "i10000", "r_apgu", "r10000", false],
+  ["iterate", "iww", null, "r_iter", "rww", false],
+  ["itermult", "i_itmu", "iw01", "r_itmu", "rw01", true],
+  ["iteraperiate", "i_itap", "iw0w", "r_itap", "rw0w", true],
+  ["cuboiter", "i_cube", "iwx2", "r_cube", "rwx2", true],
+  ["expoiter", "i_expo", "iwa1", "r_expo", "rwa1", true],
+  ["trioterate", "i_tria", "iwm2", "r_tria", "rwm2", true],
+  ["trixxate", "i_trix", "iwp2", "r_trix", "rwp2", true],
+  ["aperixxate", "i_apix", "iwpw", "r_apix", "rwpw", true],
+  ["epsilonate", "i_epsl", "iepsl", "r_epsl", "repsl", true]
+];
+var INV_DIAG = { diagnostics: true };
+function invNames(row) {
+  var names = { log: ["inv_" + row[0]], root: [row[0] + "_root", "root_" + row[0], row[3], row[4]] };
+  if (row[1]) names.log.push(row[1]);
+  if (row[2]) names.log.push(row[2]);
+  if (row[0] === "iterate") names.log.push("inv_iter");
+  return names;
+}
+(function () {
+  var missing = [];
+  for (var i = 0; i < INV_REGISTRY.length; i++) {
+    var names = invNames(INV_REGISTRY[i]);
+    var all = [INV_REGISTRY[i][0]].concat(names.log, names.root);
+    for (var k = 0; k < all.length; k++) {
+      if (typeof MetaNum(3)[all[k]] !== "function") missing.push("instance " + all[k]);
+      if (typeof MetaNum[all[k]] !== "function") missing.push("static " + all[k]);
+    }
+  }
+  checkInverseCase({
+    caseId: "G9.2.1", requirement: "10.2 / spec 5.2.1(5) every registered op has forward, inv_*, i_*, <op>_root, r_* and the new root_<op> on instance and static",
+    operation: "registry", direction: "-", call: function () { return MetaNum(1); },
+    expect: { value: 1, check: function () { return missing; } },
+    note: INV_REGISTRY.length + " ops; missing=" + (missing.length ? missing.join(",") : "none")
+  });
+  // iteraperiate's seven specified inverse names + inv_iter (spec 5.4.1 b)
+  var v = MetaNum(10).iteraperiate(5), vi = MetaNum(10).iterate(5);
+  // the finite-height marker is the constant ω^ω+ω level marker, so every
+  // inverse name returns the minimal reproducing height 2
+  var itapLog = ["inv_iteraperiate", "i_itap", "iw0w"], itapRoot = ["iteraperiate_root", "root_iteraperiate", "r_itap", "rw0w"];
+  var bad = [], badR = [];
+  itapLog.forEach(function (n) {
+    if (!v[n](10).eq(2)) bad.push("instance " + n);
+    if (!MetaNum[n](v, 10).eq(2)) bad.push("static " + n);
+  });
+  itapRoot.forEach(function (n) {
+    if (!v[n](5).eq(2)) badR.push("instance " + n);
+    if (!MetaNum[n](v, 5).eq(2)) badR.push("static " + n);
+  });
+  if (!vi.inv_iter(10).eq(5)) bad.push("instance inv_iter");
+  if (!MetaNum.inv_iter(vi, 10).eq(5)) bad.push("static inv_iter");
+  checkInverseCase({ caseId: "G9.2.2", requirement: "10.2 iteraperiate: inv_iteraperiate/i_itap/iw0w and root_iteraperiate/iteraperiate_root/r_itap/rw0w all exist and agree on the minimal reproducing height 2; inv_iter kept",
+    operation: "iteraperiate", direction: "log+root", call: function () { return v.inv_iteraperiate(10, INV_DIAG); },
+    expect: { status: ["exact", "approximate"], value: 2, check: function () { return bad.concat(badR); } } });
+  // alias / form equivalence for every op at integer height 3 (value level)
+  var mism = [];
+  var markerRoots = 0;
+  for (var j = 0; j < INV_REGISTRY.length; j++) {
+    var row = INV_REGISTRY[j], op = row[0];
+    var target = MetaNum(3)[op](3);
+    var names2 = invNames(row);
+    var refLog = target["inv_" + op](3);
+    names2.log.forEach(function (n) {
+      if (!target[n](3).eq(refLog)) mism.push(op + "." + n + "(instance)");
+      if (!MetaNum[n](target, 3).eq(refLog)) mism.push(op + "." + n + "(static)");
+    });
+    var refRoot = target[op + "_root"](3);
+    if (!refRoot.eq(row[5] ? 2 : 3)) mism.push(op + " root value " + refRoot.toString());
+    if (row[5]) markerRoots++;
+    names2.root.forEach(function (n) {
+      if (!target[n](3).eq(refRoot)) mism.push(op + "." + n + "(instance)");
+      if (!MetaNum[n](target, 3).eq(refRoot)) mism.push(op + "." + n + "(static)");
+    });
+  }
+  checkInverseCase({ caseId: "G9.2.3", requirement: "10.2 all aliases/forms return the same MetaNum value as inv_<op>/<op>_root (integer height 3, base 3)",
+    operation: "registry", direction: "log+root", call: function () { return MetaNum(1); },
+    expect: { value: 1, check: function () { return mism; } },
+    note: "marker (base-independent) root ops=" + markerRoots + " -> root 2; structural root ops -> 3" });
+  // status-level equivalence incl. options tail for one structural and one marker op
+  [["aperiote", 3], ["iteraperiate", 2]].forEach(function (pair) {
+    var op = pair[0], want = pair[1];
+    var t = MetaNum(3)[op](3);
+    var a = t["inv_" + op](3, INV_DIAG), b = t[invNames(INV_REGISTRY.filter(function (r) { return r[0] === op; })[0]).log[1]](3, INV_DIAG);
+    var c1 = t[op + "_root"](3, INV_DIAG), d = t["root_" + op](3, INV_DIAG), e = MetaNum[op + "_root"](t, 3, INV_DIAG);
+    checkInverseCase({ caseId: "G9.2.4." + op, requirement: "10.2 same input + options => same status/termination through long name, alias, root_<op>, static",
+      operation: op, direction: "log+root", call: function () { return a; },
+      expect: { status: ["exact", "approximate", "minimal-reproducing"], check: function () {
+        var p = [];
+        if (b.status !== a.status || b.value.eq(a.value) === false) p.push("alias status/value differ");
+        [c1, d, e].forEach(function (r) { if (r.status !== c1.status || !r.value.eq(c1.value)) p.push("root alias differs"); });
+        if (!c1.value.eq(want)) p.push("root value " + c1.value.toString());
+        return p;
+      } } });
+  });
+  // parameter order (spec 5.2.1 1-4)
+  var w15 = MetaNum(10).aperiote(15);
+  checkInverseCase({ caseId: "G9.2.5", requirement: "10.2 / spec 5.2.1 named log order (c first, fixed base n second) and root order (c first, fixed height b second)",
+    operation: "aperiote", direction: "log", call: function () { return MetaNum.inv_aperiote(w15, 10, INV_DIAG); },
+    expect: { value: 15, check: function () {
+      var p = [];
+      if (!w15.i_aper(10).eq(15)) p.push("i_aper(10)");
+      if (!w15.i10(10).eq(15)) p.push("i10(10)");
+      if (!MetaNum.i_aper(w15, 10).eq(15)) p.push("static i_aper");
+      if (!w15.aperiote_root(15).eq(10)) p.push("aperiote_root(15)");
+      if (!w15.r10(15).eq(10)) p.push("r10(15)");
+      if (!w15.root_aperiote(15).eq(10)) p.push("root_aperiote(15)");
+      if (!MetaNum.root_aperiote(w15, 15).eq(10)) p.push("static root_aperiote");
+      if (!MetaNum.aperiote_root(w15, 15).eq(10)) p.push("static aperiote_root");
+      return p;
+    } } });
+  checkInverseCase({ caseId: "G9.2.6", requirement: "10.2 / spec 5.2.1 generic order: hyper_log(c,n,α) solves b; hyper_root(c,b,α) solves n; instance curried forms agree",
+    operation: "hyper_log/root", direction: "log+root", call: function () { return MetaNum.hyper_log(MetaNum(2).tetr(2.5), 2, 2, INV_DIAG); },
+    expect: { status: "approximate", approx: { to: 2.5, tol: 1e-9 }, check: function () {
+      var p = [], c = MetaNum(2).tetr(2.5), cr = MetaNum(2.5).tetr(2);
+      var inst = c.hyper_log(2)(2, INV_DIAG), st = MetaNum.hyper_root(cr, 2, 2, INV_DIAG), instR = cr.hyper_root(2)(2, INV_DIAG);
+      if (!inst.value.eq(MetaNum(2.5)) && Math.abs(inst.value.toNumber() - 2.5) > 1e-9) p.push("instance hyper_log");
+      if (Math.abs(st.value.toNumber() - 2.5) > 1e-9) p.push("static hyper_root");
+      if (st.status !== instR.status || Math.abs(instR.value.toNumber() - 2.5) > 1e-9) p.push("instance hyper_root");
+      if (!MetaNum.hyper_log(7, 2, 0).eq(3.5) || !MetaNum.hyper_root(7, 2, 0).eq(3.5)) p.push("n/α must not be swapped (7,2,0)");
+      if (!MetaNum.hyper_root(65536, 4, 2).eq(2) || !MetaNum.hyper_log(65536, 2, 2).eq(4)) p.push("b/α must not be swapped (65536)");
+      return p;
+    } } });
+  // omitted vs explicit defaults, diagnostics shape, input encodings
+  (function () {
+    var def = MetaNum.hyper_log(16, 2, 2), exp = MetaNum.hyper_log(16, 2, 2, { tol: 1e-12, maxIterations: 200, maxBracketExpansions: 60, branch: "principal", acceleration: "auto" });
+    var defD = MetaNum.hyper_log(16, 2, 2, INV_DIAG), expD = MetaNum.hyper_log(16, 2, 2, { tol: 1e-12, maxIterations: 200, maxBracketExpansions: 60, branch: "principal", acceleration: "auto", diagnostics: true });
+    checkInverseCase({ caseId: "G9.2.7", requirement: "10.2 / spec 5.2.1(7) omitted options == explicit defaults (value and status)",
+      operation: "hyper_log", direction: "log", call: function () { return defD; },
+      expect: { status: ["exact", "approximate"], value: 3, check: function () {
+        var p = [];
+        if (!(def instanceof MetaNum) || typeof def.status !== "undefined") p.push("default call must return a plain MetaNum");
+        if (!def.eq(exp)) p.push("explicit default options changed the value");
+        if (expD.status !== defD.status || expD.termination !== defD.termination) p.push("explicit default options changed status/termination");
+        return p;
+      } } });
+    var num = MetaNum.hyper_log(7, 2, 0, INV_DIAG), str = MetaNum.hyper_log("7", "2", "0", INV_DIAG), mn = MetaNum.hyper_log(new MetaNum(7), new MetaNum(2), new MetaNum(0), INV_DIAG);
+    var numR = MetaNum.hyper_root(2, 2, 1, INV_DIAG), strR = MetaNum.hyper_root("2", "2", "1", INV_DIAG), mnR = MetaNum.hyper_root(MetaNum(2), MetaNum(2), MetaNum(1), INV_DIAG);
+    var named = w15.inv_aperiote(new MetaNum(10), INV_DIAG);
+    checkInverseCase({ caseId: "G9.2.8", requirement: "10.2 / spec 5.2.1(6) number, numeric string and MetaNum inputs give the same branch and value",
+      operation: "hyper_log/root", direction: "log+root", call: function () { return num; },
+      expect: { status: "exact", value: 3.5, check: function () {
+        var p = [];
+        if (str.status !== num.status || !str.value.eq(num.value)) p.push("string inputs differ (log)");
+        if (mn.status !== num.status || !mn.value.eq(num.value)) p.push("MetaNum inputs differ (log)");
+        if (strR.status !== numR.status || !strR.value.eq(numR.value)) p.push("string inputs differ (root)");
+        if (mnR.status !== numR.status || !mnR.value.eq(numR.value)) p.push("MetaNum inputs differ (root)");
+        if (!named.value.eq(15)) p.push("named log with MetaNum base");
+        return p;
+      } } });
+    var curried = MetaNum(7).hyper_log(2)(0, INV_DIAG);
+    checkInverseCase({ caseId: "G9.2.9", requirement: "10.2 / spec 5.2.1(7) curried instance form accepts a trailing options object after α",
+      operation: "hyper_log", direction: "log", call: function () { return curried; },
+      expect: { status: "exact", value: 3.5, check: function () {
+        var r = MetaNum(7).hyper_root(2)(0, INV_DIAG);
+        return r.status === "exact" && r.value.eq(3.5) ? [] : ["curried hyper_root options"];
+      } } });
+    var bad = [];
+    [["tol", -1], ["maxIterations", 2.5], ["maxIterations", 0], ["branch", "other"], ["acceleration", "newton"], ["diagnostics", "yes"], ["unknownKey", 1]].forEach(function (kv) {
+      var o = { diagnostics: true }; o[kv[0]] = kv[1];
+      var r = MetaNum.hyper_log(16, 2, 2, o);
+      // a non-boolean diagnostics turns the explicit mode off: only the NaN value is observable then
+      var rejected = r.status === undefined ? (r instanceof MetaNum && r.isNaN()) : (r.status === "invalid-input" && r.value.isNaN());
+      if (!rejected) bad.push(kv[0] + "=" + kv[1] + " -> " + (r.status || r.toString()));
+    });
+    checkInverseCase({ caseId: "G9.2.10", requirement: "10.2 / spec 4.1 invalid options (non-positive tol, non-integer budget, illegal branch/acceleration, unknown key) => invalid-input + NaN, nothing executed",
+      operation: "hyper_log", direction: "log", call: function () { return MetaNum.hyper_log(16, 2, 2, { diagnostics: true, tol: -1 }); },
+      expect: { status: "invalid-input", isNaN: true, check: function () { return bad; } } });
+    var huge = MetaNum.hyper_log(2, 2, 2, { diagnostics: true, maxIterations: 1e9, maxBracketExpansions: 5e9 });
+    checkInverseCase({ caseId: "G9.2.11", requirement: "10.2 / spec 4.1(2) budgets above the hard limits are clamped to 10000/2048 and recorded in clampedOptions, no long loop",
+      operation: "hyper_log", direction: "log", call: function () { return huge; },
+      expect: { status: "exact", check: function () {
+        return (huge.options.maxIterations === 10000 && huge.options.maxBracketExpansions === 2048 &&
+          huge.options.clampedOptions.maxIterations === 10000 && huge.options.clampedOptions.maxBracketExpansions === 2048) ? [] :
+          ["clampedOptions=" + JSON.stringify(huge.options.clampedOptions)];
+      } } });
+    var lev = MetaNum.hyper_log(2, 2, -0.5, INV_DIAG), lev2 = MetaNum.hyper_log(2, 2, "2.5", INV_DIAG);
+    checkInverseCase({ caseId: "G9.2.12", requirement: "10.2 / spec 5.3.1(12) negative level => invalid-level (never rounded); fractional level 2.5 is accepted as itself",
+      operation: "hyper_log", direction: "log", call: function () { return lev; },
+      expect: { status: "invalid-level", isNaN: true, check: function () {
+        var p = [];
+        if (lev2.level !== "2.5") p.push("level text " + lev2.level);
+        if (typeof MetaNum(3).inv_arrow !== "undefined" || typeof MetaNum(3).root_tetr !== "undefined") p.push("unagreed inv_arrow/root_tetr names must not be created");
+        if (typeof MetaNum(3).inv_nosuchop !== "undefined") p.push("unknown op must not resolve");
+        return p;
+      } } });
+  })();
+})();
+
+// ───────────────────────────────────────────────────────────────────────────
+// G9.3 closed-form non-integer, known integer, sign and reciprocal (10.3)
+// ───────────────────────────────────────────────────────────────────────────
+console.log("\n=== G9.3 closed-form non-integer / known integers / signs / reciprocal ===");
+var LOG2_3 = Math.log(3) / Math.log(2), SQRT2 = Math.sqrt(2);
+// spec 5.3.1(2) a: independent expectations, never generated by the inverse under test
+checkInverseCase({ caseId: "G9.3.1", requirement: "spec 5.3.1(2)a hyper_log(7,2,0)=3.5 (2*b=7), non-integer kept", operation: "hyper_log", direction: "log",
+  call: function () { return MetaNum.hyper_log(7, 2, 0, INV_DIAG); }, expect: { status: "exact", value: 3.5, isint: false }, solError: { from: 3.5, tol: 1e-12 }, residualMax: 1e-9 });
+checkInverseCase({ caseId: "G9.3.2", requirement: "spec 5.3.1(2)a hyper_root(7,2,0)=3.5 (n*2=7), non-integer kept", operation: "hyper_root", direction: "root",
+  call: function () { return MetaNum.hyper_root(7, 2, 0, INV_DIAG); }, expect: { status: "exact", value: 3.5, isint: false }, solError: { from: 3.5, tol: 1e-12 }, residualMax: 1e-9 });
+checkInverseCase({ caseId: "G9.3.3", requirement: "spec 5.3.1(2)a hyper_log(3,2,1)=log2(3) (independent Math.log formula)", operation: "hyper_log", direction: "log",
+  call: function () { return MetaNum.hyper_log(3, 2, 1, INV_DIAG); }, expect: { status: "approximate", isint: false }, solError: { from: LOG2_3, tol: 1e-9 }, residualMax: 1e-9 });
+checkInverseCase({ caseId: "G9.3.4", requirement: "spec 5.3.1(2)a hyper_root(2,2,1)=sqrt(2) (independent Math.sqrt), even exponent reports multiple solutions", operation: "hyper_root", direction: "root",
+  call: function () { return MetaNum.hyper_root(2, 2, 1, INV_DIAG); }, expect: { status: "approximate", isint: false, multipleSolutions: true }, solError: { from: SQRT2, tol: 1e-9 }, residualMax: 1e-9 });
+checkInverseCase({ caseId: "G9.3.5", requirement: "spec 5.5.1(2) 10^3.7 log base 10 keeps the non-integer exponent", operation: "hyper_log", direction: "log",
+  call: function () { return MetaNum.hyper_log(Math.pow(10, 3.7), 10, 1, INV_DIAG); }, expect: { status: "approximate", isint: false }, solError: { from: 3.7, tol: 1e-9 }, residualMax: 1e-9 });
+checkInverseCase({ caseId: "G9.3.6", requirement: "spec 5.3.1(2)b 0.5^2.5 log with base 0.5 uses the decreasing branch and keeps the positive height", operation: "hyper_log", direction: "log",
+  call: function () { return MetaNum.hyper_log(Math.pow(0.5, 2.5), 0.5, 1, INV_DIAG); }, expect: { status: "approximate", isint: false }, solError: { from: 2.5, tol: 1e-9 }, residualMax: 1e-9 });
+checkInverseCase({ caseId: "G9.3.7", requirement: "spec 5.3.1(10) negative solutions keep the sign: hyper_log(-7,2,0)=-3.5, hyper_root(-7,2,0)=-3.5", operation: "hyper_log/root", direction: "log+root",
+  call: function () { return MetaNum.hyper_log(-7, 2, 0, INV_DIAG); }, expect: { status: "exact", value: -3.5, isint: false }, solError: { from: -3.5, tol: 1e-12 },
+  check: function () { var r = MetaNum.hyper_root(-7, 2, 0, INV_DIAG); return r.value.eq(-3.5) && r.value.sign === -1 ? [] : ["root -3.5 sign=" + r.value.sign]; } });
+checkInverseCase({ caseId: "G9.3.8", requirement: "spec 5.3.1(10) zero and (0,1) solutions: hyper_log(0,2,0)=0, hyper_log(0.5,2,0)=0.25", operation: "hyper_log", direction: "log",
+  call: function () { return MetaNum.hyper_log(0, 2, 0, INV_DIAG); }, expect: { status: "exact", value: 0 },
+  check: function () { var r = MetaNum.hyper_log(0.5, 2, 0, INV_DIAG); return r.value.eq(0.25) && r.value.isint() === false ? [] : ["0.25 case " + r.value]; } });
+checkInverseCase({ caseId: "G9.3.9", requirement: "spec 5.3.1(2)b a (0,1) root keeps the reciprocal encoding, not its inverse or absolute value: hyper_root(0.5,1,1)=0.5", operation: "hyper_root", direction: "root",
+  call: function () { return MetaNum.hyper_root(0.5, 1, 1, INV_DIAG); }, expect: { status: "approximate", approx: { to: 0.5, tol: 1e-12 }, check: function (r) { return r.value.sign === 2 ? [] : ["sign=" + r.value.sign + " (expected reciprocal sign 2)"]; } } });
+checkInverseCase({ caseId: "G9.3.10", requirement: "spec 5.3.1(10) negative exponents: root(0.25,-2,1)=2, root(-8,-3,1)=-0.5", operation: "hyper_root", direction: "root",
+  call: function () { return MetaNum.hyper_root(0.25, -2, 1, INV_DIAG); }, expect: { status: "exact", value: 2 },
+  check: function () { var r = MetaNum.hyper_root(-8, -3, 1, INV_DIAG); return r.value.eq(-0.5) && r.value.sign === -1 ? [] : ["(-8)^(-1/3) -> " + r.value]; } });
+checkInverseCase({ caseId: "G9.3.11", requirement: "spec 5.3.1(6)a odd integer exponent: root(-8,3,1)=-2 unique signed root", operation: "hyper_root", direction: "root",
+  call: function () { return MetaNum.hyper_root(-8, 3, 1, INV_DIAG); }, expect: { status: "exact", value: -2, multipleSolutions: false } });
+checkInverseCase({ caseId: "G9.3.12", requirement: "spec 5.3.1(6)a even integer exponent: root(16,4,1)=2 positive principal root + multipleSolutions", operation: "hyper_root", direction: "root",
+  call: function () { return MetaNum.hyper_root(16, 4, 1, INV_DIAG); }, expect: { status: "exact", value: 2, multipleSolutions: true } });
+checkInverseCase({ caseId: "G9.3.13", requirement: "spec 5.3.1(10) even exponent with negative target: root(-16,4,1) => no-solution NaN", operation: "hyper_root", direction: "root",
+  call: function () { return MetaNum.hyper_root(-16, 4, 1, INV_DIAG); }, expect: { status: "no-solution", isNaN: true } });
+checkInverseCase({ caseId: "G9.3.14", requirement: "spec 5.3.1(10) zero with negative integer exponent: root(0,-1,1) => no-solution (no Infinity answer)", operation: "hyper_root", direction: "root",
+  call: function () { return MetaNum.hyper_root(0, -1, 1, INV_DIAG); }, expect: { status: "no-solution", isNaN: true } });
+checkInverseCase({ caseId: "G9.3.15", requirement: "spec 5.3.1(10) zero with positive integer exponent: root(0,2,1)=0", operation: "hyper_root", direction: "root",
+  call: function () { return MetaNum.hyper_root(0, 2, 1, INV_DIAG); }, expect: { status: "exact", value: 0 } });
+// known integer anchors (spec 5.6.1 row "已知整数结果") — each checked with strict eq through the public forward
+checkInverseCase({ caseId: "G9.3.16", requirement: "spec 5.2.1(8)a 2↑↑4: log=4 and root(·,4)=2 via verified integer anchors", operation: "hyper_log/root", direction: "log+root",
+  call: function () { return MetaNum.hyper_log(65536, 2, 2, INV_DIAG); }, expect: { status: "exact", value: 4, isint: true, termination: "verified-integer-anchor" },
+  check: function () { var r = MetaNum.hyper_root(65536, 4, 2, INV_DIAG); return r.status === "exact" && r.value.eq(2) ? [] : ["root " + r.status + " " + r.value]; } });
+checkInverseCase({ caseId: "G9.3.17", requirement: "spec 5.6.1 3↑↑3: log=3, root(·,3)=3", operation: "hyper_log/root", direction: "log+root",
+  call: function () { return MetaNum.hyper_log(MetaNum(3).arrow(2)(3), 3, 2, INV_DIAG); }, expect: { status: ["exact", "approximate"], value: 3, isint: true },
+  reproduce: { forward: function (x) { return MetaNum(3).arrow(2)(x); }, target: MetaNum(3).arrow(2)(3) },
+  check: function () { return MetaNum.hyper_root(MetaNum(3).arrow(2)(3), 3, 2).eq(3) ? [] : ["3↑↑3 root"]; } });
+checkInverseCase({ caseId: "G9.3.18", requirement: "spec 5.6.1 10↑↑↑3: log(·,10,3)=3, root(·,3,3)=10 (strict eq; structured target => representation-level anchor may be classed approximate)", operation: "hyper_log/root", direction: "log+root",
+  call: function () { return MetaNum.hyper_log(MetaNum(10).arrow(3)(3), 10, 3, INV_DIAG); }, expect: { status: ["exact", "approximate"], value: 3 },
+  check: function () { return MetaNum.hyper_root(MetaNum(10).arrow(3)(3), 3, 3).eq(10) ? [] : ["10↑↑↑3 root"]; } });
+checkInverseCase({ caseId: "G9.3.19", requirement: "spec 5.6.1 2{4}3: root(·,3,4)=2 and log(·,2,4)=3", operation: "hyper_log/root", direction: "log+root",
+  call: function () { return MetaNum.hyper_root(MetaNum(2).arrow(4)(3), 3, 4, INV_DIAG); }, expect: { status: ["exact", "approximate"], value: 2 },
+  check: function () { return MetaNum.hyper_log(MetaNum(2).arrow(4)(3), 2, 4).eq(3) ? [] : ["2{4}3 log"]; } });
+checkInverseCase({ caseId: "G9.3.20", requirement: "spec 5.6.1 2{ω}3=65536: inv_aperiote(2)=3 and aperiote_root(3)=2, both exact", operation: "aperiote", direction: "log+root",
+  call: function () { return MetaNum(2).aperiote(3).inv_aperiote(2, INV_DIAG); }, expect: { status: "exact", value: 3 },
+  reproduce: { forward: function (x) { return MetaNum(2).aperiote(x); }, target: 65536 },
+  check: function () { return MetaNum(2).aperiote(3).aperiote_root(3, INV_DIAG).value.eq(2) ? [] : ["2{ω}3 root"]; } });
+checkInverseCase({ caseId: "G9.3.21", requirement: "spec 5.6.1 (10{ω}15) root=10 (value), status must not be exact (representation-level anchor)", operation: "aperiote", direction: "root",
+  call: function () { return MetaNum(10).aperiote(15).aperiote_root(15, INV_DIAG); }, expect: { status: ["approximate", "exact"], value: 10, representationLevel: true },
+  reproduce: { forward: function (x) { return x.aperiote(15); }, target: MetaNum(10).aperiote(15)} });
+checkInverseCase({ caseId: "G9.3.22", requirement: "spec 5.6.1 multiplication anchor hyper_log(14,2,0)=7 (old checkHL vector)", operation: "hyper_log", direction: "log",
+  call: function () { return MetaNum.hyper_log(14, 2, 0, INV_DIAG); }, expect: { status: "exact", value: 7, isint: true } });
+checkInverseCase({ caseId: "G9.3.23", requirement: "spec 5.6.1 power anchor hyper_log(1e5,10,1)=5, hyper_root(256,8,1)=2, hyper_root(81,4,1)=3 (old checkHL/checkHR vectors)", operation: "hyper_log/root", direction: "log+root",
+  call: function () { return MetaNum.hyper_log(100000, 10, 1, INV_DIAG); }, expect: { status: "exact", value: 5 },
+  check: function () { return MetaNum.hyper_root(256, 8, 1).eq(2) && MetaNum.hyper_root(81, 4, 1).eq(3) ? [] : ["power anchors"]; } });
+// the 3.49 counter-example: a real solution near an integer must NOT be snapped to it
+checkInverseCase({ caseId: "G9.3.24", requirement: "spec 5.2.1(8)b / 5.5.1(14) true height 3.49 is returned as 3.49 (not 3 or 4), non-integer, R_rel<=1e-9", operation: "hyper_log", direction: "log",
+  call: function () { return MetaNum.hyper_log(MetaNum(2).tetr(3.49), 2, 2, INV_DIAG); }, expect: { status: "approximate", isint: false }, solError: { from: 3.49, tol: 1e-9 }, residualMax: 1e-9,
+  reproduce: { forward: function (x) { return MetaNum(2).tetr(x); }, target: MetaNum(2).tetr(3.49) } });
+checkInverseCase({ caseId: "G9.3.25", requirement: "spec 5.5.1(14) root of 1.5↑↑2 is 1.5 (not 1 or 2)", operation: "hyper_root", direction: "root",
+  call: function () { return MetaNum.hyper_root(MetaNum(1.5).tetr(2), 2, 2, INV_DIAG); }, expect: { status: "approximate", isint: false }, solError: { from: 1.5, tol: 1e-9 }, residualMax: 1e-9,
+  reproduce: { forward: function (x) { return x.tetr(2); }, target: MetaNum(1.5).tetr(2) } });
+// fractional level: same real solve on the interpolated arrow
+checkInverseCase({ caseId: "G9.3.26", requirement: "spec 5.1.1(6) fractional level α=2.5 and 3.5: log/root recover 2.5 within 1e-9", operation: "hyper_log/root", direction: "log+root",
+  call: function () { return MetaNum.hyper_log(MetaNum.arrow(2, 2.5, 2.5), 2, 2.5, INV_DIAG); }, expect: { status: "approximate", isint: false }, solError: { from: 2.5, tol: 1e-9 }, residualMax: 1e-9,
+  check: function () {
+    var p = [], r1 = MetaNum.hyper_root(MetaNum.arrow(2.5, 2.5, 2), 2, 2.5), r2 = MetaNum.hyper_log(MetaNum.arrow(2, 3.5, 2.5), 2, 3.5), r3 = MetaNum.hyper_root(MetaNum.arrow(2.5, 3.5, 2), 2, 3.5);
+    [r1, r2, r3].forEach(function (r) { if (r.isNaN() || Math.abs(r.toNumber() - 2.5) > 1e-9) p.push("fractional level " + r); });
+    return p;
+  } });
+
+// ───────────────────────────────────────────────────────────────────────────
+// G9.4 forward anchors: inverse substitution uses the one public forward (10.4)
+// ───────────────────────────────────────────────────────────────────────────
+console.log("\n=== G9.4 forward anchors and single-forward substitution (10.4) ===");
+(function () {
+  var p = [];
+  if (!MetaNum(10).aperioexpande(2.1).eq(MetaNum(10).powerexpande(2 * Math.pow(2.1 / 2, 0.1)))) p.push("10{ω*2}2.1 != 10{ω+3}(2*(2.1/2)^0.1)");
+  if (!MetaNum(10).aperionate(2.1).eq(MetaNum(10).explode(2 * Math.pow(2.1 / 2, 0.21)))) p.push("10{ω^2}2.1 != 10{ω*2+1}(2*(2.1/2)^0.21)");
+  if (!MetaNum(10).arrow(1.5)(1.5).gt(MetaNum(10).arrow(1.1)(1.1))) p.push("arrow(x,y,y) monotonic sample");
+  if (!MetaNum.arrow(10, 3.5, 10).gt(MetaNum.arrow(10, 3.4, 10)) || !MetaNum.arrow(10, 3.6, 10).gt(MetaNum.arrow(10, 3.5, 10))) p.push("arrow(10,3.5,10) monotonic sample");
+  if (!MetaNum(2).aperiote(2).eq(4) || !MetaNum(2).aperiote(3).gt(4)) p.push("2{λ}2=4 and 2{λ}3>4");
+  checkInverseCase({ caseId: "G9.4.1", requirement: "10.4 / spec 5.1.1(3-8) forward anchors unchanged: fractional coefficient equivalences, x{y}y / arrow(10,3.5,10) monotonicity, 2{λ}2=4",
+    operation: "forward", direction: "-", call: function () { return MetaNum(1); }, expect: { value: 1, check: function () { return p; } } });
+  var anchors = [["aperiote", 3, 5, "3{ω}5"], ["aperionate", 10, 4, "10{ω^2}4"], ["iterate", 10, 4, "10{ω^ω}4"], ["epsilonate", 10, 4, "10{ε₀}4"], ["expande", 10, 3, "10{ω+1}3"]];
+  anchors.forEach(function (a, i) {
+    var t = MetaNum(a[1])[a[0]](a[2]);
+    checkInverseCase({ caseId: "G9.4.2." + (i + 1), requirement: "10.4 / spec 5.1.1(4) anchor " + a[3] + ": inverse recovers the height and the public forward reproduces the anchor value",
+      operation: a[0], direction: "log", call: function () { return t["inv_" + a[0]](a[1], INV_DIAG); },
+      expect: { status: ["exact", "approximate"], value: a[2] }, reproduce: { forward: function (x) { return MetaNum(a[1])[a[0]](x); }, target: t } });
+  });
+  var t21 = MetaNum(10).expande(2.1);
+  checkInverseCase({ caseId: "G9.4.3", requirement: "10.4 / spec 5.1.1(3) expande(10,2.1) inverse: forward substitution equals the same public value 10{ω}10{ω}(10^0.1)",
+    operation: "expande", direction: "log", call: function () { return t21.inv_expande(10, INV_DIAG); },
+    expect: { status: ["approximate", "exact"], check: function (r) { return (r.residual && r.residual.comparison === 0) || Math.abs(r.value.toNumber() - 2.1) < 1e-4 ? [] : ["not reproduced: " + r.status]; } },
+    reproduce: { forward: function (x) { return MetaNum(10).expande(x); }, target: t21 }, note: "plateau near 2.1: value within 1e-4, reproduction at representation level" });
+})();
+
+// ───────────────────────────────────────────────────────────────────────────
+// G9.5 per-family matrix: integer / non-integer height and base, boundary,
+//      information-loss / illegal scenario (tasks 11.1, spec 5.6.1 rows 1-2,7)
+// ───────────────────────────────────────────────────────────────────────────
+console.log("\n=== G9.5 per-family integer / non-integer height and base matrix (11.1) ===");
+(function () {
+  for (var i = 0; i < INV_REGISTRY.length; i++) {
+    (function (row) {
+      var op = row[0], marker = row[5], t3 = MetaNum(3)[op](3), t1 = MetaNum(7)[op](1);
+      // iteraperiate's finite marker is the constant ω^ω+ω level marker, so the
+      // structural inverse returns the minimal reproducing height 2, not 3
+      var invY3 = (op === "iteraperiate") ? 2 : 3;
+      checkInverseCase({
+        caseId: "G9.5." + op, requirement: "11.1 integer height 3 / integer base 3 / boundary b=1 (c=n) / root b=1 / negative target root",
+        operation: op, direction: "log+root", call: function () { return t3["inv_" + op](3, INV_DIAG); },
+        expect: { status: ["exact", "approximate", "minimal-reproducing"], value: invY3, check: function (r, v) {
+          var p = [];
+          var rt = t3[op + "_root"](3, INV_DIAG);
+          if (!rt.value.eq(marker ? 2 : 3)) p.push("integer base root -> " + rt.value);
+          if (marker && (rt.status !== "minimal-reproducing" || rt.minimalityAttained !== true || rt.multipleSolutions !== true)) p.push("marker root classification " + rt.status + "/" + rt.minimalityAttained);
+          if (!t1["inv_" + op](7).eq(1)) p.push("b=1 log should give 1 (c=n)");
+          if (!t1[op + "_root"](1).eq(7)) p.push("root b=1 should give n=c");
+          if (!MetaNum(-4)[op + "_root"](3).isNaN()) p.push("negative target root must be NaN");
+          return p;
+        } },
+        note: marker ? "base-independent marker family: root = minimum of the declared n>=2 branch" : "structural family"
+      });
+    })(INV_REGISTRY[i]);
+  }
+  // non-integer height (b=2.5) per family — expectations from the forward storage
+  var fracLog = [
+    ["aperiote", "2.5", 2.5, 1e-9], ["expande", "2.5", 2.5, 1e-9], ["multiexpande", "2.5", 2.5, 1e-9], ["powerexpande", "2.5", 2.5, 1e-9],
+    ["aperioexpande", "2.5", 2.5, 1e-9], ["explode", "2.5", 2.5, 1e-9], ["aperioexplode", "2.5", 2.5, 1e-9], ["aperiodetonate", "2.5", 2.5, 1e-9],
+    ["aperionate", "2.5", 2.5, 1e-9], ["megoaperionate", "2.5", 2.5, 1e-9], ["iterate", "2.5", 2.5, 1e-9], ["epsilonate", "2.5", 2.5, 1e-9]
+  ];
+  fracLog.forEach(function (f) {
+    var t = MetaNum(3)[f[0]](2.5);
+    checkInverseCase({ caseId: "G9.5.f." + f[0], requirement: "11.1 non-integer height 2.5 is recovered as a real value (not snapped to 2 or 3) and reproduces the target",
+      operation: f[0], direction: "log", call: function () { return t["inv_" + f[0]](3, INV_DIAG); },
+      expect: { status: ["exact", "approximate"], isint: false }, solError: { from: 2.5, tol: f[3] },
+      reproduce: { forward: function (x) { return MetaNum(3)[f[0]](x); }, target: t } });
+  });
+  // gigoaperionate: the forward is flat on [~2.414, 2.6]; the inverse returns the reproducing edge, not 2.5
+  var gg = MetaNum(3).gigoaperionate(2.5);
+  checkInverseCase({ caseId: "G9.5.f.gigoaperionate", requirement: "11.1 / spec 5.3.1(5) representation plateau: inverse returns the reproducing edge (representation-level), never claims 2.5 exactly",
+    operation: "gigoaperionate", direction: "log", call: function () { return gg.inv_gigoaperionate(3, INV_DIAG); },
+    expect: { status: ["approximate", "minimal-reproducing", "lower-bound"], representationLevel: true, check: function (r, v) {
+      var p = [], x = v.toNumber();
+      if (!(x >= 2.4 && x <= 2.5)) p.push("edge " + x + " outside the known plateau [2.414, 2.6]");
+      if (MetaNum(3).gigoaperionate(v).cmp(gg) !== 0) p.push("edge does not reproduce the target");
+      return p;
+    } } });
+  // aperioguate: the forward is non-monotone at representation level around b=2.5 (F(2.49)=F(2.51)=c, F(2.4709)>c) => no faithful bracket
+  checkInverseCase({ caseId: "G9.5.f.aperioguate", requirement: "11.1 / spec 5.5.3(1) aperioguate b=2.5: forward representation is non-monotone, so the inverse must fail bounded with NaN (no pseudo value)",
+    operation: "aperioguate", direction: "log", call: function () { return MetaNum(3).aperioguate(2.5).inv_aperioguate(3, INV_DIAG); },
+    expect: { status: ["stagnated", "bracketing-failed", "non-converged", "unrecoverable"], isNaN: true },
+    note: "F(3,2.49)=F(3,2.51)=c but F(3,2.4709)>c: no strict bracket exists at double resolution" });
+  // ceil / floor platform families: the legacy integer representative is returned and must be flagged
+  // non-integer height 2.5 in the ω^ω family: the non-integer marker preserves
+  // the fraction — itermult c0 = (5.25-2)/8 lands in the segment (inv → 5.25);
+  // iteraperiate/cuboiter store the constant level marker (inv → the minimal
+  // reproducing height 2), the height itself being below marker resolution
+  [["itermult", 3, 2.5, "ceil-height"], ["iteraperiate", 3, 2, "floor-height"], ["cuboiter", 3, 2, "floor-height"]].forEach(function (f) {
+    var t = MetaNum(f[1])[f[0]](2.5);
+    checkInverseCase({ caseId: "G9.5.f." + f[0], requirement: "11.1 / design 2.4.4 " + f[0] + " at fractional height 2.5: " + (f[0] === "itermult" ? "the non-integer marker preserves the fraction (inv recovers 5.25)" : "the constant level marker loses the height (inv returns the minimal reproducing height 2)") + ", flagged legacy/representation-level, never exact",
+      operation: f[0], direction: "log", call: function () { return t["inv_" + f[0]](f[1], INV_DIAG); },
+      expect: { status: "approximate", value: f[2], legacyAnchor: true, representationLevel: true, multipleSolutions: true, encoding: f[3], isint: f[2] === 2 },
+      reproduce: { forward: function (x) { return MetaNum(f[1])[f[0]](x); }, target: t } });
+  });
+  // non-integer base (n=2.5): structural families solve on the n>=1 branch, marker families give the n>=2 minimum
+  [["aperiote", 2.5], ["expande", 2.5], ["iterate", 2.5], ["aperionate", 2.5], ["iteraperiate", 2], ["epsilonate", 2]].forEach(function (f) {
+    var t = MetaNum(2.5)[f[0]](3);
+    checkInverseCase({ caseId: "G9.5.n." + f[0], requirement: "11.1 non-integer base 2.5 (height 3): root returns a real base (or the declared n>=2 minimum for marker ops) and reproduces the target",
+      operation: f[0], direction: "root", call: function () { return t[f[0] + "_root"](3, INV_DIAG); },
+      expect: { status: ["approximate", "minimal-reproducing"], value: f[1], isint: f[1] !== 2.5 },
+      reproduce: { forward: function (x) { return x[f[0]](3); }, target: t } });
+  });
+  // fractional bases that the forward itself cannot evaluate are recorded, not substituted
+  ["megote", "multimegote", "aperimegote"].forEach(function (op) {
+    checkInverseCase({ caseId: "G9.5.n." + op, requirement: "11.1 non-integer base row cannot be constructed: the forward throws (RangeError) for megote(2.5,3); recorded as not executed, no substitute sample",
+      operation: op, direction: "root", call: function () { return MetaNum(1); }, run: false,
+      note: "forward " + op + "(2.5, 3) => RangeError: Maximum call stack size exceeded (pre-existing forward limitation, out of this feature's scope)" });
+  });
+  // root at fractional height: with the seed rows carried (fix for issue 2),
+  // expande's root recovers base 3 despite the documented F(4,2.5)=10 anomaly;
+  // detonate/aperiodetonate recover 3 through the integer anchor
+  checkInverseCase({ caseId: "G9.5.b.expande", requirement: "11.1 root at fractional height 2.5 for expande: base 3 recovered (the carried seed rows give the solver a clean bracket); the documented forward anomaly F(4,2.5)=10<F(3,2.5) is reported separately",
+    operation: "expande", direction: "root", call: function () { return MetaNum(3).expande(2.5).expande_root(2.5, INV_DIAG); },
+    expect: { status: ["exact", "approximate"], value: 3 },
+    reproduce: { forward: function (x) { return x.expande(2.5); }, target: MetaNum(3).expande(2.5) } });
+  ["detonate", "aperiodetonate"].forEach(function (op) {
+    checkInverseCase({ caseId: "G9.5.b." + op, requirement: "11.1 root at fractional height 2.5: base 3 recovered by a verified integer anchor (representation-level); fractional-base candidates on this op hit NaN forward points and are reported, not substituted",
+      operation: op, direction: "root", call: function () { return MetaNum(3)[op](2.5)[op + "_root"](2.5, INV_DIAG); },
+      expect: { status: ["exact", "approximate"], value: 3 }, reproduce: { forward: function (x) { return x[op](2.5); }, target: MetaNum(3)[op](2.5) } });
+  });
+  checkInverseCase({ caseId: "G9.5.b.aperiote", requirement: "11.1 root at fractional height 2.5 for aperiote: base 3 recovered by verified integer anchor",
+    operation: "aperiote", direction: "root", call: function () { return MetaNum(3).aperiote(2.5).aperiote_root(2.5, INV_DIAG); },
+    expect: { status: ["exact", "approximate"], value: 3 }, reproduce: { forward: function (x) { return x.aperiote(2.5); }, target: MetaNum(3).aperiote(2.5) } });
+})();
+
+// ───────────────────────────────────────────────────────────────────────────
+// G9.6 round-trip vs. substitution residual (11.2): recovering the unknown and
+//      reproducing the target are two independent assertions
+// ───────────────────────────────────────────────────────────────────────────
+console.log("\n=== G9.6 round-trip vs. substitution residual separation (11.2) ===");
+(function () {
+  var rt = [ // [label, target, inverse call, original unknown, tol]
+    ["α=2 log 2↑↑2.5", MetaNum(2).tetr(2.5), function () { return MetaNum.hyper_log(MetaNum(2).tetr(2.5), 2, 2, INV_DIAG); }, 2.5],
+    ["α=2 root 1.5↑↑2", MetaNum(1.5).tetr(2), function () { return MetaNum.hyper_root(MetaNum(1.5).tetr(2), 2, 2, INV_DIAG); }, 1.5],
+    ["α=3 log 2{3}2.5", MetaNum.arrow(2, 3, 2.5), function () { return MetaNum.hyper_log(MetaNum.arrow(2, 3, 2.5), 2, 3, INV_DIAG); }, 2.5],
+    ["α=3 root 2.5{3}2", MetaNum.arrow(2.5, 3, 2), function () { return MetaNum.hyper_root(MetaNum.arrow(2.5, 3, 2), 2, 3, INV_DIAG); }, 2.5],
+    ["α=2.5 log", MetaNum.arrow(2, 2.5, 2.5), function () { return MetaNum.hyper_log(MetaNum.arrow(2, 2.5, 2.5), 2, 2.5, INV_DIAG); }, 2.5],
+    ["aperiote(3,1.5)", MetaNum(3).aperiote(1.5), function () { return MetaNum(3).aperiote(1.5).inv_aperiote(3, INV_DIAG); }, 1.5],
+    ["expande(3,2.5)", MetaNum(3).expande(2.5), function () { return MetaNum(3).expande(2.5).inv_expande(3, INV_DIAG); }, 2.5],
+    ["10.tetr(3+1e-6)", MetaNum(10).tetr(3 + 1e-6), function () { return MetaNum.hyper_log(MetaNum(10).tetr(3 + 1e-6), 10, 2, INV_DIAG); }, 3.000001]
+  ];
+  rt.forEach(function (c, i) {
+    checkInverseCase({ caseId: "G9.6.1." + (i + 1), requirement: "11.2 / spec 5.6.1(3-6) round-trip " + c[0] + ": unknown recovered within 1e-9 AND independent forward substitution within R_rel<=1e-9 (or cmp=0)",
+      operation: "mixed", direction: "log/root", call: c[2], expect: { status: ["exact", "approximate"], isint: false },
+      solError: { from: c[3], tol: 1e-9 }, residualMax: 1e-9 });
+  });
+  // reproduction-only: the original non-integer height is NOT recoverable, the representative must be flagged
+  var multi = [
+    ["iteraperiate(3,5.25)", function () { return MetaNum(3).iteraperiate(5.25).inv_iteraperiate(3, INV_DIAG); }, 2, "floor-height", MetaNum(3).iteraperiate(5.25)],
+    ["itermult(3,5.25)", function () { return MetaNum(3).itermult(5.25).inv_itermult(3, INV_DIAG); }, 5.25, "ceil-height", MetaNum(3).itermult(5.25)],
+    ["epsilonate(10,5.25)", function () { return MetaNum(10).epsilonate(5.25).inv_epsilonate(10, INV_DIAG); }, 5.25, "epsilon-layer", MetaNum(10).epsilonate(5.25)],
+    ["iteraperiate_root(5)", function () { return MetaNum(3).iteraperiate(5).iteraperiate_root(5, INV_DIAG); }, 2, null, MetaNum(3).iteraperiate(5)],
+    ["aperiote_root(15) on 10{ω}15", function () { return MetaNum(10).aperiote(15).aperiote_root(15, INV_DIAG); }, 10, null, MetaNum(10).aperiote(15)]
+  ];
+  multi.forEach(function (c, i) {
+    checkInverseCase({ caseId: "G9.6.2." + (i + 1), requirement: "11.2 / spec 5.6.1(5,10) " + c[0] + ": only reproduction is asserted; result must carry representation-level / legacy flags and never claim original-input recovery",
+      operation: "named", direction: "log/root", call: c[1],
+      expect: { status: ["approximate", "minimal-reproducing", "lower-bound"], value: c[2], representationLevel: true, check: function (r) {
+        var p = [];
+        if (r.status === "minimal-reproducing" && r.minimalityAttained !== true) p.push("minimal-reproducing without minimality evidence");
+        if (r.status !== "minimal-reproducing" && r.minimalityAttained === true) p.push("minimality claimed on a non-minimal result");
+        if (c[3] && r.encoding !== c[3]) p.push("encoding " + r.encoding + " expected " + c[3]);
+        return p;
+      } },
+      reproduce: { forward: function (x) { return i === 3 ? x.iteraperiate(5) : i === 4 ? x.aperiote(15) : (i === 0 ? MetaNum(3).iteraperiate(x) : i === 1 ? MetaNum(3).itermult(x) : MetaNum(10).epsilonate(x)); }, target: c[4] },
+      note: "value " + c[2] + " is a reproducing representative, not the original input" });
+  });
+  // structural exactness on a plain finite target: 2{ω}3 = 65536 -> 3, residual is a faithful number residual
+  checkInverseCase({ caseId: "G9.6.3", requirement: "11.2 / spec 5.6.1(6) exact structural recovery on a plain number target carries a number residual (R_abs=R_rel=0), not an unavailable one",
+    operation: "aperiote", direction: "log", call: function () { return MetaNum(2).aperiote(3).inv_aperiote(2, INV_DIAG); },
+    expect: { status: "exact", value: 3, residualKind: "number-absolute-relative", check: function (r) { return r.residual.absolute === 0 && r.residual.relative === 0 ? [] : ["residual " + JSON.stringify(r.residual)]; } } });
+  // saturated / structured target: cmp=0 is representation-level, the numeric residual must stay null
+  checkInverseCase({ caseId: "G9.6.4", requirement: "11.2 / spec 5.6.1(7)a 10↑↑15 (ordinal rows): cmp=0 is reported as representation-level with residual kind ordinal-structure and relative=null (never 0)",
+    operation: "hyper_log", direction: "log", call: function () { return MetaNum.hyper_log(MetaNum(10).tetr(15), 10, 2, INV_DIAG); },
+    expect: { status: ["exact", "approximate"], value: 15, representationLevel: true, residualKind: "bracket-only", check: function (r) { return r.residual.relative === null && r.residual.comparison === 0 ? [] : ["residual " + JSON.stringify(r.residual)]; } } });
+})();
+
+// ───────────────────────────────────────────────────────────────────────────
+// G9.7 successor break points m-δ / m / m+δ (11.3)
+// ───────────────────────────────────────────────────────────────────────────
+console.log("\n=== G9.7 successor break points ±δ (11.3) ===");
+// continuity rule: either the inverse lands within `tol` of m+δ (faithful, no
+// reverse jump, no integer snap) or it is classified as a bounded failure /
+// representation-level result within the forward's resolution.  Never a value on
+// the wrong side of m, never exactly m when δ≠0 (that would be a rounding jump).
+function invContinuityProblems(r, m, d, tol) {
+  var p = [];
+  if (r.value.isNaN()) {
+    if (["stagnated", "bracketing-failed", "non-converged", "unrecoverable", "unrepresentable"].indexOf(r.status) === -1) p.push("NaN with unexpected status " + r.status);
+    return p;
+  }
+  var x = r.value.toNumber(), want = m + d;
+  if (!Number.isFinite(x)) { p.push("non-finite value"); return p; }
+  if (d !== 0 && x === m) p.push("snapped to the integer " + m);
+  if ((x - m) * d < 0) p.push("reverse jump: " + x + " is on the wrong side of " + m);
+  if (Math.abs(x - want) > tol) p.push("solution " + x + " farther than " + tol + " from " + want + " (" + r.status + "/" + r.termination + ")");
+  return p;
+}
+(function () {
+  [2, 3].forEach(function (m) {
+    [[-1e-6, 1e-6], [1e-6, 1e-6], [-1e-10, 1e-10], [1e-10, 1e-10], [0, 1e-12]].forEach(function (dd) {
+      var d = dd[0], t = MetaNum(2).tetr(m + d);
+      checkInverseCase({ caseId: "G9.7.tetr." + m + "." + d, requirement: "11.3 tetration base 2 at m=" + m + ", δ=" + d + ": inverse lands on m+δ within 1e-9 (definition-guaranteed continuous successor interpolation)",
+        operation: "tetr", direction: "log", call: function () { return MetaNum.hyper_log(t, 2, 2, INV_DIAG); },
+        expect: { status: ["exact", "approximate"], check: function (r) { return invContinuityProblems(r, m, d, dd[1]); } },
+        reproduce: { forward: function (x) { return MetaNum(2).tetr(x); }, target: t } });
+    });
+  });
+  [["expande", 1e-9], ["multiexpande", 1e-9], ["explode", 1e-9]].forEach(function (f) {
+    [2, 3].forEach(function (m) {
+      [-1e-6, 1e-6].forEach(function (d) {
+        var t = MetaNum(3)[f[0]](m + d);
+        checkInverseCase({ caseId: "G9.7." + f[0] + "." + m + "." + d, requirement: "11.3 " + f[0] + " base 3 at m=" + m + ", δ=" + d + ": no reverse jump / integer snap; within 1e-9 when faithfully representable",
+          operation: f[0], direction: "log", call: function () { return t["inv_" + f[0]](3, INV_DIAG); },
+          expect: { status: ["exact", "approximate", "stagnated", "bracketing-failed", "non-converged"], check: function (r) { return invContinuityProblems(r, m, d, f[1]); } },
+          reproduce: { forward: function (x) { return MetaNum(3)[f[0]](x); }, target: t } });
+      });
+    });
+  });
+  // itermult: the forward stores ceil(y)-1, so fractional heights are NOT continuous in storage;
+  // the inverse must flag the legacy platform representative rather than pretend continuity
+  [2, 3].forEach(function (m) {
+    [-1e-6, 0, 1e-6].forEach(function (d) {
+      var t = MetaNum(3).itermult(m + d);
+      checkInverseCase({ caseId: "G9.7.itermult." + m + "." + d, requirement: "11.3 itermult at m=" + m + ", δ=" + d + ": ceil-height platform — result must be a flagged legacy/representation-level representative on the correct side, continuity itself is not assertable",
+        operation: "itermult", direction: "log", call: function () { return t.inv_itermult(3, INV_DIAG); },
+        expect: { status: ["exact", "approximate", "minimal-reproducing", "lower-bound"], check: function (r, v) {
+          var p = [], x = v.toNumber();
+          if (!(r.representationLevel || r.legacyAnchor)) p.push("platform result not flagged (R/L)");
+          if (d !== 0 && x === m && r.legacyAnchor !== true) p.push("unflagged integer snap");
+          if (x < m - 0.01 || x > m + 1.0000001) p.push("platform representative " + x + " outside [m, m+1]");
+          return p;
+        } },
+        reproduce: { forward: function (x) { return MetaNum(3).itermult(x); }, target: t } });
+    });
+  });
+})();
+
+// ───────────────────────────────────────────────────────────────────────────
+// G9.8 fundamental-sequence break points and fractional coefficient (11.4)
+// ───────────────────────────────────────────────────────────────────────────
+console.log("\n=== G9.8 fundamental-sequence break points and fractional coefficient (11.4) ===");
+(function () {
+  [["aperiote", 1e-9], ["aperioexpande", 1e-9], ["aperionate", 1e-9], ["iterate", 1e-9], ["epsilonate", 1e-9]].forEach(function (f) {
+    var ms = f[0] === "aperioexpande" || f[0] === "aperionate" ? [2] : [2, 3];
+    ms.forEach(function (m) {
+      [-1e-6, 1e-6].forEach(function (d) {
+        var t = MetaNum(3)[f[0]](m + d);
+        // ε₀ with y in (1,2): the forward marker stores max(2,floor y)+frac, i.e. the same value as y+1
+        var quirk = f[0] === "epsilonate" && m === 2 && d < 0;
+        checkInverseCase({ caseId: "G9.8." + f[0] + "." + m + "." + d, requirement: "11.4 / spec 5.1.1(4,5) " + f[0] + " at integer point " + m + (quirk ? "-δ" : " ±δ") + ": no level-switch jump; faithful within 1e-9, or representation-level within the forward's resolution" + (quirk ? " (ε₀ marker encodes heights in (1,2) as y+1 — pre-existing forward convention, documented)" : ""),
+          operation: f[0], direction: "log", call: function () { return t["inv_" + f[0]](3, INV_DIAG); },
+          expect: { status: ["exact", "approximate", "stagnated", "bracketing-failed", "non-converged"], allowNaN: true, check: function (r, v) {
+            var p = [];
+            if (r.value.isNaN()) { if (["stagnated", "bracketing-failed", "non-converged"].indexOf(r.status) === -1) p.push("NaN with " + r.status); return p; }
+            var x = v.toNumber(), want = m + d + (quirk ? 1 : 0);
+            var tol = r.representationLevel ? 0.01 : f[1];
+            if (Math.abs(x - want) > tol) p.push("solution " + x + " vs " + want + " (" + r.status + "/" + r.termination + ", R=" + r.representationLevel + ")");
+            if (quirk && !r.representationLevel) p.push("(1,2) ε marker recovery must be flagged representation-level");
+            return p;
+          } },
+          reproduce: { forward: function (x) { return MetaNum(3)[f[0]](x); }, target: t } });
+      });
+    });
+  });
+  // fractional coefficient (spec 5.1.1(5)): 10{ω*2}2.1 and 10{ω^2}2.1 keep the fraction and invert to 2.1
+  [["aperioexpande", "10{ω*2}2.1"], ["aperionate", "10{ω^2}2.1"]].forEach(function (f) {
+    var t = MetaNum(10)[f[0]](2.1);
+    checkInverseCase({ caseId: "G9.8.frac." + f[0], requirement: "11.4 / spec 5.1.1(5) fractional coefficient " + f[1] + ": inverse returns 2.1 (fraction preserved), reproduction at representation level",
+      operation: f[0], direction: "log", call: function () { return t["inv_" + f[0]](10, INV_DIAG); },
+      expect: { status: ["exact", "approximate"], isint: false }, solError: { from: 2.1, tol: 1e-9 },
+      reproduce: { forward: function (x) { return MetaNum(10)[f[0]](x); }, target: t } });
+  });
+  // non-integer marker (spec 5.1.1(5)b resolved): itermult(10, 2.1) stores
+  // c0 = 0.1/8 in the fractional r0 slot, so the inverse recovers 2.1 — the
+  // fraction is preserved, not dropped
+  var tl = MetaNum(10).itermult(2.1);
+  checkInverseCase({ caseId: "G9.8.loss.itermult", requirement: "11.4 / spec 5.1.1(5)b itermult(10,2.1): the non-integer marker keeps the fraction — inverse recovers 2.1 (representation-level structural value)",
+    operation: "itermult", direction: "log", call: function () { return tl.inv_itermult(10, INV_DIAG); },
+    expect: { status: "approximate", value: 2.1, legacyAnchor: true, representationLevel: true, encoding: "ceil-height" },
+    reproduce: { forward: function (x) { return MetaNum(10).itermult(x); }, target: tl } });
+})();
+
+// ───────────────────────────────────────────────────────────────────────────
+// G9.9 domain boundaries, multi/no-solution, invalid & non-finite (12.1)
+// ───────────────────────────────────────────────────────────────────────────
+console.log("\n=== G9.9 domain boundaries, multi/no-solution, invalid and non-finite inputs (12.1) ===");
+(function () {
+  var D = INV_DIAG, p;
+  // zero coefficient / zero exponent constant maps (design 2.4.2)
+  checkInverseCase({ caseId: "G9.9.1", requirement: "12.1 zero coefficient: log(5,0,0) no-solution; log(0,0,0) all real heights reproduce 0 => NaN + unbounded-below + multipleSolutions",
+    operation: "hyper_log", direction: "log", call: function () { return MetaNum.hyper_log(5, 0, 0, D); }, expect: { status: "no-solution", isNaN: true },
+    check: function () { var r = MetaNum.hyper_log(0, 0, 0, D); return r.status === "unrecoverable" && r.termination === "unbounded-below" && r.multipleSolutions === true && r.value.isNaN() ? [] : ["log(0,0,0) " + r.status]; } });
+  checkInverseCase({ caseId: "G9.9.2", requirement: "12.1 zero coefficient root: root(5,0,0) no-solution; root(0,0,0) unbounded-below NaN",
+    operation: "hyper_root", direction: "root", call: function () { return MetaNum.hyper_root(5, 0, 0, D); }, expect: { status: "no-solution", isNaN: true },
+    check: function () { var r = MetaNum.hyper_root(0, 0, 0, D); return r.status === "unrecoverable" && r.termination === "unbounded-below" && r.multipleSolutions === true ? [] : ["root(0,0,0) " + r.status]; } });
+  checkInverseCase({ caseId: "G9.9.3", requirement: "12.1 base 1 constant map: log(1,1,1) unbounded-below multi; log(2,1,1) no-solution; α=2 log(1,1,2) minimal height 0 (minimal-reproducing, multi); log(2,1,2) no-solution",
+    operation: "hyper_log", direction: "log", call: function () { return MetaNum.hyper_log(1, 1, 1, D); }, expect: { status: "unrecoverable", termination: "unbounded-below", multipleSolutions: true, isNaN: true },
+    check: function () {
+      var a = MetaNum.hyper_log(2, 1, 1, D), b = MetaNum.hyper_log(1, 1, 2, D), c = MetaNum.hyper_log(2, 1, 2, D), q = [];
+      if (a.status !== "no-solution") q.push("log(2,1,1) " + a.status);
+      if (b.status !== "minimal-reproducing" || !b.value.eq(0) || b.multipleSolutions !== true || b.minimalityAttained !== true) q.push("log(1,1,2) " + b.status + " " + b.value);
+      if (c.status !== "no-solution") q.push("log(2,1,2) " + c.status);
+      return q;
+    } });
+  checkInverseCase({ caseId: "G9.9.4", requirement: "12.1 zero exponent: root(1,0,1) => lower-bound 0 with minimalityAttained=false; root(2,0,1) no-solution; α=2 root(1,0,2) minimal-reproducing 1",
+    operation: "hyper_root", direction: "root", call: function () { return MetaNum.hyper_root(1, 0, 1, D); }, expect: { status: "lower-bound", value: 0, minimalityAttained: false, multipleSolutions: true },
+    check: function () { var a = MetaNum.hyper_root(2, 0, 1, D), b = MetaNum.hyper_root(1, 0, 2, D); return a.status === "no-solution" && b.status === "minimal-reproducing" && b.value.eq(1) ? [] : ["root zero exponent " + a.status + "/" + b.status]; } });
+  checkInverseCase({ caseId: "G9.9.5", requirement: "12.1 / spec 5.3.1(8)b height 1 root: c=7 -> 7; c=0.5 is outside the n>=1 image => no-solution (never copied as 0.5); c=1 -> minimal base 1 (multi)",
+    operation: "aperiote_root", direction: "root", call: function () { return MetaNum(7).aperiote_root(1, D); }, expect: { status: "exact", value: 7 },
+    check: function () { var a = MetaNum(0.5).aperiote_root(1, D), b = MetaNum(1).aperiote_root(1, D); return a.status === "no-solution" && b.status === "minimal-reproducing" && b.value.eq(1) ? [] : ["b=1 roots " + a.status + "/" + b.status]; } });
+  checkInverseCase({ caseId: "G9.9.6", requirement: "12.1 c=0 / c=1: aperiote log c=0 -> b=0 (aperiote(n,0)=0 special); expande log c=0 -> no-solution; root c=0 -> no-solution; log(1,2,2)=0; root(1,2,2) -> minimal base 1",
+    operation: "named", direction: "log+root", call: function () { return MetaNum(0).inv_aperiote(2, D); }, expect: { status: "exact", value: 0 },
+    check: function () {
+      var q = [], a = MetaNum(0).inv_expande(10, D), b = MetaNum(0).aperiote_root(5, D), c = MetaNum.hyper_log(1, 2, 2, D), d = MetaNum.hyper_root(1, 2, 2, D);
+      if (a.status !== "no-solution") q.push("inv_expande c=0 " + a.status);
+      if (b.status !== "no-solution") q.push("root c=0 " + b.status);
+      if (!c.value.eq(0)) q.push("log(1,2,2)");
+      if (d.status !== "minimal-reproducing" || !d.value.eq(1)) q.push("root(1,2,2) " + d.status);
+      return q;
+    } });
+  checkInverseCase({ caseId: "G9.9.7", requirement: "12.1 finite high-level outside image: log(-5,2,2), log(0.5,2,2), root(0.5,2,2) => no-solution (no clamped endpoint)",
+    operation: "hyper_log/root", direction: "log+root", call: function () { return MetaNum.hyper_log(-5, 2, 2, D); }, expect: { status: "no-solution", isNaN: true },
+    check: function () { var a = MetaNum.hyper_log(0.5, 2, 2, D), b = MetaNum.hyper_root(0.5, 2, 2, D); return a.status === "no-solution" && b.status === "no-solution" ? [] : ["outside image " + a.status + "/" + b.status]; } });
+  checkInverseCase({ caseId: "G9.9.8", requirement: "12.1 special fold 2{λ}2=4 (and 2{λ}3>4): log(4,2,3)=2 and aperiote log/root of 4 with base/height 2 => 2 exact; other bases still solved by their own forward",
+    operation: "aperiote", direction: "log+root", call: function () { return MetaNum(4).inv_aperiote(2, D); }, expect: { status: "exact", value: 2 },
+    check: function () {
+      var q = [], f = MetaNum.hyper_log(4, 2, 3, D), r = MetaNum(4).aperiote_root(2, D), o = MetaNum(16).inv_aperiote(2, D);
+      if (!f.value.eq(2)) q.push("log(4,2,3)");
+      if (!r.value.eq(2)) q.push("aperiote_root(2) of 4");
+      if (!MetaNum(2).aperiote(3).gt(4)) q.push("2{λ}3 must exceed 4");
+      if (!MetaNum(2).aperiote(4).inv_aperiote(2).eq(4)) q.push("aperiote(2,4)=2{4}4 must still invert to 4 (other heights are solved by their own forward)");
+      return q;
+    } });
+  checkInverseCase({ caseId: "G9.9.9", requirement: "12.1 unauthenticated domains: 0<n<1 at α=2 log => unsupported-domain; negative height (named root) => unsupported-domain; negative base at α=2 root => unsupported-domain/NaN",
+    operation: "hyper_log/root", direction: "log+root", call: function () { return MetaNum.hyper_log(2, 0.5, 2, D); }, expect: { status: "unsupported-domain", isNaN: true },
+    check: function () {
+      var q = [], a = MetaNum.expande(10, 3).expande_root(-1, D), b = MetaNum(10).aperiote(15).aperiote_root(-5, D), c = MetaNum.hyper_root(16, 2, 2, D), d = MetaNum.hyper_root(-16, 4, 2, D), ind = MetaNum(16).ssrt();
+      if (a.status !== "unsupported-domain" || !a.value.isNaN()) q.push("negative height " + a.status);
+      if (b.status !== "unsupported-domain" || !b.value.isNaN()) q.push("aperiote negative height " + b.status);
+      if (Math.abs(c.value.toNumber() - ind.toNumber()) > 1e-9) q.push("root(16,2,2) should match the independent Lambert-W ssrt(16)=" + ind + ", got " + c.value);
+      if (d.value.isNaN() === false && d.status !== "unsupported-domain") q.push("negative high-level base " + d.status);
+      return q;
+    } });
+  // NaN / ±Infinity in every position (spec 5.3.1(11)) — default returns stay NaN
+  (function () {
+    var q = [];
+    [[NaN, 2, 2], [2, NaN, 2], [2, 2, NaN], [Infinity, 2, 2], [2, Infinity, 2], [2, 2, Infinity], [-Infinity, 2, 2], [2, -Infinity, 2]].forEach(function (args) {
+      ["hyper_log", "hyper_root"].forEach(function (m) {
+        var r = MetaNum[m](args[0], args[1], args[2], D), plain = MetaNum[m](args[0], args[1], args[2]);
+        var want = (isNaN(args[0]) || isNaN(args[1]) || isNaN(args[2])) ? "invalid-input" : "non-finite-input";
+        if (r.status !== want || !r.value.isNaN() || !plain.isNaN()) q.push(m + "(" + args.join(",") + ") -> " + r.status);
+      });
+    });
+    var v = MetaNum(10).aperiote(15);
+    [[function () { return v.inv_aperiote(NaN, D); }, "invalid-input"], [function () { return v.inv_aperiote(Infinity, D); }, "non-finite-input"],
+     [function () { return v.aperiote_root(NaN, D); }, "invalid-input"], [function () { return v.aperiote_root(Infinity, D); }, "non-finite-input"],
+     [function () { return MetaNum.inv_iteraperiate(NaN, 10, D); }, "invalid-input"], [function () { return MetaNum(10).iteraperiate(5).iteraperiate_root(Infinity, D); }, "non-finite-input"]].forEach(function (c) {
+      var r = c[0](); if (r.status !== c[1] || !r.value.isNaN()) q.push("named non-finite -> " + r.status);
+    });
+    if (!MetaNum.inv_aperiote(MetaNum(3), MetaNum.NaN).isNaN()) q.push("old NaN propagation inv_aperiote(3, NaN)");
+    checkInverseCase({ caseId: "G9.9.10", requirement: "12.1 / spec 5.3.1(11) NaN => invalid-input and ±Infinity => non-finite-input in every position of c/n/α/b for generic and named entries; default calls return NaN",
+      operation: "all", direction: "log+root", call: function () { return MetaNum.hyper_log(NaN, 2, 2, D); }, expect: { status: "invalid-input", isNaN: true, check: function () { return q; } } });
+  })();
+  // invalid strings / levels (spec 4.3.2, 5.3.1(12)): the constructor's silent 0 must not be solved as 0
+  (function () {
+    var q = [];
+    [["abc", 2, 2], ["", 2, 2], ["12abc", 2, 2], [2, "abc", 2], [2, 2, "abc"], [2, "1e", 2]].forEach(function (args) {
+      var r = MetaNum.hyper_log(args[0], args[1], args[2], D);
+      if (r.status !== "invalid-input" || !r.value.isNaN()) q.push("hyper_log(" + args.join(",") + ") -> " + r.status);
+    });
+    var r0 = MetaNum.hyper_log("0", 2, 0, D), rv = MetaNum.inv_aperiote("abc", 10, D), rn = MetaNum.aperiote_root("abc", 15, D), ri = MetaNum("abc").hyper_log(2)(2, D);
+    if (!r0.value.eq(0)) q.push("string \"0\" must still be the number 0: " + r0.status);
+    if (rv.status !== "invalid-input" || rn.status !== "invalid-input") q.push("named invalid string " + rv.status + "/" + rn.status);
+    if (ri.status === "invalid-input") q.push("unexpected");
+    [[-1], [-0.5], ["abc"], ["2x"]].forEach(function (lv) { var r = MetaNum.hyper_log(2, 2, lv[0], D); if (r.status !== "invalid-level" && r.status !== "invalid-input") q.push("level " + lv[0] + " -> " + r.status); });
+    checkInverseCase({ caseId: "G9.9.11", requirement: "12.1 / spec 4.3.2 invalid strings => invalid-input NaN (never solved as the constructor's silent 0); negative/unknown levels => invalid-level, never rounded",
+      operation: "hyper_log", direction: "log", call: function () { return MetaNum.hyper_log("abc", 2, 2, D); }, expect: { status: "invalid-input", isNaN: true, check: function () { return q; } } });
+  })();
+  // object inputs the constructor rejects keep raising the constructor's own error (no new exception system)
+  checkInverseCase({ caseId: "G9.9.12", requirement: "12.1 / design 2.4.8 non-numeric objects keep the constructor's own MetaNumError (no new inverse exception type)",
+    operation: "hyper_log", direction: "log", call: function () { return MetaNum(1); },
+    expect: { value: 1, check: function () {
+      var msg = "";
+      try { MetaNum.hyper_log({}, 2, 2); } catch (e) { msg = (e && e.name) + ": " + (e && e.message); }
+      return /MetaNumError/.test(msg) ? [] : ["unexpected: " + msg];
+    } } });
+  // multi-solution: even integer power double root (principal positive), and the 2{λ}2 anchor
+  checkInverseCase({ caseId: "G9.9.13", requirement: "12.1 / spec 5.3.1(6) multiple discrete solutions: root(81,4,1)=3 positive principal with multipleSolutions; root(-81,4,1) no-solution",
+    operation: "hyper_root", direction: "root", call: function () { return MetaNum.hyper_root(81, 4, 1, D); }, expect: { status: "exact", value: 3, multipleSolutions: true },
+    check: function () { return MetaNum.hyper_root(-81, 4, 1, D).status === "no-solution" ? [] : ["root(-81,4,1)"]; } });
+})();
+
+// ───────────────────────────────────────────────────────────────────────────
+// G9.10 markers, saturation, truncation, COEFF_BOUND / MSI / cap, minimality (12.2)
+// ───────────────────────────────────────────────────────────────────────────
+console.log("\n=== G9.10 markers, saturation, truncation, COEFF/MSI/cap and minimality (12.2) ===");
+(function () {
+  var D = INV_DIAG;
+  // COEFF_BOUND = 100 boundary on a representative limit operation
+  [[100 - 1e-6, 1e-2, "representation plateau: value within 0.01 of 100"], [100, 1e-12, "integer anchor"], [100 + 1e-6, 1e-6, "just above the bound (representation-level within 1e-6)"], [101, 1e-12, "integer anchor"]].forEach(function (c) {
+    var t = MetaNum(3).aperiote(c[0]);
+    checkInverseCase({ caseId: "G9.10.1." + c[0], requirement: "12.2 / spec 5.6.1 row 'representation boundary' aperiote(3," + c[0] + ") across COEFF_BOUND=100: " + c[2] + "; structure may change, no false exactness",
+      operation: "aperiote", direction: "log", call: function () { return t.inv_aperiote(3, D); },
+      expect: { status: ["approximate", "exact"], check: function (r, v) {
+        var x = v.toNumber(); return Math.abs(x - c[0]) <= c[1] ? [] : ["value " + x + " vs " + c[0] + " (" + r.status + ")"];
+      } },
+      reproduce: { forward: function (x) { return MetaNum(3).aperiote(x); }, target: t }, note: c[2] });
+  });
+  checkInverseCase({ caseId: "G9.10.2", requirement: "12.2 expande(3,99/100/101): complete cascade rows keep the height exactly across the bound",
+    operation: "expande", direction: "log", call: function () { return MetaNum(3).expande(100).inv_expande(3, D); }, expect: { status: "exact", value: 100 },
+    check: function () { return MetaNum(3).expande(99).inv_expande(3).eq(99) && MetaNum(3).expande(101).inv_expande(3).eq(101) ? [] : ["99/101"]; } });
+  // truncation: arrow(10,39,10) (full) and arrow(10,40,10) (truncated: [10] base + first row count+1) under maxRows 20 / 50
+  (function () {
+    var q = [], rows20 = MetaNum.maxRows, cols20 = MetaNum.maxCols, log = [];
+    try {
+      MetaNum.maxRows = 20;
+      var t39 = MetaNum.arrow(10, 39, 10), t40 = MetaNum.arrow(10, 40, 10);
+      var l39 = MetaNum.hyper_log(t39, 10, 39, D), r39 = MetaNum.hyper_root(t39, 10, 39, D);
+      var l40 = MetaNum.hyper_log(t40, 10, 40, D), r40 = MetaNum.hyper_root(t40, 10, 40, D);
+      log.push("maxRows=20: rows " + t39.array.length + "/" + t40.array.length + "; log39 " + l39.status + "/" + l39.value + "; root39 " + r39.status + "/" + r39.value + "; log40 " + l40.status + "/" + l40.value + "; root40 " + r40.status + "/" + r40.value);
+      [[l39, 39], [r39, 39], [l40, 40], [r40, 40]].forEach(function (pair) {
+        var r = pair[0];
+        if (r.status === "exact") q.push("truncated/target at " + pair[1] + " reported exact");
+        if (!r.value.isNaN() && r.representationLevel !== true) q.push("value at " + pair[1] + " without representation-level flag");
+      });
+      if (JSON.stringify(t40.array[0]) !== "[10]") q.push("arrow(10,40,10) should be the truncated [10] form at maxRows=20, got " + JSON.stringify(t40.array[0]));
+      if (!l39.value.eq(10) || !r39.value.eq(10) || !l40.value.eq(10) || !r40.value.eq(10)) q.push("truncation inverses should reproduce 10 at representation level (legacy), not NaN");
+      MetaNum.maxRows = 50;
+      var t40b = MetaNum.arrow(10, 40, 10), l40b = MetaNum.hyper_log(t40b, 10, 40, D), r40b = MetaNum.hyper_root(t40b, 10, 40, D);
+      log.push("maxRows=50: rows " + t40b.array.length + "; log40 " + l40b.status + "/" + l40b.value + "; root40 " + r40b.status + "/" + r40b.value);
+      if (l40b.status === "exact" || r40b.status === "exact") q.push("maxRows=50 inverse reported exact");
+    } finally { MetaNum.maxRows = rows20; MetaNum.maxCols = cols20; }
+    if (MetaNum.maxRows !== rows20 || MetaNum.maxCols !== cols20) q.push("global config not restored");
+    checkInverseCase({ caseId: "G9.10.3", requirement: "12.2 / spec 5.4.1(6) truncated arrays ([10] base, first row +1) never become exact roots/heights; inverses are representation-level; maxRows restored in finally",
+      operation: "arrow(10,39/40,10)", direction: "log+root", call: function () { return MetaNum(1); }, expect: { value: 1, check: function () { return q; } }, note: log.join(" || ") });
+  })();
+  // MSI and the ε₀ ceiling: below / at / above (y > MSI → Infinity per the
+  // documented convention, so its inverse is NaN by the non-finite rule)
+  checkInverseCase({ caseId: "G9.10.4", requirement: "12.2 / spec 5.4.1(7-8) ε₀: y=MSI-1 exact structural; y=MSI saturates to layer MSI-1 (lower-bound, minimalityAttained=false); y>MSI → the forward itself returns Infinity and the inverse reports non-finite-input",
+    operation: "epsilonate", direction: "log", call: function () { return MetaNum(10).epsilonate(9007199254740990).inv_epsilonate(10, D); }, expect: { status: "exact", value: 9007199254740990 },
+    check: function () {
+      var q = [], a = MetaNum(10).epsilonate(9007199254740991).inv_epsilonate(10, D), b = MetaNum(10).epsilonate(1e16);
+      if (a.status !== "lower-bound" || !a.value.eq(9007199254740991) || a.minimalityAttained !== false || a.loss !== "capped") q.push("y=MSI " + a.status + "/" + a.loss);
+      if (b.toString() !== "Infinity") q.push("y=1e16 forward should be Infinity, got " + b);
+      var bi = b.inv_epsilonate(10, D);
+      if (bi.status !== "non-finite-input" || !bi.value.isNaN()) q.push("y=1e16 inverse " + bi.status);
+      return q;
+    } });
+  checkInverseCase({ caseId: "G9.10.5", requirement: "12.2 / spec 5.4.1(7) huge-argument markers: y>MSI inverses stay finite, non-NaN, >=1 (old sanity) and carry representation-level evidence; epsilonate returns Infinity (documented); capped counts are not read as exact applications",
+    operation: "named", direction: "log", call: function () { return MetaNum(10).aperiote(1e16).inv_aperiote(10, D); },
+    expect: { status: ["exact", "approximate", "lower-bound"], value: 1e16, representationLevel: true, check: function () {
+      var q = [], big = MetaNum(1e16);
+      ["expande", "iterate", "itermult"].forEach(function (op) {
+        var r = MetaNum(10)[op](big)["inv_" + op](10, D);
+        if (r.value.isNaN() || !r.value.isFinite() || r.value.lt(1)) q.push(op + " y>MSI -> " + r.status + " " + r.value);
+        if (r.representationLevel !== true) q.push(op + " y>MSI without representation-level flag");
+        if (op === "itermult" && r.legacyAnchor !== true) q.push("itermult capped count must be a legacy anchor");
+      });
+      var eb = MetaNum(10).epsilonate(big);
+      if (eb.toString() !== "Infinity") q.push("epsilonate y>MSI should be Infinity");
+      return q;
+    } } });
+  // base-independent markers: root = 2 on the declared n>=2 branch, with reproduction (old vector kept) and n=1 constant handled
+  (function () {
+    var q = [];
+    INV_REGISTRY.filter(function (r) { return r[5]; }).forEach(function (row) {
+      var op = row[0], v = MetaNum(10)[op](5), r = v[op + "_root"](5, D);
+      if (!r.value.eq(2) || r.status !== "minimal-reproducing" || r.minimalityAttained !== true || r.multipleSolutions !== true) q.push(op + " root " + r.status + "/" + r.value + "/" + r.minimalityAttained);
+      if (!MetaNum(2)[op](5).eq(v)) q.push(op + ": 2 does not reproduce the marker");
+      if (MetaNum(1)[op](5).eq(v)) q.push(op + ": base 1 must be the constant special case, not the marker");
+      var one = MetaNum(1)[op + "_root"](5, D);
+      if (one.status !== "minimal-reproducing" || !one.value.eq(1)) q.push(op + " root of 1 " + one.status);
+      var lower = MetaNum(1.5)[op + "_root"](5, D);
+      if (lower.status !== "unrecoverable") q.push(op + " root of a non-marker (n=1.5 target) " + lower.status);
+    });
+    checkInverseCase({ caseId: "G9.10.6", requirement: "12.2 / spec 5.4.1(4-5) / design 2.4.4(6) base-independent markers (itermult..epsilonate, height 5): root = 2 minimal-reproducing on n>=2 with F(2,5)=c; base 1 constant; non-marker targets unrecoverable; no claim about (1,2)",
+      operation: "marker ops", direction: "root", call: function () { return MetaNum(10).iteraperiate(5).iteraperiate_root(5, D); },
+      expect: { status: "minimal-reproducing", value: 2, minimalityAttained: true, multipleSolutions: true, representationLevel: true, check: function () { return q; } } });
+  })();
+  // non-integer marker: the fraction lives in r0[0] and the inverse recovers it
+  checkInverseCase({ caseId: "G9.10.7", requirement: "12.2 / design 2.4.4(2-3) itermult non-integer marker: c0 = (5.25-2)/8 = 0.40625 in r0[0], inverse recovers 5.25; F(5.25) reproduces, F(5.99) does NOT (the marker is fractional, not a ceil platform) => legacy/approximate, never minimal-reproducing",
+    operation: "itermult", direction: "log", call: function () { return MetaNum(3).itermult(5.25).inv_itermult(3, D); },
+    expect: { status: "approximate", value: 5.25, legacyAnchor: true, representationLevel: true, check: function (r) {
+      var q = [], c = MetaNum(3).itermult(5.25);
+      if (Math.abs(c.array[0][0] - 0.40625) > 1e-15) q.push("c0 " + c.array[0][0] + " != (5.25-2)/8");
+      if (MetaNum(3).itermult(6).eq(c)) q.push("ceil platform must be gone: itermult(6) should differ from itermult(5.25)");
+      if (MetaNum(3).itermult(5.99).eq(c)) q.push("5.99 must not reproduce 5.25's marker");
+      if (r.minimalityAttained === true) q.push("minimality claimed on a fractional marker");
+      return q;
+    } } });
+  checkInverseCase({ caseId: "G9.10.8", requirement: "12.2 / design 2.4.4(3) iteraperiate constant level marker: every finite height (5.25 / 5 / 4.99) shares [[10,1],[1,0,1]], the inverse returns the minimal reproducing height 2; ordinal-height markers [1|ω] / [1|ω^ω] still strip",
+    operation: "iteraperiate", direction: "log", call: function () { return MetaNum(3).iteraperiate(5.25).inv_iteraperiate(3, D); },
+    expect: { status: "approximate", value: 2, legacyAnchor: true, representationLevel: true, check: function (r) {
+      var q = [], c = MetaNum(3).iteraperiate(5.25);
+      if (!MetaNum(3).iteraperiate(5).eq(c) || !MetaNum(3).iteraperiate(4.99).eq(c)) q.push("finite heights must share the constant level marker");
+      if (!r.value.eq(2) || !MetaNum(3).iteraperiate(2).eq(c)) q.push("inverse should return the minimal reproducing height 2");
+      var oy = MetaNum(10).itermult(3), ov = MetaNum(10).iteraperiate(oy);
+      if (!ov.inv_iteraperiate(10).eq(oy)) q.push("ordinal-height [1|ω] strip");
+      var oy2 = MetaNum(10).iteraperiate(3), ov2 = MetaNum(10).iteraperiate(oy2);
+      if (!ov2.inv_iteraperiate(10).eq(oy2)) q.push("ordinal-height [1|ω^ω] strip");
+      return q;
+    } } });
+  // epsilonate fraction: integer exact, fraction approximate + representation-level; y=2 equals iterate (separately verified anchor)
+  checkInverseCase({ caseId: "G9.10.9", requirement: "12.2 / design 2.4.4(5) epsilonate: integer height exact structural, 5.25 recovered as 5.25 (approximate, fraction-preserved, representation-level); y=2 equals iterate(x,x)",
+    operation: "epsilonate", direction: "log", call: function () { return MetaNum(10).epsilonate(5).inv_epsilonate(10, D); }, expect: { status: "exact", value: 5, encoding: "epsilon-layer" },
+    check: function () {
+      var q = [], r = MetaNum(10).epsilonate(5.25).inv_epsilonate(10, D);
+      if (!r.value.eq(5.25) || r.status !== "approximate" || r.encoding !== "epsilon-layer" || r.loss !== "fraction-preserved" || r.representationLevel !== true) q.push("5.25 -> " + r.status + "/" + r.value + "/" + r.loss);
+      if (!MetaNum(10).epsilonate(2).eq(MetaNum(10).iterate(10))) q.push("epsilonate(10,2) must equal iterate(10,10)");
+      if (!MetaNum(10).epsilonate(2).inv_epsilonate(10).eq(2) && !MetaNum(10).epsilonate(2).inv_epsilonate(10).eq(10)) q.push("y=2 anchor inverse");
+      return q;
+    } });
+})();
+
+// ───────────────────────────────────────────────────────────────────────────
+// G9.11 large numbers, tolerance ladder, numeric strings, reciprocal limits (12.3)
+// ───────────────────────────────────────────────────────────────────────────
+console.log("\n=== G9.11 large numbers, tolerance ladder, numeric strings and reciprocal limits (12.3) ===");
+(function () {
+  var D = INV_DIAG;
+  var big = MetaNum(2).tetr(100);
+  checkInverseCase({ caseId: "G9.11.1", requirement: "12.3 / spec 5.6.1 row 'large numbers' layer>0 target 2↑↑100: log => 100 (legacy anchor, bounded iterations), residual is bracket-only with relative=null (no Infinity-Infinity pseudo residual)",
+    operation: "hyper_log", direction: "log", call: function () { return MetaNum.hyper_log(big, 2, 2, D); },
+    expect: { status: ["approximate", "exact"], value: 100, representationLevel: true, residualKind: "bracket-only", check: function (r) {
+      var q = []; if (r.residual.relative !== null || r.residual.absolute !== null) q.push("numeric residual must be null for structured targets");
+      if (r.iterations > 200 || r.forwardEvaluations > 400) q.push("unbounded work " + r.iterations + "/" + r.forwardEvaluations); return q; } } });
+  checkInverseCase({ caseId: "G9.11.2", requirement: "12.3 root of 2↑↑100 at height 100 => 2 (legacy, representation-level), cmp-based evidence only",
+    operation: "hyper_root", direction: "root", call: function () { return MetaNum.hyper_root(big, 100, 2, D); },
+    expect: { status: ["approximate", "exact"], value: 2, representationLevel: true, residualKind: "bracket-only" } });
+  var nested = MetaNum(10).aperiote(15);
+  checkInverseCase({ caseId: "G9.11.3", requirement: "12.3 nested ordinal rows target 10{ω}15: log => 15 (structural), residual kind meta-comparison / ordinal-structure with null numeric fields; root => 10 (representation-level)",
+    operation: "aperiote", direction: "log+root", call: function () { return nested.inv_aperiote(10, D); },
+    expect: { status: ["exact", "approximate"], value: 15, representationLevel: true, check: function (r) {
+      var q = [], rr = nested.aperiote_root(15, D);
+      if (["meta-comparison", "ordinal-structure", "bracket-only"].indexOf(r.residual.kind) === -1 || r.residual.relative !== null) q.push("log residual " + r.residual.kind);
+      if (!rr.value.eq(10) || rr.status === "exact" || rr.residual.relative !== null) q.push("root residual/status " + rr.status + "/" + rr.residual.kind);
+      return q; } } });
+  // tolerance ladder on one non-integer vector
+  var ladder = [1e-8, 1e-12, 1e-300], runs = [];
+  ladder.forEach(function (tol) { runs.push(MetaNum.hyper_log(MetaNum(2).tetr(2.5), 2, 2, { diagnostics: true, tol: tol })); });
+  checkInverseCase({ caseId: "G9.11.4", requirement: "12.3 / spec 5.5.3(3) tolerance ladder on 2↑↑2.5 log: tol=1e-8 and 1e-12 converge within 1e-9 with R_rel<=1e-9; tol=1e-300 (below representation resolution) ends stagnated/approximate, never claims extra precision",
+    operation: "hyper_log", direction: "log", call: function () { return runs[1]; },
+    expect: { status: "approximate", isint: false }, solError: { from: 2.5, tol: 1e-9 }, residualMax: 1e-9, check: function () {
+      var q = [], r8 = runs[0], r300 = runs[2];
+      if (Math.abs(r8.value.toNumber() - 2.5) > 1e-9 || r8.residual.relative > 1e-9) q.push("tol=1e-8 " + r8.status + " " + r8.value + " R=" + r8.residual.relative);
+      if (["stagnated", "non-converged", "approximate"].indexOf(r300.status) === -1) q.push("tol=1e-300 " + r300.status);
+      if (r300.termination === "converged") q.push("tol=1e-300 reported normal convergence");
+      if (!r300.value.isNaN() && r300.representationLevel !== true) q.push("tol=1e-300 finite result must be representation-level");
+      return q; },
+    note: ladder.map(function (t, i) { return "tol=" + t + ": it=" + runs[i].iterations + " fw=" + runs[i].forwardEvaluations + " status=" + runs[i].status + "/" + runs[i].termination + " value=" + runs[i].value + " R=" + runs[i].residual.relative; }).join(" | ") });
+  // semantic equality of number / numeric string / MetaNum encodings at large scale
+  checkInverseCase({ caseId: "G9.11.5", requirement: "12.3 number, numeric string and MetaNum inputs are the same call; a structured value re-parsed from its toString() is lossy and is reported as a precision limit (bounded failure), not as a recovered height",
+    operation: "hyper_log", direction: "log", call: function () { return MetaNum.hyper_log(new MetaNum(big), 2, 2, D); },
+    expect: { status: ["approximate", "exact"], value: 100, check: function () {
+      var q = [], s = MetaNum.hyper_log(big.toString(), 2, 2, D), n = MetaNum.hyper_log(1e5, 10, 1, D), ns = MetaNum.hyper_log("1e5", "10", "1", D), nm = MetaNum.hyper_log(MetaNum(1e5), MetaNum(10), MetaNum(1), D);
+      if (["stagnated", "non-converged", "bracketing-failed", "unrecoverable"].indexOf(s.status) === -1 && !s.value.eq(100)) q.push("re-parsed string target must be solved or classified, got " + s.status);
+      if (n.value.eq(5) === false || !ns.value.eq(n.value) || !nm.value.eq(n.value)) q.push("1e5 encodings differ");
+      return q; } },
+    note: "string re-parse of 2↑↑100 gave status=" + MetaNum.hyper_log(big.toString(), 2, 2, D).status + " (documented string-parsing precision limit); 1e5 encodings agree" });
+  // reciprocal / underflow limits (spec 5.5.1(12)b): tiny legal solutions keep the reciprocal structure or fail as unrepresentable, never 0
+  checkInverseCase({ caseId: "G9.11.6", requirement: "12.3 / spec 5.5.1(12)b tiny legal solutions: root(1e-330,2,0)=5e-331 and root(5e-324,10,0)=5e-325 use the reciprocal structure (sign=2), never underflow to 0; plain Number would give 0",
+    operation: "hyper_root", direction: "root", call: function () { return MetaNum.hyper_root("1e-330", 2, 0, D); },
+    expect: { status: "exact", check: function (r, v) {
+      var q = [], r2 = MetaNum.hyper_root("5e-324", 10, 0, D);
+      if (v.eq(0) || v.sign !== 2) q.push("1e-330/2 -> " + v + " sign=" + v.sign);
+      if (r2.value.eq(0) || r2.value.sign !== 2) q.push("5e-324/10 -> " + r2.value + " sign=" + r2.value.sign + " (Number lane: " + (5e-324 / 10) + ")");
+      if (r2.residual.kind === "unavailable" && r2.residual.reason !== "not evaluated") q.push("unexpected unavailable residual");
+      return q; } },
+    reproduce: { forward: function (x) { return x.mul(2); }, target: MetaNum("1e-330") },
+    note: "residual is log-space (the difference is below double resolution); the equality itself is definition-guaranteed by the reciprocal structure" });
+  checkInverseCase({ caseId: "G9.11.7", requirement: "12.3 log of a subnormal target with a large base: log(1e-320,1e10,0)=1e-330 keeps the reciprocal structure",
+    operation: "hyper_log", direction: "log", call: function () { return MetaNum.hyper_log("1e-320", 1e10, 0, D); },
+    expect: { status: "exact", check: function (r, v) { return v.eq(0) || v.sign !== 2 ? ["1e-330 -> " + v] : []; } } });
+  // precision limits are reported, not hidden: double, string parsing, structural counts, normalisation
+  checkInverseCase({ caseId: "G9.11.8", requirement: "12.3 / spec 5.4.1(9) precision limits: a 17-significant-digit string is parsed to double precision and the inverse reports the double-level result (approximate), not the string's extra digits",
+    operation: "hyper_log", direction: "log", call: function () { return MetaNum.hyper_log("2.50000000000000001", 2, 0, D); },
+    expect: { status: ["exact", "approximate"], approx: { to: 1.25, tol: 1e-15 }, isint: false },
+    note: "the string's 18th digit is below double resolution; result is the double-level 1.25 (documented limitation, not arbitrary precision)" });
+})();
+
+// ───────────────────────────────────────────────────────────────────────────
+// G9.12 failure injection (12.4)
+// ───────────────────────────────────────────────────────────────────────────
+console.log("\n=== G9.12 failure injection: budgets, stagnation, acceleration fallback, overflow/underflow (12.4) ===");
+(function () {
+  var D = INV_DIAG;
+  checkInverseCase({ caseId: "G9.12.1", requirement: "12.4 / spec 5.5.1(10) maxIterations=1 on 2↑↑2.5 log => non-converged, NaN, iterations=1, last candidate NOT returned",
+    operation: "hyper_log", direction: "log", call: function () { return MetaNum.hyper_log(MetaNum(2).tetr(2.5), 2, 2, { diagnostics: true, maxIterations: 1 }); },
+    expect: { status: "non-converged", termination: "iteration-budget-exhausted", isNaN: true, check: function (r) { return r.iterations === 1 ? [] : ["iterations=" + r.iterations]; } } });
+  checkInverseCase({ caseId: "G9.12.2", requirement: "12.4 / spec 5.5.1(4,10) maxBracketExpansions=1 on 2↑↑10.5 log => bracketing-failed / expansion-budget-exhausted, expansions=1, never the last upper bound as the answer",
+    operation: "hyper_log", direction: "log", call: function () { return MetaNum.hyper_log(MetaNum(2).tetr(10.5), 2, 2, { diagnostics: true, maxBracketExpansions: 1 }); },
+    expect: { status: "bracketing-failed", termination: "expansion-budget-exhausted", isNaN: true, check: function (r) {
+      return r.expansions === 1 && r.bracket && r.bracket.loCmp === -1 && r.bracket.hiCmp === -1 ? [] : ["expansions=" + r.expansions + " bracket=" + JSON.stringify(r.bracket)]; } } });
+  checkInverseCase({ caseId: "G9.12.3", requirement: "12.4 tol=1e-300 on the 2.5 round trip => stagnated (finite representation-level 2.5 or NaN); never normal convergence",
+    operation: "hyper_log", direction: "log", call: function () { return MetaNum.hyper_log(MetaNum(2).tetr(2.5), 2, 2, { diagnostics: true, tol: 1e-300 }); },
+    expect: { status: ["stagnated", "non-converged", "approximate"], termination: ["stagnated", "midpoint-not-interior", "iteration-budget-exhausted", "converged"], check: function (r) {
+      var q = []; if (r.termination === "converged") q.push("claimed convergence under tol=1e-300");
+      if (!r.value.isNaN() && r.representationLevel !== true) q.push("finite stagnated result must be representation-level"); return q; } } });
+  var auto = MetaNum.hyper_log(MetaNum(2).tetr(2.5), 2, 2, D), bis = MetaNum.hyper_log(MetaNum(2).tetr(2.5), 2, 2, { diagnostics: true, acceleration: "bisection" });
+  checkInverseCase({ caseId: "G9.12.4", requirement: "12.4 / design 2.4.5(3) acceleration vs bisection on 2↑↑2.5 (representable secant lane): same branch/criteria, both within 1e-9; auto records fallbackCount>0 (rejected/worsening secant candidates fall back to midpoint, bracket kept valid)",
+    operation: "hyper_log", direction: "log", call: function () { return auto; },
+    expect: { status: "approximate", isint: false }, solError: { from: 2.5, tol: 1e-9 }, residualMax: 1e-9, check: function (r) {
+      var q = [];
+      if (Math.abs(bis.value.toNumber() - 2.5) > 1e-9 || bis.status !== r.status) q.push("bisection differs " + bis.status + " " + bis.value);
+      if (!(r.fallbackCount > 0)) q.push("no acceleration fallback observed (fallbackCount=" + r.fallbackCount + ")");
+      if (bis.fallbackCount !== 0) q.push("bisection must not use acceleration (fb=" + bis.fallbackCount + ")");
+      if (!(r.iterations <= bis.iterations)) q.push("auto took more iterations than bisection " + r.iterations + " vs " + bis.iterations);
+      if (r.bracket && !(r.bracket.lo < r.bracket.hi)) q.push("bracket invalid at exit");
+      return q; },
+    note: "auto it=" + auto.iterations + "/fb=" + auto.fallbackCount + "; bisection it=" + bis.iterations + "/fb=" + bis.fallbackCount });
+  var t = MetaNum(10).tetr(3 + 1e-10), ra = MetaNum.hyper_log(t, 10, 2, D), rb = MetaNum.hyper_log(t, 10, 2, { diagnostics: true, acceleration: "bisection" });
+  checkInverseCase({ caseId: "G9.12.5", requirement: "12.4 10↑↑(3+1e-10) auto vs bisection: bounded termination; if a finite value comes back it is not the integer 3 and is representation-level; otherwise NaN with a failure termination",
+    operation: "hyper_log", direction: "log", call: function () { return ra; },
+    expect: { status: ["stagnated", "non-converged", "bracketing-failed", "approximate", "exact"], check: function (r) {
+      var q = [];
+      [ra, rb].forEach(function (x) {
+        if (x.iterations > 200 || x.forwardEvaluations > 400) q.push("unbounded work " + x.iterations + "/" + x.forwardEvaluations);
+        if (!x.value.isNaN() && (x.value.eq(3) || x.representationLevel !== true)) q.push("finite result " + x.value + " is an integer snap or unflagged");
+      });
+      if (ra.termination === "converged" && Math.abs(ra.value.toNumber() - (3 + 1e-10)) > 1e-9) q.push("converged away from the target height");
+      return q; } },
+    note: "auto " + ra.status + "/" + ra.termination + " it=" + ra.iterations + " fb=" + ra.fallbackCount + " value=" + ra.value + " | bisection " + rb.status + "/" + rb.termination + " it=" + rb.iterations + " value=" + rb.value + " — residual criterion unreachable at double resolution near the steep point; reported as stagnation, not as precision" });
+  // forward NaN / invalid points
+  checkInverseCase({ caseId: "G9.12.6", requirement: "12.4 forward NaN injection: a NaN forward target (expande(3,0)) => invalid-input; zero/negative heights for named roots => unsupported-domain; all bounded, no forward evaluation",
+    operation: "expande", direction: "log+root", call: function () { return MetaNum(3).expande(0).inv_expande(3, D); }, expect: { status: "invalid-input", isNaN: true, check: function () {
+      var q = [], a = MetaNum(10).aperiote(15).aperiote_root(0, D), b = MetaNum(10).aperiote(15).aperiote_root(-5, D);
+      if (a.status !== "unsupported-domain" || a.forwardEvaluations !== 0) q.push("zero height " + a.status);
+      if (b.status !== "unsupported-domain") q.push("negative height " + b.status);
+      return q; } } });
+  checkInverseCase({ caseId: "G9.12.7", requirement: "12.4 / spec 5.5.1(4,10) target beyond the expansion budget's reach (log of 10↑↑(1e19): the solution ~1e19 exceeds 2^60 doublings) => bracketing-failed / expansion-budget-exhausted within 60 expansions, not misreported as mathematical no-solution",
+    operation: "hyper_log", direction: "log", call: function () { return MetaNum.hyper_log(MetaNum(10).tetr(1e19), 10, 2, D); },
+    expect: { status: "bracketing-failed", termination: "expansion-budget-exhausted", isNaN: true, check: function (r) { return r.expansions === 60 && r.forwardEvaluations <= 70 ? [] : ["expansions=" + r.expansions + " fw=" + r.forwardEvaluations]; } } });
+  checkInverseCase({ caseId: "G9.12.8", requirement: "12.4 upper-layer Infinity as a target => non-finite-input (never a finite upper bound); overflow on the analytic side (1e308 root) stays exact via MetaNum arithmetic",
+    operation: "hyper_root", direction: "root", call: function () { return MetaNum.hyper_root(Infinity, 2, 2, D); }, expect: { status: "non-finite-input", isNaN: true },
+    check: function () { var r = MetaNum.hyper_root(1e308, 2, 1, D); return r.value.eq(MetaNum(1e154)) || Math.abs(r.value.toNumber() - 1e154) <= 1e154 * 1e-9 ? [] : ["root(1e308,2,1) -> " + r.value]; } });
+  checkInverseCase({ caseId: "G9.12.9", requirement: "12.4 analytic precision limit: root(1e300,1000,1) — the closed-form candidate fails forward verification by error amplification (1.995^1000) and is reported unrecoverable, not returned as a fake root",
+    operation: "hyper_root", direction: "root", call: function () { return MetaNum.hyper_root(1e300, 1000, 1, D); },
+    expect: { status: ["unrecoverable", "approximate"], allowNaN: true, check: function (r) {
+      if (r.value.isNaN()) return r.status === "unrecoverable" && r.termination === "analytic-verification-failed" ? [] : ["unexpected " + r.status + "/" + r.termination];
+      return r.residual.relative !== null && r.residual.relative <= 1e-9 ? [] : ["finite without residual evidence"];
+    } },
+    note: "design 2.4.1(5): a formula candidate that fails substitution is discarded and the path may fail; the small mirror case root(1e-300,1000,1)=0.501 verifies fine" });
+  // forward-side Infinity during bracketing could not be produced by the public forward (MetaNum saturates to finite layer markers) — recorded as not executed
+  checkInverseCase({ caseId: "G9.12.10", requirement: "12.4 'finite target with forward overflow to Infinity inside the bracket': NOT EXECUTED — the public forward saturates to finite ε-markers (epsl(10,epsl(10,5)) = 1ε9007199254740990) instead of Infinity, so no stable vector exists; recorded, not replaced by a smooth sample",
+    operation: "solver", direction: "-", call: function () { return MetaNum(1); }, run: false,
+    note: "closest executed coverage: G9.12.7 (target above image) and G9.12.8 (Infinity target)" });
+  checkInverseCase({ caseId: "G9.12.11", requirement: "12.4 'secant candidate actually rejected for leaving the bracket / worsening residual' — the representable-lane case above shows fallbackCount>0; an injected out-of-bracket candidate cannot be forced without a production hook (not added), so the exact rejection branch is covered only indirectly",
+    operation: "solver", direction: "-", call: function () { return MetaNum(1); }, run: false,
+    note: "indirect coverage via G9.12.4 (fallbackCount=auto>0, bisection=0); no production hook added per 12.4" });
+})();
+
+// ───────────────────────────────────────────────────────────────────────────
+// G9.13 input immutability, global configuration isolation, determinism (12.5)
+// ───────────────────────────────────────────────────────────────────────────
+console.log("\n=== G9.13 input immutability, config isolation and determinism (12.5) ===");
+(function () {
+  var D = INV_DIAG;
+  function snap(m) { return JSON.stringify([m.sign, m.array, m.layer]); }
+  var c = MetaNum(2).tetr(2.5), n = MetaNum(2), v = MetaNum(10).aperiote(15), b = MetaNum(15);
+  var before = [snap(c), snap(n), snap(v), snap(b)];
+  var opts = { tol: 1e-10, diagnostics: true };
+  MetaNum.hyper_log(c, n, 2, opts); MetaNum.hyper_root(MetaNum(1.5).tetr(2), n, 2, { diagnostics: true });
+  v.inv_aperiote(10, { diagnostics: true }); v.aperiote_root(b, { diagnostics: true }); MetaNum.root_aperiote(v, b);
+  var after = [snap(c), snap(n), snap(v), snap(b)];
+  checkInverseCase({ caseId: "G9.13.1", requirement: "12.5 / spec 4.2.2 no input MetaNum is mutated (sign/array/layer identical before/after) and the caller's options object is not modified",
+    operation: "mixed", direction: "log+root", call: function () { return MetaNum.hyper_log(c, n, 2, D); },
+    expect: { status: "approximate", check: function () {
+      var q = []; before.forEach(function (s, i) { if (s !== after[i]) q.push("input " + i + " mutated"); });
+      if (Object.keys(opts).length !== 2 || opts.tol !== 1e-10 || opts.diagnostics !== true) q.push("options mutated: " + JSON.stringify(opts));
+      return q; } } });
+  var rows0 = MetaNum.maxRows, cols0 = MetaNum.maxCols, leaked = "";
+  try { MetaNum.maxRows = 20; MetaNum.maxCols = 12; MetaNum.arrow(10, 40, 10).aperiote_root(40, D); MetaNum(10).aperiote(15).inv_aperiote(10, D); }
+  catch (e) { leaked = e.message; } finally { MetaNum.maxRows = rows0; MetaNum.maxCols = cols0; }
+  checkInverseCase({ caseId: "G9.13.2", requirement: "12.5 temporary maxRows/maxCols are restored in finally and the default configuration is unchanged afterwards",
+    operation: "config", direction: "-", call: function () { return MetaNum(10).aperiote(15).inv_aperiote(10, D); },
+    expect: { value: 15, check: function () { var q = []; if (MetaNum.maxRows !== rows0 || MetaNum.maxCols !== cols0) q.push("config not restored"); if (leaked) q.push("threw: " + leaked); return q; } } });
+  var r1 = MetaNum.hyper_log(MetaNum(2).tetr(2.5), 2, 2, D), r2 = MetaNum.hyper_log(MetaNum(2).tetr(2.5), 2, 2, D);
+  var r3 = MetaNum(10).aperiote(15).aperiote_root(15, D), r4 = MetaNum.root_aperiote(MetaNum(10).aperiote(15), 15, D);
+  checkInverseCase({ caseId: "G9.13.3", requirement: "12.5 / spec 4.2.1 determinism: same input, branch, tol, budgets and representation config => same value, status, termination and counts across repeated calls and alias forms",
+    operation: "mixed", direction: "log+root", call: function () { return r1; },
+    expect: { status: "approximate", check: function () {
+      var q = [];
+      if (!r1.value.eq(r2.value) || r1.status !== r2.status || r1.termination !== r2.termination || r1.iterations !== r2.iterations || r1.forwardEvaluations !== r2.forwardEvaluations || r1.fallbackCount !== r2.fallbackCount) q.push("log repeat differs");
+      if (!r3.value.eq(r4.value) || r3.status !== r4.status || r3.termination !== r4.termination || r3.iterations !== r4.iterations) q.push("alias repeat differs");
+      return q; } } });
+  var snap1 = MetaNum.hyper_log(MetaNum(2).tetr(2.5), 2, 2, D);
+  var originalArray = JSON.stringify(snap1.value.array);
+  snap1.value.array[0][0] = 424242; snap1.options.tol = 5; snap1.iterations = 999; if (snap1.bracket && snap1.bracket.lo instanceof MetaNum) snap1.bracket.lo.array[0][0] = 7;
+  var snap2 = MetaNum.hyper_log(MetaNum(2).tetr(2.5), 2, 2, D);
+  checkInverseCase({ caseId: "G9.13.4", requirement: "12.5 diagnostic snapshots are isolated copies: mutating a returned result's value/options/bracket cannot change later calls or any input",
+    operation: "hyper_log", direction: "log", call: function () { return snap2; },
+    expect: { status: "approximate", check: function () {
+      var q = [];
+      if (JSON.stringify(snap2.value.array) !== originalArray) q.push("later call altered by snapshot mutation");
+      if (snap2.options.tol !== 1e-12 || snap2.iterations === 999) q.push("options/iterations leaked");
+      if (snap(c) !== before[0]) q.push("target mutated through snapshot");
+      return q; } } });
+  checkInverseCase({ caseId: "G9.13.5", requirement: "12.5 no global last-diagnostics state: a diagnostics call leaves no trace observable by a later default call (no Promise, no global)",
+    operation: "hyper_log", direction: "log", call: function () { var p = MetaNum.hyper_log(MetaNum(2).tetr(2.5), 2, 2, D); return MetaNum.hyper_log(MetaNum(2).tetr(2.5), 2, 2); },
+    expect: { approx: { to: 2.5, tol: 1e-9 }, check: function (r, v) {
+      var q = []; if (typeof v.then === "function") q.push("returned a Promise"); if (typeof v.status === "string") q.push("default call returned a diagnostics object"); return q; } } });
+})();
+
+// ───────────────────────────────────────────────────────────────────────────
+// G9.14 inverse summary and process gate (10.1 / 14.2)
+// ───────────────────────────────────────────────────────────────────────────
+console.log("\n=== G9.14 inverse test summary and process gate ===");
+(function () {
+  var ev = INVERSE_STATS.evidence, cats = INVERSE_STATS.categories;
+  console.log("INV SUMMARY | cases=" + INVERSE_STATS.total + " pass=" + INVERSE_STATS.pass + " fail=" + INVERSE_STATS.fail + " error=" + INVERSE_STATS.error + " skipped=" + INVERSE_STATS.skipped);
+  console.log("INV EVIDENCE | definition-guaranteed=" + (ev["definition-guaranteed"] || 0) + " representation-level=" + (ev["representation-level"] || 0) + " numerical-experiment=" + (ev["numerical-experiment"] || 0) + " not-applicable=" + (ev["not-applicable"] || 0));
+  console.log("INV CATEGORIES | " + Object.keys(cats).sort().map(function (k) { return k + "=" + cats[k]; }).join(" "));
+  if (INVERSE_STATS.failedCases.length) console.log("INV FAILED CASES | " + INVERSE_STATS.failedCases.join(", "));
+  var skippedIds = [];
+  console.log("INV NOTE | skipped rows are recorded above as SKIP lines with their reason (never replaced by a success sample)");
+  void skippedIds;
+  process.exitCode = (GATE_COUNTS.fail || GATE_COUNTS.error) ? 1 : 0;
+  console.log("GATE | FAIL lines=" + GATE_COUNTS.fail + " ERROR lines=" + GATE_COUNTS.error + " => exit code " + process.exitCode);
 })();
