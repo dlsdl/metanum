@@ -3562,7 +3562,9 @@ console.log("\n=== G8.13 README contract structure ===");
   var changelog = readme.split("# Changelog")[1] || "";
   checkBool("README has one v2.2.0 changelog entry", (changelog.match(/v2\.2\.0/g) || []).length === 1, true);
   checkBool("README v2.2.0 keeps all capability categories",
-    ["limit rules", "iteraperiate", "root forms", "null", "large-base"].every(function (term) {
+    // terms follow the maintainer-rewritten v2.2.0 entry (2026-11-24): the old
+    // literal-null wording was folded into "fix formatting" in the changelog
+    ["limit rules", "iteraperiate", "root forms", "formatting", "large-base"].every(function (term) {
       return changelog.indexOf(term) !== -1;
     }), true);
   var limitLine = readme.split("\n").filter(function (line) { return line.indexOf("multiLetterLimit") !== -1 && line.indexOf("// 13.") !== -1; })[0] || "";
@@ -3740,6 +3742,7 @@ function checkInverseCase(spec) {
 (function () {
   var captured = [];
   var outerLog = console.log;
+  var savedGateFail = GATE_COUNTS.fail;
   console.log = function () { captured.push(Array.prototype.join.call(arguments, " ")); };
   var savedStats = JSON.stringify({ pass: INVERSE_STATS.pass, fail: INVERSE_STATS.fail, total: INVERSE_STATS.total,
     categories: INVERSE_STATS.categories, failedCases: INVERSE_STATS.failedCases });
@@ -3763,7 +3766,7 @@ function checkInverseCase(spec) {
       var p = [];
       if (!injectedLine) p.push("injected case produced no FAIL line");
       if (injectedLine.indexOf("PROBLEMS: status exact not in [wrong-on-purpose]") === -1) p.push("FAIL line lacks the problem detail");
-      if (GATE_COUNTS.fail !== 0) p.push("injected FAIL reached the process gate");
+      if (GATE_COUNTS.fail !== savedGateFail) p.push("injected FAIL reached the process gate");
       if (INVERSE_STATS.fail !== 0) p.push("injected FAIL stayed in the stats");
       return p;
     } },
